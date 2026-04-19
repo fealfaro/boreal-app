@@ -728,7 +728,7 @@ function ModalCotizacion({cotizacion,productos,empresas,onSave,onClose,logoB64})
           <button onClick={() => generarPDFCotizacion({...form,total,costoTotal,margenProm}, logoB64)} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:500}}>
             📄 Exportar PDF
           </button>
-          <div style={{display:"flex",gap:8"}}>
+          <div style={{display:"flex",gap:8}}>
             <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:7,padding:"8px 14px",cursor:"pointer",fontSize:13}}>Cancelar</button>
             <button onClick={handleSave} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:7,padding:"8px 16px",cursor:"pointer",fontWeight:600,fontSize:13}}>Guardar</button>
           </div>

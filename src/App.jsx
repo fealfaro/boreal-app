@@ -304,18 +304,32 @@ export default function App() {
   const isMob=winW<768;
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f7f8fc",minHeight:"100vh",color:"#1a1a2e"}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f8fafc",minHeight:"100vh",color:"#0f172a"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-      <style>{`@media print{.no-print{display:none!important}}input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}input[type=number]{-moz-appearance:textfield}button:hover{opacity:0.92}`}</style>
+      <style>{`
+  @media print{.no-print{display:none!important}}
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  input[type=number]{-moz-appearance:textfield}
+  button:hover{opacity:0.92}
+  *{-webkit-tap-highlight-color:transparent;}
+  input,select,textarea{font-size:16px!important;}
+  @media(min-width:768px){input,select,textarea{font-size:13px!important;}}
+`}</style>
       <ToastContainer/>
 
-      {sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:199}}/>}
+      {isMob&&sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:199}}/>}
 
       {/* SIDEBAR */}
-      <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:214,background:"#0f172a",display:"flex",flexDirection:"column",zIndex:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease"}}>
-        <div style={{padding:"16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"center",alignItems:"center",minHeight:78}}>
+      <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:220,background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"4px 0 20px rgba(0,0,0,.1)":"none",position:"fixed"}}>
+        <div style={{padding:"16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72}}>
           <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" style={{height:54,maxWidth:160,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>
         </div>
+        {isMob&&(
+          <button onClick={()=>setSideOpen(false)} style={{position:"absolute",top:12,right:12,background:"#f1f5f9",border:"none",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",zIndex:1}}>
+            {Ic.x}
+          </button>
+        )}
         <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
           {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
             const isAct=tab===item.id;
@@ -334,7 +348,7 @@ export default function App() {
               return 0;
             })();
             return (
-              <button key={item.id} onClick={()=>goTab(item.id)} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 11px",borderRadius:8,background:isAct?"#1e40af":"transparent",color:isAct?"#fff":"#94a3b8",border:"none",cursor:"pointer",textAlign:"left",fontSize:13,fontWeight:isAct?500:400,transition:"all .12s",width:"100%"}}>
+              <button key={item.id} onClick={()=>goTab(item.id)} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 12px",borderRadius:8,background:isAct?"#eff6ff":"transparent",color:isAct?"#1d4ed8":"#64748b",border:"none",cursor:"pointer",textAlign:"left",fontSize:13,fontWeight:isAct?600:400,transition:"all .12s",width:"100%",borderLeft:isAct?"3px solid #1d4ed8":"3px solid transparent"}}>
                 <span style={{flexShrink:0,opacity:isAct?1:.75}}>{item.icon}</span>
                 <span>{item.label}</span>
                 {badge>0&&<span style={{marginLeft:"auto",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{badge}</span>}
@@ -342,15 +356,15 @@ export default function App() {
             );
           })}
         </nav>
-        <div style={{padding:"10px 12px",borderTop:"1px solid #1e293b"}}>
-          <button onClick={()=>setShowNotifs(v=>!v)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#1e293b",border:"none",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#94a3b8"}}>
+        <div style={{padding:"10px 12px",borderTop:"1px solid #f1f5f9"}}>
+          <button onClick={()=>setShowNotifs(v=>!v)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#64748b"}}>
             <span style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>{Ic.bell} Alertas</span>
             {notifList.length>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{notifList.length}</span>}
           </button>
           {showNotifs&&notifList.slice(0,4).map(n=>(
             <div key={n.id} onClick={()=>goTab(n.tab)} style={{marginTop:3,background:n.tipo==="danger"?"#fee2e2":n.tipo==="warning"?"#fef3c7":"#dbeafe",borderRadius:6,padding:"5px 8px",fontSize:10,cursor:"pointer",color:n.tipo==="danger"?"#b91c1c":n.tipo==="warning"?"#92400e":"#1d4ed8",lineHeight:1.4}}>{n.msg}</div>
           ))}
-          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"#334155"}}>{BUILD_VERSION}</div>
+          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</div>
         </div>
       </div>
 
@@ -361,7 +375,7 @@ export default function App() {
       </div>
 
       {/* MAIN */}
-      <div style={{marginLeft:isMob?0:214,padding:isMob?"12px 12px 80px":"22px 20px",minHeight:"100vh"}}>
+      <div style={{marginLeft:isMob?0:220,padding:isMob?"12px 12px 80px":"24px 24px",minHeight:"100vh"}}>
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -380,24 +394,31 @@ export default function App() {
 
       {/* Mobile bottom navigation */}
       {isMob&&(
-        <div className="no-print" style={{position:"fixed",bottom:0,left:0,right:0,background:"#0f172a",borderTop:"1px solid #1e293b",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom)"}}>
+        <div className="no-print" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom)",boxShadow:"0 -2px 10px rgba(0,0,0,.06)"}}>
           {[
             {id:"dashboard",   label:"Inicio",    icon:Ic.grid},
             {id:"cotizaciones",label:"Cots.",      icon:Ic.file},
             {id:"operacional", label:"Ops.",       icon:Ic.clock},
             {id:"compras",     label:"Compras",    icon:Ic.cart},
-            {id:"inventario",  label:"Inventario", icon:Ic.warehouse},
+            {id:"__more__",    label:"Más",        icon:Ic.menu},
           ].map(item=>{
+            if(item.id==="__more__") return (
+              <button key="more" onClick={()=>setSideOpen(true)}
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",position:"relative"}}>
+                <span>{Ic.menu}</span>
+                <span style={{fontSize:9,fontWeight:400}}>Más</span>
+              </button>
+            );
             const isAct=tab===item.id;
             const badge=item.id==="compras"?cots.filter(c=>c.estadoOp==="En compra").length
               :item.id==="operacional"?cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length:0;
             return (
               <button key={item.id} onClick={()=>setTab(item.id)}
-                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",color:isAct?"#60a5fa":"#64748b",position:"relative"}}>
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",color:isAct?"#1d4ed8":"#94a3b8",position:"relative"}}>
                 <span style={{opacity:isAct?1:.7}}>{item.icon}</span>
                 <span style={{fontSize:9,fontWeight:isAct?600:400}}>{item.label}</span>
                 {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 14px)",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{badge}</span>}
-                {isAct&&<span style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:"#60a5fa",borderRadius:2}}/>}
+                {isAct&&<span style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:"#1d4ed8",borderRadius:2}}/>}
               </button>
             );
           })}

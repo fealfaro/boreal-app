@@ -170,7 +170,7 @@ export default function App() {
     {id:"u2",nombre:"Jorge Díaz",cargo:"Ejecutivo Comercial",email:"jorge@borealgroup.cl",rol:"ejecutivo"},
   ]);
   const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
-  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15});
+  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
   const [detalleCot,setDetalleCot]= useState(null);
@@ -305,8 +305,8 @@ export default function App() {
                 c.estado==="Modificada"||
                 (c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)
               ).length;
-              if(item.id==="productos")  return productos.filter(p=>(p.stock||0)<5).length;
-              if(item.id==="inventario") return productos.filter(p=>(p.stock||0)<5).length;
+              if(item.id==="productos")  return productos.filter(p=>(p.stock||0)<(config.stockMinimo||5)).length;
+              if(item.id==="inventario") return productos.filter(p=>(p.stock||0)<(config.stockMinimo||5)).length;
               return 0;
             })();
             return (
@@ -339,12 +339,12 @@ export default function App() {
       {/* MAIN */}
       <div style={{marginLeft:isMob()?0:214,padding:"22px 20px",minHeight:"100vh"}}>
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
-        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stock:0,ubicacion:bodegas[0]||"",historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil}/>}
+        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stock:0,ubicacion:bodegas[0]||"",historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos}/>}
-        {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas}/>}
+        {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin}/>}
@@ -455,7 +455,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 }
 
 // ── PRODUCTOS ─────────────────────────────────────────────────
-function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil}) {
+function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
   const fileRef=useRef();
@@ -522,7 +522,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
               <div onClick={()=>onEdit(p)} style={{width:"100%",paddingTop:"75%",position:"relative",background:"#f8fafc",overflow:"hidden"}}>
                 {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
                   :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}>📦</div>}
-                {(p.stock||0)<5&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
+                {(p.stock||0)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
               </div>
               <div style={{padding:"10px 12px"}}>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#94a3b8",marginBottom:2}}>{p.sku}</div>
@@ -1147,6 +1147,16 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
           <div><div style={{fontSize:13,fontWeight:500}}>Días de alerta antes de vencimiento</div></div>
           <input type="number" value={config.diasAlertaVenc||3} min={1} max={14} onChange={e=>setConfigKey("diasAlertaVenc",Number(e.target.value))} style={{width:60,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0"}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:500}}>Stock mínimo para alerta</div>
+            <div style={{fontSize:11,color:"#64748b"}}>Bajo este número el producto aparece como "Stock bajo"</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <input type="number" value={config.stockMinimo||5} min={1} max={999} onChange={e=>setConfigKey("stockMinimo",Number(e.target.value))} style={{width:70,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
+            <span style={{fontSize:12,color:"#64748b"}}>uds.</span>
+          </div>
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0"}}>
           <div><div style={{fontSize:13,fontWeight:500}}>Alerta variación precio compra (%)</div><div style={{fontSize:11,color:"#64748b"}}>Avisa cuando el precio nuevo difiere más que este %</div></div>
@@ -1804,7 +1814,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
 }
 
 // ── MODULO INVENTARIO ─────────────────────────────────────────
-function ModuloInventario({productos,setProductos,movimientos,setMovimientos,perfil,bodegas}) {
+function ModuloInventario({productos,setProductos,movimientos,setMovimientos,perfil,bodegas,stockMinimo=5}) {
   const [subTab,setSubTab]=useState("resumen");
   const [periodoInv,setPeriodoInv]=useState("todo");
   const [filtroProd,setFiltroProd]=useState("");
@@ -1913,8 +1923,8 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
               <tbody>
                 {[...productos].sort((a,b)=>(a.stock||0)-(b.stock||0)).map((p,i)=>{
                   const ultimoMov=movimientos.filter(m=>m.productoId===p.id).sort((a,b)=>b.ts.localeCompare(a.ts))[0];
-                  const stockStatus=(p.stock||0)===0?"crítico":(p.stock||0)<5?"bajo":"ok";
-                  const statusColors={ok:{bg:"#dcfce7",text:"#15803d",label:"OK"},bajo:{bg:"#fef9c3",text:"#854d0e",label:"Stock bajo"},crítico:{bg:"#fee2e2",text:"#b91c1c",label:"Sin stock"}};
+                  const stockStatus=(p.stock||0)===0?"crítico":(p.stock||0)<stockMinimo?"bajo":"ok";
+                  const statusColors={ok:{color:"#15803d"},bajo:{color:"#854d0e"},crítico:{color:"#b91c1c"}};
                   const sc=statusColors[stockStatus];
                   return (
                     <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
@@ -1926,7 +1936,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
                       <td style={{padding:"9px 13px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</td>
                       <td style={{padding:"9px 13px",color:"#64748b"}}>{p.proveedor||"—"}</td>
                       <td style={{padding:"9px 13px",color:"#64748b"}}>{p.ubicacion||"—"}</td>
-                      <td style={{padding:"9px 13px",fontWeight:700,fontSize:15,color:stockStatus==="ok"?"#0f172a":sc.text}}>{fmtN(p.stock||0)}</td>
+                      <td style={{padding:"9px 13px",fontWeight:700,fontSize:15,color:sc.color}}>{fmtN(p.stock||0)}</td>
                       <td style={{padding:"9px 13px",fontSize:11,color:"#94a3b8"}}>
                         {ultimoMov?(
                           <div>
@@ -1936,7 +1946,10 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
                         ):"Sin movimientos"}
                       </td>
                       <td style={{padding:"9px 13px"}}>
-                        <span style={{background:sc.bg,color:sc.text,padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:600}}>{sc.label}</span>
+                        {stockStatus==="ok"
+                          ? <span style={{color:"#94a3b8",fontSize:12}}>—</span>
+                          : <span style={{background:stockStatus==="crítico"?"#fee2e2":"#fef9c3",color:stockStatus==="crítico"?"#b91c1c":"#854d0e",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:600}}>{stockStatus==="crítico"?"Sin stock":"Stock bajo"}</span>
+                        }
                       </td>
                     </tr>
                   );

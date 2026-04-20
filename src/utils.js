@@ -107,3 +107,23 @@ export const copiarAlPortapapeles = async texto => {
 
 export const BUILD_VERSION = "v8.0";
 export const USUARIO_DEFAULT = {nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",telefono:"+56 9 3200 0969",email:"fealfaro@gmail.com",foto:""};
+
+// Format ISO date to dd/mm/yyyy
+export const fmtFecha = s => {
+  if(!s) return "—";
+  const d = s.slice(0,10);
+  if(!d.includes("-")) return d;
+  const [y,m,dd] = d.split("-");
+  return `${dd}/${m}/${y}`;
+};
+
+// Margin color based on configurable thresholds
+export const colorMargen = (pct, umbrales={verde:30,amarillo:15}) => {
+  if(pct >= umbrales.verde)   return {bg:"#dcfce7",text:"#15803d"};
+  if(pct >= umbrales.amarillo)return {bg:"#fef9c3",text:"#854d0e"};
+  if(pct >= 0)                return {bg:"#fed7aa",text:"#9a3412"};
+  return                              {bg:"#fee2e2",text:"#b91c1c"};
+};
+
+// Margin in $ from total and costoTotal
+export const calcUtilidad = (total, costoTotal) => Math.round((total||0) - (costoTotal||0));

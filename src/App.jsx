@@ -10,7 +10,8 @@ import {
   calcPrecioVenta, calcMargenDesde, calcTotalesCot, calcCPP,
   formatRut, addDays, diffDays, PERIODOS, filtrarPorPeriodo,
   ESTADOS_CRITICOS, esRetroceso, exportarProductosCSV, importarProductosCSV,
-  copiarAlPortapapeles, BUILD_VERSION, USUARIO_DEFAULT
+  copiarAlPortapapeles, BUILD_VERSION, USUARIO_DEFAULT,
+  fmtFecha, colorMargen, calcUtilidad
 } from "./utils.js";
 
 const LOGO_B64_WHITE = "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";
@@ -149,7 +150,12 @@ export default function App() {
   const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
   const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
   const [perfil,setPerfil]       = useState(USUARIO_DEFAULT);
-  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30});
+  const [usuarios,setUsuarios]   = useState([
+    {id:"u1",nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",email:"fealfaro@gmail.com",rol:"admin"},
+    {id:"u2",nombre:"Jorge Díaz",cargo:"Ejecutivo Comercial",email:"jorge@borealgroup.cl",rol:"ejecutivo"},
+  ]);
+  const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
+  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
   const [detalleCot,setDetalleCot]= useState(null);
@@ -308,19 +314,19 @@ export default function App() {
       <div style={{marginLeft:isMob()?0:214,padding:"22px 20px",minHeight:"100vh"}}>
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stock:0,ubicacion:bodegas[0]||"",historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config}/>}
-        {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil}/>}
-        {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos}/>}
-        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots}/>}
+        {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
       {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin}/>}
     </div>
   );
 }
@@ -514,7 +520,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 }
 
 // ── COTIZACIONES ──────────────────────────────────────────────
-function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,periodo,setPeriodo,sortCot,setSortCot,onNew,onDetalle,onEditar}) {
+function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,periodo,setPeriodo,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={}}) {
   const handleCopy=async (c,e)=>{
     e.stopPropagation();
     const ok=await copiarAlPortapapeles(`Cotización ${c.numero} — ${c.organismo} — ${fmt(c.total||0)}`);
@@ -570,13 +576,13 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
                         {c.numero} <span style={{opacity:.5}}>{Ic.copy}</span>
                       </button>
                     </td>
-                    <td style={{padding:"8px 11px",color:"#64748b",whiteSpace:"nowrap"}}>{c.fecha}</td>
+                    <td style={{padding:"8px 11px",color:"#64748b",whiteSpace:"nowrap"}}>{fmtFecha(c.fecha)}</td>
                     <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}>
                       {dv!==null?<span style={{fontSize:10,fontWeight:600,color:dv<0?"#b91c1c":dv<=3?"#92400e":"#64748b",background:dv<0?"#fee2e2":dv<=3?"#fef3c7":"transparent",padding:"1px 6px",borderRadius:4}}>{dv<0?"Venció":`${dv}d`}</span>:<span style={{color:"#94a3b8",fontSize:10}}>—</span>}
                     </td>
                     <td style={{padding:"8px 11px",fontWeight:500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.organismo}</td>
                     <td style={{padding:"8px 11px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
-                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}><span style={{color:mg2>=25?"#15803d":"#b91c1c",fontWeight:600}}>{fmtPct(mg2)}</span></td>
+                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}>{()=>{const u=colorMargen(mg2,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600}}>{fmtPct(mg2)}{mg2>0?` · ${fmt(calcUtilidad(c.total,c.costoTotal))}`:""}</span>}()}</td>
                     <td style={{padding:"8px 11px"}}><EstadoBadge estado={c.estado}/></td>
                     <td style={{padding:"8px 11px"}} onClick={e=>e.stopPropagation()}>
                       <button onClick={e=>{e.stopPropagation();onEditar(c);}} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#64748b",transition:"all .12s"}}>Editar</button>
@@ -611,7 +617,7 @@ function ModuloRevision({cots,cambiarEstado,onDetalle}) {
               <div>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:"#1d4ed8",marginBottom:2}}>{c.numero}</div>
                 <div style={{fontWeight:700,fontSize:15}}>{c.organismo}</div>
-                <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{c.fecha} · Ej: {c.ejecutivo||"—"}</div>
+                <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{fmtFecha(c.fecha)} · Ej: {c.ejecutivo||"—"}</div>
               </div>
               <div style={{textAlign:"right"}}>
                 <div style={{fontWeight:700,fontSize:17,color:"#1d4ed8"}}>{fmt(c.total||total)}</div>
@@ -903,7 +909,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config}) {
 }
 
 // ── GASTOS ────────────────────────────────────────────────────
-function ModuloGastos({gastos,setGastos,adjFact,perfil}) {
+function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}}) {
   const [form,setForm]=useState({descripcion:"",categoria:"Transporte",monto:"",fecha:today(),declaradoPor:perfil?.nombre||"",boletaUrl:""});
   const [periodo,setPeriodo]=useState("mes");
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
@@ -966,12 +972,12 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil}) {
               <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #f9fafb"}}>
                 <div>
                   <div style={{fontSize:12,fontWeight:500}}>{g.descripcion}</div>
-                  <div style={{fontSize:10,color:"#94a3b8"}}>{g.fecha} · {g.categoria} · {g.declaradoPor}</div>
+                  <div style={{fontSize:10,color:"#94a3b8"}}>{fmtFecha(g.fecha)} · {g.categoria} · {g.declaradoPor}</div>
                   {g.boletaUrl&&<a href={g.boletaUrl} target="_blank" rel="noreferrer" style={{fontSize:9,color:"#1d4ed8",textDecoration:"none"}}>🔗 Ver boleta</a>}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:7}}>
                   <span style={{fontWeight:700,fontSize:13,color:"#ef4444"}}>{fmt(g.monto)}</span>
-                  <button onClick={()=>setGastos(prev=>prev.filter(x=>x.id!==g.id))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,transition:"color .12s"}}>×</button>
+                  {isAdmin ? <button onClick={()=>setGastos(prev=>prev.filter(x=>x.id!==g.id))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,transition:"color .12s"}} title="Solo admin">×</button> : <span style={{fontSize:10,color:"#cbd5e1",padding:"0 4px"}} title="Solo admin puede eliminar">🔒</span>}
                 </div>
               </div>
             ))}
@@ -983,7 +989,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil}) {
 }
 
 // ── RENTABILIDAD ──────────────────────────────────────────────
-function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos}) {
+function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
   const filtMes=(arr,m)=>m===null?arr:arr.filter(c=>parseInt((c.fecha||"").slice(5,7))===m+1);
   return (
     <div>
@@ -1003,7 +1009,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos}) {
             <div style={{flex:1,minWidth:90}}><div style={{fontWeight:500,fontSize:13}}>{c.organismo}</div><div style={{color:"#94a3b8",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{c.numero}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Venta</div><div style={{fontWeight:700,fontSize:13}}>{fmt(c.total||0)}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Util. bruta</div><div style={{fontWeight:700,fontSize:13,color:"#10b981"}}>{fmt(util)}</div></div>
-            <span style={{background:mg3>=25?"#dcfce7":"#fee2e2",color:mg3>=25?"#15803d":"#b91c1c",padding:"3px 9px",borderRadius:20,fontSize:12,fontWeight:700}}>{fmtPct(mg3)}</span>
+            {()=>{const u=colorMargen(mg3,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"3px 9px",borderRadius:20,fontSize:12,fontWeight:700}}>{fmtPct(mg3)} · {fmt(calcUtilidad(c.total,c.costoTotal))}</span>}()}
           </div>);
         })}
       </div>
@@ -1025,7 +1031,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos}) {
                 <td style={{padding:"7px 9px",color:"#10b981",fontWeight:600}}>{ub>0?fmt(ub):"—"}</td>
                 <td style={{padding:"7px 9px",color:"#ef4444"}}>{gm>0?fmt(gm):"—"}</td>
                 <td style={{padding:"7px 9px",color:un>=0?"#6366f1":"#ef4444",fontWeight:600}}>{vn>0?fmt(un):"—"}</td>
-                <td style={{padding:"7px 9px"}}>{mn!==0?<span style={{background:mn>=25?"#dcfce7":mn>=0?"#fef9c3":"#fee2e2",color:mn>=25?"#15803d":mn>=0?"#854d0e":"#b91c1c",padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:600}}>{fmtPct(mn)}</span>:"—"}</td>
+                <td style={{padding:"7px 9px"}}>{mn!==0?()=>{const u=colorMargen(mn,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:600}}>{fmtPct(mn)}</span>}():"—"}</td>
               </tr>);
             })}</tbody>
           </table>
@@ -1036,7 +1042,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos}) {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────
-function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,config,setConfigKey,cots}) {
+function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,config,setConfigKey,cots,usuarios=[],setUsuarios,isAdmin=false}) {
   const [inputs,setInputs]=useState({prov:"",emp:"",bod:""});
   const si=(k,v)=>setInputs(p=>({...p,[k]:v}));
   const addItem=(items,setItems,val,k)=>{
@@ -1092,6 +1098,65 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
           <input type="number" value={config.alertaVariacionCompra||30} min={5} max={200} onChange={e=>setConfigKey("alertaVariacionCompra",Number(e.target.value))} style={{width:60,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
         </div>
       </div>
+      {/* Umbrales de rentabilidad */}
+      <div style={{background:"#fff",borderRadius:12,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",marginBottom:13}}>
+        <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Umbrales de rentabilidad</div>
+        <div style={{fontSize:12,color:"#64748b",marginBottom:10}}>Define los colores de los indicadores de margen en toda la app</div>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+          {[{label:"Verde (bueno) ≥",k:"umbralVerde",color:"#15803d",bg:"#dcfce7"},{label:"Amarillo (aceptable) ≥",k:"umbralAmarillo",color:"#854d0e",bg:"#fef9c3"}].map(u=>(
+            <div key={u.k} style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{background:u.bg,color:u.color,padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600}}>{u.label}</span>
+              <input type="number" value={config[u.k]||30} min={0} max={100} onChange={e=>setConfigKey(u.k,Number(e.target.value))}
+                style={{width:64,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
+              <span style={{fontSize:12,color:"#64748b"}}>%</span>
+            </div>
+          ))}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{background:"#fee2e2",color:"#b91c1c",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:600}}>Rojo (malo) &lt;</span>
+            <span style={{fontSize:12,color:"#64748b"}}>{config.umbralAmarillo||15}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Gestión de usuarios */}
+      <div style={{background:"#fff",borderRadius:12,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",marginBottom:13}}>
+        <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Usuarios del sistema</div>
+        {!isAdmin && <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#92400e",marginBottom:10}}>🔒 Solo administradores pueden gestionar usuarios</div>}
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+              {["Nombre","Cargo","Email","Rol",""].map(h=><th key={h} style={{padding:"7px 10px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {usuarios.map((u,i)=>(
+                <tr key={u.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#f8fafc"}}>
+                  <td style={{padding:"7px 10px",fontWeight:500}}>{u.nombre}</td>
+                  <td style={{padding:"7px 10px",color:"#64748b"}}>{u.cargo}</td>
+                  <td style={{padding:"7px 10px",color:"#64748b",fontSize:11}}>{u.email}</td>
+                  <td style={{padding:"7px 10px"}}>
+                    {isAdmin ? (
+                      <select value={u.rol} onChange={e=>{if(setUsuarios)setUsuarios(prev=>prev.map(x=>x.id===u.id?{...x,rol:e.target.value}:x));toast("Rol actualizado");}}
+                        style={{padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
+                        <option value="admin">Admin</option>
+                        <option value="ejecutivo">Ejecutivo</option>
+                      </select>
+                    ) : (
+                      <span style={{background:u.rol==="admin"?"#dbeafe":"#f1f5f9",color:u.rol==="admin"?"#1d4ed8":"#475569",padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:500}}>{u.rol}</span>
+                    )}
+                  </td>
+                  <td style={{padding:"7px 10px"}}>
+                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));toast("Usuario eliminado");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {isAdmin && (
+          <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>[...prev,{id:uid(),nombre:"Nuevo usuario",cargo:"Ejecutivo",email:"",rol:"ejecutivo"}]);toast("Usuario agregado — edita los datos en Mi perfil");}} style={{marginTop:10,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontSize:12,color:"#1d4ed8",fontWeight:500}}>+ Agregar usuario</button>
+        )}
+      </div>
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:13}}>
         <MaestroSec title="Proveedores" items={proveedores} setItems={setProv} k="prov" tipo="prov"/>
         <MaestroSec title="Organismos compradores" items={empresas} setItems={setEmpresas} k="emp" tipo="emp"/>
@@ -1243,7 +1308,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
           <div style={{fontSize:10,color:"#64748b",fontWeight:600,marginBottom:4}}>Historial CPP</div>
           {[...form.historialCostos].reverse().slice(0,4).map((h,i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"2px 0",color:"#64748b"}}>
-              <span>{h.fecha}</span><span>{fmtN(h.cantidad||0)} uds · {fmt(h.costo)}</span>
+              <span>{fmtFecha(h.fecha)}</span><span>{fmtN(h.cantidad||0)} uds · {fmt(h.costo)}</span>
               {h.cpp&&<span style={{color:"#1d4ed8",fontWeight:500}}>CPP: {fmt(h.cpp)}</span>}
             </div>
           ))}
@@ -1363,7 +1428,7 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
 }
 
 // ── DETALLE COTIZACION ────────────────────────────────────────
-function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil}) {
+function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false}) {
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
@@ -1401,7 +1466,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
             {c.numero} {Ic.copy}
           </button>
           <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{c.organismo}</h2>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{c.fecha}{c.fechaVencimiento?` · Vence ${c.fechaVencimiento}`:""} · Ej: {c.ejecutivo||"—"}</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{fmtFecha(c.fecha)}{c.fechaVencimiento?` · Vence ${fmtFecha(c.fechaVencimiento)}`:""} · Ej: {c.ejecutivo||"—"}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}><EstadoBadge estado={c.estado}/><CloseBtn onClose={onClose}/></div>
       </div>
@@ -1467,7 +1532,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
           <div style={{background:"#f8fafc",borderRadius:7,padding:"7px 10px",maxHeight:100,overflowY:"auto"}}>
             {[...(c.log||[])].reverse().map((entry,i)=>(
               <div key={i} style={{display:"flex",gap:7,fontSize:11,padding:"2px 0",flexWrap:"wrap"}}>
-                <span style={{color:"#94a3b8",flexShrink:0,fontFamily:"'DM Mono',monospace",fontSize:9}}>{fmtDateTime(entry.ts||entry.fecha)}</span>
+                <span style={{color:"#94a3b8",flexShrink:0,fontFamily:"'DM Mono',monospace",fontSize:9}}>{fmtDateTime(entry.ts)||fmtFecha(entry.fecha)}</span>
                 <EstadoBadge estado={entry.estado}/>
                 {entry.usuario&&<span style={{color:"#1d4ed8",fontSize:10,fontWeight:500}}>{entry.usuario}</span>}
                 {entry.nota&&<span style={{color:"#64748b"}}>{entry.nota}</span>}
@@ -1477,7 +1542,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         </div>
       )}
       <div style={{display:"flex",gap:7,justifyContent:"space-between",flexWrap:"wrap"}}>
-        <Btn onClick={onEditar} size="sm">Editar</Btn>
+        {(isAdmin||!["Facturada","Adjudicada","Rechazada"].includes(c.estado)) ? <Btn onClick={onEditar} size="sm">Editar</Btn> : <span style={{fontSize:11,color:"#94a3b8",padding:"4px 8px",background:"#f1f5f9",borderRadius:7}} title="Solo admin puede editar">🔒 Solo admin</span>}
         <div style={{display:"flex",gap:7}}>
           <Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">📄 PDF</Btn>
           <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>

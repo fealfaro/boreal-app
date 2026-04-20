@@ -151,7 +151,7 @@ function PeriodoChips({periodo,setPeriodo}) {
   );
 }
 
-function buildNotifs(cots, prods) {
+function buildNotifs(cots, prods, stockMin=5) {
   const n=[], t=today();
   cots.forEach(c=>{
     if(c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)){
@@ -162,7 +162,7 @@ function buildNotifs(cots, prods) {
   });
   const comp=cots.filter(c=>c.estadoOp==="En compra");
   if(comp.length) n.push({id:"comp",tipo:"info",msg:`${comp.length} cot. en proceso de compra`,tab:"compras"});
-  prods.forEach(p=>{if(getStockTotal(p)<(window._stockMinimo||5)) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
+  prods.forEach(p=>{if(getStockTotal(p)<stockMin) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
   return n;
 }
 
@@ -183,7 +183,6 @@ export default function App() {
     {id:"u2",nombre:"Jorge Díaz",cargo:"Ejecutivo Comercial",email:"jorge@borealgroup.cl",rol:"ejecutivo"},
   ]);
   const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
-  window._stockMinimo = config.stockMinimo||5;
   const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
@@ -196,7 +195,7 @@ export default function App() {
   const [periDash,setPeriDash]   = useState("mes");
   const [mesRent,setMesRent]     = useState(null);
 
-  const notifList = buildNotifs(cots, productos);
+  const notifList = buildNotifs(cots, productos, config.stockMinimo||5);
   const adjFact   = cots.filter(c=>["Adjudicada","Facturada"].includes(c.estado));
 
   // Dashboard aggregates
@@ -1346,8 +1345,8 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
   const handleClose=()=>{if(dirty){if(window.confirm("¿Cerrar sin guardar?"))onClose();}else onClose();};
   const handleSave=()=>{
     if(!form.nombre.trim()){toast("El nombre es obligatorio","warning");return;}
-    if(form.ubicacion&&!bodegas.includes(form.ubicacion)){toast(`Bodega "${form.ubicacion}" no existe en el maestro`,"warning");return;}
-    onSave({...form,costo:Number(form.costo)||0,margen:Number(form.margen)||0,stock:Number(form.stock)||0});
+    const spb=(form.stockPorBodega||[]).filter(b=>b.bodega);
+    onSave({...form,costo:Number(form.costo)||0,margen:Number(form.margen)||0,stockPorBodega:spb,stock:spb.reduce((a,b)=>a+(b.cantidad||0),0)});
   };
   const inp={width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
   return (
@@ -1385,7 +1384,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
         <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
           {(form.stockPorBodega||[]).map((sb,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<(form.stockPorBodega||[]).length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#f8fafc"}}>
-              <select value={sb.bodega} onChange={e=>{const spb=[...form.stockPorBodega];spb[i]={...spb[i],bodega:e.target.value};set("stockPorBodega",spb);}}
+              <select value={sb.bodega} onChange={e=>{const spb=[...(form.stockPorBodega||[])];spb[i]={...spb[i],bodega:e.target.value};set("stockPorBodega",spb);}}
                 style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="">— Sin bodega —</option>
                 {bodegas.map(b=><option key={b} value={b}>{b}</option>)}
@@ -2194,10 +2193,11 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
 
   const guardarCantidad=(prod,bIdx,nuevaCant)=>{
     const key=`${prod.id}_${bIdx}`;
-    const cantAnterior=prod.stockPorBodega[bIdx].cantidad||0;
+    const spbSafe=prod.stockPorBodega||[];
+    const cantAnterior=(spbSafe[bIdx]?.cantidad)||0;
     const delta=nuevaCant-cantAnterior;
     if(delta===0){setEditando(e=>{const n={...e};delete n[key];return n;});return;}
-    const spbNew=prod.stockPorBodega.map((b,i)=>i===bIdx?{...b,cantidad:nuevaCant}:b);
+    const spbNew=(prod.stockPorBodega||[]).map((b,i)=>i===bIdx?{...b,cantidad:nuevaCant}:b);
     const stockTotal=spbNew.reduce((a,b)=>a+(b.cantidad||0),0);
     setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stockPorBodega:spbNew,stock:stockTotal,updatedAt:nowISO()}));
     setMovimientos(prev=>[...prev,{

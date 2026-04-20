@@ -58,12 +58,25 @@ const NAV = [
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
 ];
 
+// Helper: total stock across all bodegas
+const getStockTotal = (p) => {
+  if(p.stockPorBodega&&p.stockPorBodega.length>0)
+    return p.stockPorBodega.reduce((a,b)=>a+(b.cantidad||0),0);
+  return p.stock||0;
+};
+
+// Helper: migrate legacy stock/ubicacion to stockPorBodega
+const migrarStock = (p) => {
+  if(p.stockPorBodega) return p;
+  return {...p,stockPorBodega:[{bodega:p.ubicacion||"Bodega A-1",cantidad:p.stock||0}]};
+};
+
 const SEED_PRODS = [
-  {id:"p1",sku:"ASE-001",nombre:"Cloro líquido 5L",proveedor:"Brenntag",costo:2800,margen:30,foto_url:"",stock:20,ubicacion:"Bodega A-1",historialCostos:[{fecha:today(),costo:2800,cantidad:20,usuario:"Felipe Alfaro"}]},
-  {id:"p2",sku:"ASE-002",nombre:"Detergente industrial 10kg",proveedor:"Unilever",costo:8500,margen:28,foto_url:"",stock:8,ubicacion:"Bodega A-2",historialCostos:[]},
-  {id:"p3",sku:"ASE-003",nombre:"Jabón líquido 5L",proveedor:"Diversey",costo:4100,margen:29,foto_url:"",stock:15,ubicacion:"Bodega B-1",historialCostos:[]},
-  {id:"p4",sku:"ASE-004",nombre:"Papel higiénico Elite x48",proveedor:"CMPC",costo:12000,margen:22,foto_url:"",stock:5,ubicacion:"Bodega B-2",historialCostos:[]},
-  {id:"p5",sku:"ASE-005",nombre:"Guantes nitrilo caja x100",proveedor:"Ansell",costo:6400,margen:32,foto_url:"",stock:12,ubicacion:"Bodega C-1",historialCostos:[]},
+  {id:"p1",sku:"ASE-001",nombre:"Cloro líquido 5L",proveedor:"Brenntag",costo:2800,margen:30,foto_url:"",stockPorBodega:[{bodega:"Bodega A-1",cantidad:20}],historialCostos:[{fecha:today(),costo:2800,cantidad:20,usuario:"Felipe Alfaro"}]},
+  {id:"p2",sku:"ASE-002",nombre:"Detergente industrial 10kg",proveedor:"Unilever",costo:8500,margen:28,foto_url:"",stockPorBodega:[{bodega:"Bodega A-2",cantidad:8}],historialCostos:[]},
+  {id:"p3",sku:"ASE-003",nombre:"Jabón líquido 5L",proveedor:"Diversey",costo:4100,margen:29,foto_url:"",stockPorBodega:[{bodega:"Bodega B-1",cantidad:15}],historialCostos:[]},
+  {id:"p4",sku:"ASE-004",nombre:"Papel higiénico Elite x48",proveedor:"CMPC",costo:12000,margen:22,foto_url:"",stockPorBodega:[{bodega:"Bodega B-2",cantidad:5}],historialCostos:[]},
+  {id:"p5",sku:"ASE-005",nombre:"Guantes nitrilo caja x100",proveedor:"Ansell",costo:6400,margen:32,foto_url:"",stockPorBodega:[{bodega:"Bodega C-1",cantidad:12}],historialCostos:[]},
 ];
 
 // ── Shared UI ─────────────────────────────────────────────────
@@ -149,7 +162,7 @@ function buildNotifs(cots, prods) {
   });
   const comp=cots.filter(c=>c.estadoOp==="En compra");
   if(comp.length) n.push({id:"comp",tipo:"info",msg:`${comp.length} cot. en proceso de compra`,tab:"compras"});
-  prods.forEach(p=>{if((p.stock||0)<5) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre}`,tab:"productos"});});
+  prods.forEach(p=>{if(getStockTotal(p)<(window._stockMinimo||5)) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
   return n;
 }
 
@@ -170,6 +183,7 @@ export default function App() {
     {id:"u2",nombre:"Jorge Díaz",cargo:"Ejecutivo Comercial",email:"jorge@borealgroup.cl",rol:"ejecutivo"},
   ]);
   const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
+  window._stockMinimo = config.stockMinimo||5;
   const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
@@ -221,12 +235,8 @@ export default function App() {
   const guardarProd=p=>{
     try {
       if(p.proveedor&&!proveedores.includes(p.proveedor)) setProv(prev=>[...prev,p.proveedor]);
-      // Validate bodega
-      if(p.ubicacion && !bodegas.includes(p.ubicacion)){
-        toast(`Bodega "${p.ubicacion}" no existe. Créala primero en Configuración.`,"warning");
-        return;
-      }
-      const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stock:Number(p.stock)||0,updatedAt:nowISO()};
+      const spb=(p.stockPorBodega||[]).filter(b=>b.bodega&&b.cantidad>=0);
+      const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stockPorBodega:spb,stock:spb.reduce((a,b)=>a+(b.cantidad||0),0),updatedAt:nowISO()};
       if(productos.find(x=>x.id===p.id)) setProductos(prev=>prev.map(x=>x.id===p.id?limpio:x));
       else setProductos(prev=>[...prev,{...limpio,id:uid()}]);
       setModalProd(null);
@@ -305,8 +315,8 @@ export default function App() {
                 c.estado==="Modificada"||
                 (c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)
               ).length;
-              if(item.id==="productos")  return productos.filter(p=>(p.stock||0)<(config.stockMinimo||5)).length;
-              if(item.id==="inventario") return productos.filter(p=>(p.stock||0)<(config.stockMinimo||5)).length;
+              if(item.id==="productos")  return productos.filter(p=>getStockTotal(p)<(config.stockMinimo||5)).length;
+              if(item.id==="inventario") return productos.filter(p=>getStockTotal(p)<(config.stockMinimo||5)).length;
               return 0;
             })();
             return (
@@ -339,11 +349,11 @@ export default function App() {
       {/* MAIN */}
       <div style={{marginLeft:isMob()?0:214,padding:"22px 20px",minHeight:"100vh"}}>
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
-        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stock:0,ubicacion:bodegas[0]||"",historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
+        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
-        {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos}/>}
+        {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
         {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -522,7 +532,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
               <div onClick={()=>onEdit(p)} style={{width:"100%",paddingTop:"75%",position:"relative",background:"#f8fafc",overflow:"hidden"}}>
                 {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
                   :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}>📦</div>}
-                {(p.stock||0)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
+                {getStockTotal(p)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
               </div>
               <div style={{padding:"10px 12px"}}>
                 <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:"#94a3b8",marginBottom:2}}>{p.sku}</div>
@@ -535,7 +545,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
                     <button onClick={e=>{e.stopPropagation();onClonar(p);}} title="Clonar" style={{background:"#eff6ff",border:"1px solid #bae6fd",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:11,color:"#1e40af"}}>⧉</button>
                   </div>
                 </div>
-                <div style={{marginTop:5,fontSize:10,color:"#94a3b8"}}>Stock: {fmtN(p.stock||0)} · {p.ubicacion||"—"}</div>
+                <div style={{marginTop:5,fontSize:10,color:"#94a3b8"}}>Stock total: {fmtN(getStockTotal(p))} uds</div>
               </div>
             </div>
           );
@@ -700,9 +710,17 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
         (c.items||[]).forEach(item=>{
           const prod=productos.find(p=>p.id===item.productoId||p.nombre===item.nombre);
           if(prod) {
-            const stockAntes=prod.stock||0;
-            const stockDespues=Math.max(0,stockAntes-item.cantidad);
-            setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stock:stockDespues,updatedAt:nowISO()}));
+            const stockAntes=getStockTotal(prod);
+            // Deduct from first available bodega with enough stock
+            let remaining=item.cantidad;
+            const spbNew=(prod.stockPorBodega||[{bodega:"",cantidad:stockAntes}]).map(b=>{
+              if(remaining<=0) return b;
+              const deduct=Math.min(b.cantidad||0,remaining);
+              remaining-=deduct;
+              return{...b,cantidad:(b.cantidad||0)-deduct};
+            });
+            const stockDespues=spbNew.reduce((a,b)=>a+(b.cantidad||0),0);
+            setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stockPorBodega:spbNew,stock:stockDespues,updatedAt:nowISO()}));
             setMovimientos(prev=>[...prev,{
               id:uid(),ts:nowISO(),fecha:today(),tipo:"salida",
               productoId:prod.id,nombreProducto:prod.nombre,
@@ -791,11 +809,12 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
 }
 
 // ── COMPRAS ───────────────────────────────────────────────────
-function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos}) {
+function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos,bodegas=[]}) {
   const [periodo,setPeriodo]=useState("todo");
   const [historial,setHistorial]=useState([]);
   const [compradas,setCompradas]=useState({});
   const [precios,setPrecios]=useState({});
+  const [bodegasCompra,setBodegasCompra]=useState({});
   const [verHistorial,setVerHistorial]=useState(false);
 
   const pendientes=cots.filter(c=>c.estadoOp==="En compra");
@@ -811,7 +830,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
 
   const getStockFaltante=(item)=>{
     const prod=productos.find(p=>p.id===item.productoId||p.nombre===item.nombre);
-    const stockActual=prod?.stock||0;
+    const stockActual=prod?getStockTotal(prod):0;
     return Math.max(0,item.cantidadTotal-stockActual);
   };
 
@@ -821,7 +840,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
     return pct>(config?.alertaVariacionCompra||30);
   };
 
-  const marcarComprado=(key,precio)=>{
+  const marcarComprado=(key,precio,bodegaCompra)=>{
     const item=lista.find(i=>(i.productoId||i.nombre)===key);
     const prod=productos.find(p=>p.id===item?.productoId||p.nombre===item?.nombre);
     const qty=getStockFaltante(item);
@@ -858,7 +877,12 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
     const h=historial.find(x=>x.key===key);
     if(!h) return;
     const prod=productos.find(p=>p.id===key||p.nombre===lista.find(i=>(i.productoId||i.nombre)===key)?.nombre);
-    if(prod) setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stock:Math.max(0,(p.stock||0)-h.qty),historialCostos:(p.historialCostos||[]).slice(0,-1)}));
+    if(prod) {
+      const bodegaDest=h.bodegaDest||(prod.stockPorBodega&&prod.stockPorBodega[0]?.bodega)||"";
+      const spbNew=(prod.stockPorBodega||[]).map(b=>b.bodega===bodegaDest?{...b,cantidad:Math.max(0,(b.cantidad||0)-h.qty)}:b);
+      const stockTotal=spbNew.reduce((a,b)=>a+(b.cantidad||0),0);
+      setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stockPorBodega:spbNew,stock:stockTotal,historialCostos:(p.historialCostos||[]).slice(0,-1)}));
+    }
     setCompradas(prev=>{const n={...prev};delete n[key];return n;});
     setHistorial(prev=>prev.filter(x=>x.key!==key));
     toast("Compra deshecha","warning");
@@ -906,7 +930,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:560}}>
                 <thead><tr style={{background:"#0f172a",color:"#fff"}}>
-                  {["Producto","Proveedor","Stock actual","Stock faltante","Costo actual","Precio compra","Total","Estado"].map(h=><th key={h} style={{padding:"9px 11px",textAlign:"left",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
+                  {["Producto","Proveedor","Stock actual","Faltante","Costo actual","Bodega destino","Precio compra","Total","Estado"].map(h=><th key={h} style={{padding:"9px 11px",textAlign:"left",fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {lista.map((item,i)=>{
@@ -926,6 +950,13 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
                         <td style={{padding:"9px 11px"}}><span style={{fontSize:11,fontWeight:500,color:(prod?.stock||0)<5?"#b91c1c":"#64748b"}}>{fmtN(prod?.stock||0)}</span></td>
                         <td style={{padding:"9px 11px",fontWeight:700,color:stockFalt>0?"#1d4ed8":"#15803d"}}>{stockFalt>0?fmtN(stockFalt):"✓ Suficiente"}</td>
                         <td style={{padding:"9px 11px",fontWeight:600}}>{fmt(prod?.costo||item.costo)}</td>
+                      <td style={{padding:"9px 11px"}}>
+                        <select value={bodegasCompra[k]||(prod?.stockPorBodega&&prod.stockPorBodega[0]?.bodega)||""}
+                          onChange={e=>setBodegasCompra(prev=>({...prev,[k]:e.target.value}))}
+                          disabled={ya} style={{padding:"3px 7px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",maxWidth:110}}>
+                          {bodegas.map(b=><option key={b}>{b}</option>)}
+                        </select>
+                      </td>
                         <td style={{padding:"9px 11px"}}>
                           <div>
                             <MilesInput value={precios[k]||""} onChange={v=>setPrecios(prev=>({...prev,[k]:v}))} placeholder={fmtMiles(prod?.costo||item.costo)} style={{width:90,padding:"3px 7px",fontSize:12}} disabled={ya}/>
@@ -940,7 +971,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
                               <button onClick={()=>deshacer(k)} style={{background:"#f1f5f9",border:"none",borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",gap:2,color:"#64748b",transition:"all .12s"}}>{Ic.undo}</button>
                             </div>
                           ):(
-                            <button onClick={()=>marcarComprado(k,precios[k])} disabled={stockFalt===0} style={{background:stockFalt===0?"#f1f5f9":"#1d4ed8",color:stockFalt===0?"#94a3b8":"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:stockFalt===0?"default":"pointer",fontSize:11,fontWeight:600,transition:"all .12s"}}>
+                            <button onClick={()=>marcarComprado(k,precios[k],bodegasCompra[k])} disabled={stockFalt===0} style={{background:stockFalt===0?"#f1f5f9":"#1d4ed8",color:stockFalt===0?"#94a3b8":"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:stockFalt===0?"default":"pointer",fontSize:11,fontWeight:600,transition:"all .12s"}}>
                               {stockFalt===0?"Sin faltante":"Comprar"}
                             </button>
                           )}
@@ -1281,7 +1312,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
   const [form,setForm]=useState({
     id:producto.id||"",sku:producto.sku||"",nombre:producto.nombre||"",proveedor:producto.proveedor||"",
     costo:Number(producto.costo)||0,margen:Number(producto.margen)||30,foto_url:producto.foto_url||"",
-    stock:Number(producto.stock)||0,ubicacion:producto.ubicacion||bodegas[0]||"",
+    stockPorBodega:producto.stockPorBodega||[{bodega:bodegas[0]||"",cantidad:producto.stock||0}],
     historialCostos:producto.historialCostos||[],
   });
   const [dirty,setDirty]=useState(false);
@@ -1344,12 +1375,33 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
         <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Margen (%)</label>
           <input type="number" value={form.margen} onChange={e=>set("margen",e.target.value)} style={{...inp,borderColor:margenNeg?"#ef4444":"#e2e8f0",background:margenNeg?"#fff5f5":"#fff"}}/>
         </div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Stock actual</label><MilesInput value={form.stock} onChange={v=>set("stock",v)}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Bodega</label>
-          <select value={form.ubicacion} onChange={e=>set("ubicacion",e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
-            <option value="">— Sin bodega —</option>
-            {bodegas.map(b=><option key={b} value={b}>{b}</option>)}
-          </select>
+      </div>
+      {/* Stock por bodega */}
+      <div style={{marginTop:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <label style={{fontSize:11,color:"#64748b",fontWeight:600}}>STOCK POR BODEGA</label>
+          <span style={{fontSize:12,color:"#64748b"}}>Total: <strong>{fmtN((form.stockPorBodega||[]).reduce((a,b)=>a+(b.cantidad||0),0))}</strong> uds</span>
+        </div>
+        <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
+          {(form.stockPorBodega||[]).map((sb,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<(form.stockPorBodega||[]).length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#f8fafc"}}>
+              <select value={sb.bodega} onChange={e=>{const spb=[...form.stockPorBodega];spb[i]={...spb[i],bodega:e.target.value};set("stockPorBodega",spb);}}
+                style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,background:"#fff",cursor:"pointer"}}>
+                <option value="">— Sin bodega —</option>
+                {bodegas.map(b=><option key={b} value={b}>{b}</option>)}
+              </select>
+              <MilesInput value={sb.cantidad} onChange={v=>{const spb=[...form.stockPorBodega];spb[i]={...spb[i],cantidad:Number(v)||0};set("stockPorBodega",spb);}} style={{width:90}}/>
+              <span style={{fontSize:11,color:"#94a3b8"}}>uds</span>
+              <button onClick={()=>set("stockPorBodega",(form.stockPorBodega||[]).filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,padding:2,transition:"color .12s"}}
+                onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
+            </div>
+          ))}
+          <div style={{padding:"7px 11px",background:"#f8fafc"}}>
+            <button onClick={()=>set("stockPorBodega",[...(form.stockPorBodega||[]),{bodega:bodegas[0]||"",cantidad:0}])}
+              style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:12,fontWeight:500,display:"flex",alignItems:"center",gap:4,padding:0}}>
+              <span style={{fontSize:16,lineHeight:1}}>+</span> Agregar bodega
+            </button>
+          </div>
         </div>
       </div>
       {/* Precio venta editable */}
@@ -1705,7 +1757,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
     if(nuevoEstado==="Adjudicada"){
       const sinStock=(c.items||[]).filter(item=>{
         const p=productos.find(x=>x.id===item.productoId||x.nombre===item.nombre);
-        return !p||(p.stock||0)<item.cantidad;
+        return !p||getStockTotal(p)<item.cantidad;
       });
       if(sinStock.length>0){
         const ok=window.confirm(`⚠ Stock insuficiente:\n${sinStock.map(i=>i.nombre).join(", ")}\n\n¿Adjudicar e iniciar compra?`);
@@ -1912,52 +1964,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
 
       {/* ── RESUMEN ── */}
       {subTab==="resumen"&&(
-        <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-              <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                {["","Producto","SKU","Proveedor","Bodega","Stock actual","Últ. movimiento","Estado"].map(h=>(
-                  <th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {[...productos].sort((a,b)=>(a.stock||0)-(b.stock||0)).map((p,i)=>{
-                  const ultimoMov=movimientos.filter(m=>m.productoId===p.id).sort((a,b)=>b.ts.localeCompare(a.ts))[0];
-                  const stockStatus=(p.stock||0)===0?"crítico":(p.stock||0)<stockMinimo?"bajo":"ok";
-                  const statusColors={ok:{color:"#15803d"},bajo:{color:"#854d0e"},crítico:{color:"#b91c1c"}};
-                  const sc=statusColors[stockStatus];
-                  return (
-                    <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
-                      <td style={{padding:"9px 10px",width:40}}>
-                        {p.foto_url?<img src={p.foto_url} alt="" style={{width:32,height:32,objectFit:"cover",borderRadius:5}}/>
-                          :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📦</div>}
-                      </td>
-                      <td style={{padding:"9px 13px",fontWeight:600}}>{p.nombre}</td>
-                      <td style={{padding:"9px 13px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</td>
-                      <td style={{padding:"9px 13px",color:"#64748b"}}>{p.proveedor||"—"}</td>
-                      <td style={{padding:"9px 13px",color:"#64748b"}}>{p.ubicacion||"—"}</td>
-                      <td style={{padding:"9px 13px",fontWeight:700,fontSize:15,color:sc.color}}>{fmtN(p.stock||0)}</td>
-                      <td style={{padding:"9px 13px",fontSize:11,color:"#94a3b8"}}>
-                        {ultimoMov?(
-                          <div>
-                            <div style={{color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>{TIPO_COLORS[ultimoMov.tipo]?.label} {ultimoMov.tipo==="entrada"?"+":"-"}{fmtN(ultimoMov.cantidad)}</div>
-                            <div style={{color:"#94a3b8"}}>{fmtFecha(ultimoMov.fecha)}</div>
-                          </div>
-                        ):"Sin movimientos"}
-                      </td>
-                      <td style={{padding:"9px 13px"}}>
-                        {stockStatus==="ok"
-                          ? <span style={{color:"#94a3b8",fontSize:12}}>—</span>
-                          : <span style={{background:stockStatus==="crítico"?"#fee2e2":"#fef9c3",color:stockStatus==="crítico"?"#b91c1c":"#854d0e",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:600}}>{stockStatus==="crítico"?"Sin stock":"Stock bajo"}</span>
-                        }
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ResumenStock productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} stockMinimo={stockMinimo} perfil={perfil} TIPO_COLORS={TIPO_COLORS}/>
       )}
 
       {/* ── MOVIMIENTOS ── */}
@@ -2174,6 +2181,146 @@ function AjustePreview({productos,ajuste}) {
     <div style={{marginTop:4}}>
       Stock actual: <strong>{fmtN(prod.stock||0)}</strong>
       {" → "}Stock resultante: <strong style={{color:res<5?"#b91c1c":"#15803d"}}>{fmtN(res)}</strong>
+    </div>
+  );
+}
+
+// ── RESUMEN STOCK — expandable per-bodega with inline edit ────
+function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMinimo,perfil,TIPO_COLORS}) {
+  const [expandidos,setExpandidos]=useState({});
+  const [editando,setEditando]=useState({}); // {productoId_bodegaIdx: cantidad}
+
+  const toggleExpand=id=>setExpandidos(e=>({...e,[id]:!e[id]}));
+
+  const guardarCantidad=(prod,bIdx,nuevaCant)=>{
+    const key=`${prod.id}_${bIdx}`;
+    const cantAnterior=prod.stockPorBodega[bIdx].cantidad||0;
+    const delta=nuevaCant-cantAnterior;
+    if(delta===0){setEditando(e=>{const n={...e};delete n[key];return n;});return;}
+    const spbNew=prod.stockPorBodega.map((b,i)=>i===bIdx?{...b,cantidad:nuevaCant}:b);
+    const stockTotal=spbNew.reduce((a,b)=>a+(b.cantidad||0),0);
+    setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stockPorBodega:spbNew,stock:stockTotal,updatedAt:nowISO()}));
+    setMovimientos(prev=>[...prev,{
+      id:uid(),ts:nowISO(),fecha:today(),tipo:"ajuste",
+      productoId:prod.id,nombreProducto:prod.nombre,
+      cantidad:Math.abs(delta),
+      stockAntes:getStockTotal(prod),
+      stockDespues:stockTotal,
+      referencia:"Ajuste desde inventario",
+      motivo:"Corrección de stock",
+      bodegaOrigen:"",bodegaDestino:prod.stockPorBodega[bIdx].bodega,
+      usuario:perfil?.nombre||""
+    }]);
+    setEditando(e=>{const n={...e};delete n[key];return n;});
+    toast(`Stock actualizado: ${prod.nombre} · ${prod.stockPorBodega[bIdx].bodega}`);
+  };
+
+  const prodOrdenados=[...productos].sort((a,b)=>getStockTotal(a)-getStockTotal(b));
+
+  return (
+    <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+      {/* Header */}
+      <div style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 80px 120px 120px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+        {["","Producto","SKU","Stock total","Último mov.",""].map((h,i)=>(
+          <div key={i} style={{padding:"10px 13px",fontSize:11,color:"#64748b",fontWeight:700}}>{h}</div>
+        ))}
+      </div>
+
+      {prodOrdenados.map((p,pi)=>{
+        const stockTotal=getStockTotal(p);
+        const ultimoMov=movimientos.filter(m=>m.productoId===p.id).sort((a,b)=>b.ts.localeCompare(a.ts))[0];
+        const stockColor=stockTotal===0?"#b91c1c":stockTotal<stockMinimo?"#854d0e":"#15803d";
+        const isExp=expandidos[p.id];
+        const spb=p.stockPorBodega||[{bodega:p.ubicacion||"—",cantidad:stockTotal}];
+
+        return (
+          <div key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
+            {/* Fila producto */}
+            <div style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 80px 120px 120px",alignItems:"center",background:pi%2===0?"#fff":"#fafafa",cursor:"pointer"}}
+              onClick={()=>toggleExpand(p.id)}>
+              <div style={{padding:"10px 10px"}}>
+                {p.foto_url
+                  ?<img src={p.foto_url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,display:"block"}}/>
+                  :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
+                }
+              </div>
+              <div style={{padding:"10px 13px"}}>
+                <div style={{fontWeight:600,fontSize:13}}>{p.nombre}</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{p.proveedor||""}</div>
+              </div>
+              <div style={{padding:"10px 13px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</div>
+              <div style={{padding:"10px 13px",fontWeight:700,fontSize:15,color:stockColor}}>{fmtN(stockTotal)}</div>
+              <div style={{padding:"10px 13px",fontSize:11,color:"#94a3b8"}}>
+                {ultimoMov
+                  ?<span style={{color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>
+                    {ultimoMov.tipo==="entrada"?"+":"-"}{fmtN(ultimoMov.cantidad)} · {fmtFecha(ultimoMov.fecha)}
+                  </span>
+                  :"—"
+                }
+              </div>
+              <div style={{padding:"10px 13px",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:16,transition:"transform .2s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                <span>{isExp?"Ocultar":"Ver bodegas"} ({spb.length})</span>
+              </div>
+            </div>
+
+            {/* Filas expandidas — una por bodega, con edición inline */}
+            {isExp&&(
+              <div style={{background:"#f8fafc",borderTop:"1px solid #f1f5f9"}}>
+                {spb.map((sb,bi)=>{
+                  const key=`${p.id}_${bi}`;
+                  const isEdit=editando[key]!==undefined;
+                  const bColor=(sb.cantidad||0)===0?"#b91c1c":(sb.cantidad||0)<stockMinimo?"#854d0e":"#15803d";
+                  return (
+                    <div key={bi} style={{display:"grid",gridTemplateColumns:"40px 1fr auto",alignItems:"center",padding:"8px 0",borderBottom:bi<spb.length-1?"1px solid #f1f5f9":"none",paddingLeft:52}}>
+                      <div/>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:18,color:"#94a3b8"}}>🏬</span>
+                        <span style={{fontSize:13,fontWeight:500,color:"#475569"}}>{sb.bodega||"Sin bodega"}</span>
+                      </div>
+                      <div style={{padding:"0 16px",display:"flex",alignItems:"center",gap:8}}>
+                        {isEdit ? (
+                          <>
+                            <input
+                              type="number"
+                              value={editando[key]}
+                              onChange={e=>setEditando(ed=>({...ed,[key]:Number(e.target.value)||0}))}
+                              onKeyDown={e=>{
+                                if(e.key==="Enter") guardarCantidad(p,bi,editando[key]);
+                                if(e.key==="Escape") setEditando(ed=>{const n={...ed};delete n[key];return n;});
+                              }}
+                              autoFocus
+                              style={{width:72,padding:"4px 8px",borderRadius:6,border:"1.5px solid #1d4ed8",fontSize:14,fontWeight:700,textAlign:"center",outline:"none",background:"#eff6ff"}}
+                            />
+                            <span style={{fontSize:11,color:"#64748b"}}>uds</span>
+                            <button onClick={()=>guardarCantidad(p,bi,editando[key])} style={{background:"#1d4ed8",border:"none",borderRadius:6,color:"#fff",padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600}}>✓</button>
+                            <button onClick={()=>setEditando(ed=>{const n={...ed};delete n[key];return n;})} style={{background:"#f1f5f9",border:"none",borderRadius:6,color:"#64748b",padding:"4px 8px",cursor:"pointer",fontSize:12}}>✗</button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{fontWeight:700,fontSize:15,color:bColor,minWidth:40,textAlign:"right"}}>{fmtN(sb.cantidad||0)}</span>
+                            <span style={{fontSize:11,color:"#94a3b8"}}>uds</span>
+                            <button
+                              onClick={e=>{e.stopPropagation();setEditando(ed=>({...ed,[key]:sb.cantidad||0}));}}
+                              style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,color:"#64748b",padding:"3px 9px",cursor:"pointer",fontSize:11,fontWeight:500,marginLeft:4,transition:"all .12s"}}
+                              onMouseEnter={e=>{e.currentTarget.style.background="#eff6ff";e.currentTarget.style.color="#1d4ed8";}}
+                              onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
+                              Editar
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{padding:"8px 16px 8px 52px",fontSize:11,color:"#94a3b8"}}>
+                  Clic en "Editar" para ajustar stock · Enter confirma · Esc cancela
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

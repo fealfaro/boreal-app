@@ -54,6 +54,7 @@ const NAV = [
   {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
   {id:"gastos",      label:"Gastos",       icon:Ic.wallet},
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
+  {id:"admin",       label:"Admin",         icon:Ic.settings, adminOnly:true},
   {id:"maestros",    label:"Maestros",      icon:Ic.box},
   {id:"config",      label:"Configuración",icon:Ic.settings},
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
@@ -83,11 +84,17 @@ const SEED_PRODS = [
 // ── Shared UI ─────────────────────────────────────────────────
 function Modal({onClose,children,maxWidth=480}) {
   const [hov,setHov]=useState(false);
+  const mob=window.innerWidth<768;
   useEffect(()=>{
     const h=e=>{if(e.key==="Escape")onClose();};
     document.addEventListener("keydown",h);
     return()=>document.removeEventListener("keydown",h);
   },[onClose]);
+  if(mob) return (
+    <div style={{position:"fixed",inset:0,background:"#fff",zIndex:300,display:"flex",flexDirection:"column",overflowY:"auto"}}>
+      <div style={{padding:"12px 16px 80px"}}>{children}</div>
+    </div>
+  );
   return (
     <div style={{position:"fixed",inset:0,background:hov?"rgba(0,0,0,.58)":"rgba(0,0,0,.46)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16,transition:"background .15s",cursor:hov?"pointer":"default"}}
       onClick={onClose} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
@@ -175,7 +182,8 @@ export default function App() {
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
   const [movimientos,setMovimientos] = useState([]);
-  const [solicitudes,setSolicitudes] = useState([]); // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
+  const [solicitudes,setSolicitudes] = useState([]);
+  const [activityLog,setActivityLog] = useState([]); // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
   const [proveedores,setProv]    = useState(["Brenntag","Unilever","Diversey","CMPC","Ansell","3M Chile"]);
   const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
   const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
@@ -273,6 +281,7 @@ export default function App() {
 
   const cambiarEstado=(id,estado,extra={})=>{
     const logEntry={ts:nowISO(),fecha:today(),estado,nota:extra.nota||"",usuario:perfil.nombre};
+    setActivityLog(prev=>[{id:uid(),ts:nowISO(),usuario:perfil.nombre,accion:`Cambió estado cotización a "${estado}"`,ref:id},...prev].slice(0,200));
     setCots(prev=>prev.map(c=>{
       if(c.id!==id) return c;
       const updated={...c,estado,...extra,log:[...(c.log||[]),logEntry],updatedAt:nowISO()};
@@ -290,7 +299,9 @@ export default function App() {
   });
 
   const goTab=t=>{setTab(t);setSideOpen(false);};
-  const isMob=()=>window.innerWidth<768;
+  const [winW,setWinW]=useState(window.innerWidth);
+  useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
+  const isMob=winW<768;
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f7f8fc",minHeight:"100vh",color:"#1a1a2e"}}>
@@ -301,17 +312,18 @@ export default function App() {
       {sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:199}}/>}
 
       {/* SIDEBAR */}
-      <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:214,background:"#0f172a",display:"flex",flexDirection:"column",zIndex:200,transform:isMob()?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease"}}>
+      <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:214,background:"#0f172a",display:"flex",flexDirection:"column",zIndex:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease"}}>
         <div style={{padding:"16px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"center",alignItems:"center",minHeight:78}}>
           <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" style={{height:54,maxWidth:160,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>
         </div>
         <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
-          {NAV.map(item=>{
+          {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
             const isAct=tab===item.id;
             const badge = (() => {
               if(item.id==="revision")    return cots.filter(c=>c.estado==="Para revisar").length;
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
               if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
+              if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
                 c.estado==="Modificada"||
@@ -343,13 +355,13 @@ export default function App() {
       </div>
 
       {/* Mobile topbar */}
-      <div className="no-print" style={{position:"sticky",top:0,background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:12,zIndex:100,...(isMob()?{}:{display:"none"})}}>
+      <div className="no-print" style={{position:"sticky",top:0,background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:12,zIndex:100,...(isMob?{}:{display:"none"})}}>
         <button onClick={()=>setSideOpen(true)} style={{background:"none",border:"none",color:"#fff",cursor:"pointer",padding:4}}>{Ic.menu}</button>
         <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" style={{height:28,objectFit:"contain"}}/>
       </div>
 
       {/* MAIN */}
-      <div style={{marginLeft:isMob()?0:214,padding:"22px 20px",minHeight:"100vh"}}>
+      <div style={{marginLeft:isMob?0:214,padding:isMob?"12px 12px 80px":"22px 20px",minHeight:"100vh"}}>
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -359,11 +371,38 @@ export default function App() {
         {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
 
+
+      {/* Mobile bottom navigation */}
+      {isMob&&(
+        <div className="no-print" style={{position:"fixed",bottom:0,left:0,right:0,background:"#0f172a",borderTop:"1px solid #1e293b",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom)"}}>
+          {[
+            {id:"dashboard",   label:"Inicio",    icon:Ic.grid},
+            {id:"cotizaciones",label:"Cots.",      icon:Ic.file},
+            {id:"operacional", label:"Ops.",       icon:Ic.clock},
+            {id:"compras",     label:"Compras",    icon:Ic.cart},
+            {id:"inventario",  label:"Inventario", icon:Ic.warehouse},
+          ].map(item=>{
+            const isAct=tab===item.id;
+            const badge=item.id==="compras"?cots.filter(c=>c.estadoOp==="En compra").length
+              :item.id==="operacional"?cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length:0;
+            return (
+              <button key={item.id} onClick={()=>setTab(item.id)}
+                style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 4px 8px",background:"none",border:"none",cursor:"pointer",color:isAct?"#60a5fa":"#64748b",position:"relative"}}>
+                <span style={{opacity:isAct?1:.7}}>{item.icon}</span>
+                <span style={{fontSize:9,fontWeight:isAct?600:400}}>{item.label}</span>
+                {badge>0&&<span style={{position:"absolute",top:6,right:"calc(50% - 14px)",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{badge}</span>}
+                {isAct&&<span style={{position:"absolute",bottom:0,left:"20%",right:"20%",height:2,background:"#60a5fa",borderRadius:2}}/>}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
       {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
@@ -398,7 +437,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
         <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Dashboard</h1>
         <PeriodoChips periodo={periDash} setPeriodo={setPeriDash}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:11,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
         <KPI label="Ventas adj." value={fmt(totalV)} color="#1d4ed8" tab="cotizaciones"/>
         <KPI label="Margen bruto" value={fmt(mgBruto)} sub={fmtPct(mgPct)} color="#10b981"/>
         <KPI label="Margen neto" value={fmt(mgNeto)} sub={dashGastos>0?`-${fmt(dashGastos)} gastos`:""} color={mgNeto>=0?"#6366f1":"#ef4444"}/>
@@ -598,7 +637,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
       </div>
       <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
         <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:520}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
             <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
               {["Número","Fecha","Vence","Organismo","Total","Margen","Estado",""].map(h=><th key={h} style={{padding:"8px 11px",textAlign:"left",fontWeight:600,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>{h}</th>)}
             </tr></thead>
@@ -695,7 +734,7 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
     if(estadoOp==="En despacho"){
       const itemsSinCompra=(c.items||[]).filter(item=>{
         const p=productos.find(x=>x.id===item.productoId||x.nombre===item.nombre);
-        return !p||(p.stock||0)<1;
+        return !p||getStockTotal(p)<1;
       });
       if(itemsSinCompra.length>0){
         toast(`Faltan productos por comprar: ${itemsSinCompra.map(i=>i.nombre).join(", ")}. Completa la compra primero.`,"warning",5000);
@@ -1016,7 +1055,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
     <div>
       <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Gastos</h1>
       <p style={{color:"#64748b",fontSize:13,marginBottom:14}}>Gastos operacionales para calcular margen neto</p>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:11,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
         {[{l:"Margen bruto",v:fmt(ventasMB),c:"#10b981"},{l:"Total gastos",v:fmt(totalG),c:"#ef4444"},{l:"Margen neto",v:fmt(ventasMB-totalG),c:ventasMB-totalG>=0?"#6366f1":"#ef4444"}].map((k,i)=>(
           <div key={i} style={{background:"#fff",borderRadius:12,padding:"13px 15px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderTop:`3px solid ${k.c}`}}>
             <div style={{color:"#64748b",fontSize:11,marginBottom:3}}>{k.l}</div>
@@ -1770,7 +1809,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>{fmt(pv)}</div>
-                  <div style={{fontSize:10,color:(p.stock||0)<5?"#ef4444":"#94a3b8"}}>Stock: {fmtN(p.stock||0)}</div>
+                  <div style={{fontSize:10,color:getStockTotal(p)<5?"#ef4444":"#94a3b8"}}>Stock: {fmtN(getStockTotal(p))}</div>
                 </div>
               </div>
             );
@@ -2092,7 +2131,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
                 <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>PRODUCTO *</label>
                 <select value={ajuste.productoId} onChange={e=>setAjuste(a=>({...a,productoId:e.target.value}))} style={inpS}>
                   <option value="">Seleccionar producto…</option>
-                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(p.stock||0)})</option>)}
+                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(getStockTotal(p))})</option>)}
                 </select>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -2175,7 +2214,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
                   setTransf(t=>({...t,productoId:e.target.value,bodegaOrigen:prod?.ubicacion||""}));
                 }} style={inpS}>
                   <option value="">Seleccionar producto…</option>
-                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(p.stock||0)} · {p.ubicacion||"Sin bodega"})</option>)}
+                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(getStockTotal(p))} · {(p.stockPorBodega||[]).map(b=>b.bodega).join(", ")||"Sin bodega"})</option>)}
                 </select>
               </div>
               <div>
@@ -2869,5 +2908,226 @@ function ModalRecepcion({productos,setProductos,setMovimientos,bodegas,perfil,on
         </Btn>
       </div>
     </Modal>
+  );
+}
+
+// ── MODULO ADMIN ──────────────────────────────────────────────
+function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLog,cots,perfil,isAdmin}) {
+  const [subTab,setSubTab]=useState("usuarios");
+  const [modalUser,setModalUser]=useState(null); // {idx, data} | {idx:null, data:EMPTY}
+  const [confirmDelUser,setConfirmDelUser]=useState(null);
+
+  const EMPTY_USER={nombre:"",cargo:"",email:"",rol:"ejecutivo",activo:true};
+  const inp={width:"100%",padding:"7px 10px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
+
+  const TABS=[
+    {id:"usuarios",     label:"Usuarios"},
+    {id:"solicitudes",  label:"Solicitudes", dot:solicitudes.filter(s=>s.estado==="pendiente").length>0},
+    {id:"actividad",    label:"Actividad"},
+  ];
+
+  // Stats per user
+  const statsPorUsuario=usuarios.map(u=>({
+    ...u,
+    cotizaciones:cots.filter(c=>c.ejecutivo===u.nombre).length,
+    adjudicadas:cots.filter(c=>c.ejecutivo===u.nombre&&c.estado==="Adjudicada").length,
+  }));
+
+  return (
+    <div>
+      <div style={{marginBottom:18}}>
+        <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Administración</h1>
+        <p style={{color:"#64748b",fontSize:13,margin:0}}>Solo visible para administradores</p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:2,marginBottom:18,background:"#f1f5f9",borderRadius:10,padding:4,width:"fit-content"}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setSubTab(t.id)} style={{
+            padding:"7px 18px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,
+            fontWeight:subTab===t.id?600:400,background:subTab===t.id?"#fff":"transparent",
+            color:subTab===t.id?"#0f172a":"#64748b",
+            boxShadow:subTab===t.id?"0 1px 3px rgba(0,0,0,.1)":"none",
+            transition:"all .15s",display:"flex",alignItems:"center",gap:5
+          }}>
+            {t.label}
+            {t.dot&&<span style={{width:7,height:7,borderRadius:"50%",background:"#ef4444",display:"inline-block"}}/>}
+          </button>
+        ))}
+      </div>
+
+      {/* ── USUARIOS ── */}
+      {subTab==="usuarios"&&(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <span style={{fontSize:13,color:"#64748b"}}>{usuarios.length} usuarios registrados</span>
+            <Btn onClick={()=>setModalUser({idx:null,data:{...EMPTY_USER}})} size="sm">+ Nuevo usuario</Btn>
+          </div>
+          <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                {["Usuario","Cargo","Email","Rol","Cots.","Adj.","Estado",""].map(h=>(
+                  <th key={h} style={{padding:"9px 13px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {statsPorUsuario.map((u,i)=>(
+                  <tr key={u.id||i} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa",opacity:u.activo===false?.5:1}}>
+                    <td style={{padding:"10px 13px"}}>
+                      <div style={{fontWeight:600}}>{u.nombre}</div>
+                      {u.nombre===perfil?.nombre&&<span style={{fontSize:10,color:"#1d4ed8",background:"#eff6ff",padding:"1px 6px",borderRadius:20}}>Tú</span>}
+                    </td>
+                    <td style={{padding:"10px 13px",color:"#64748b",fontSize:12}}>{u.cargo||"—"}</td>
+                    <td style={{padding:"10px 13px",fontSize:12}}>{u.email?<a href={`mailto:${u.email}`} style={{color:"#1d4ed8",textDecoration:"none"}}>{u.email}</a>:"—"}</td>
+                    <td style={{padding:"10px 13px"}}>
+                      <select value={u.rol||"ejecutivo"}
+                        onChange={e=>setUsuarios(prev=>prev.map((x,j)=>j===i?{...x,rol:e.target.value}:x))}
+                        style={{padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
+                        <option value="admin">Admin</option>
+                        <option value="ejecutivo">Ejecutivo</option>
+                      </select>
+                    </td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontWeight:600,color:"#1d4ed8"}}>{u.cotizaciones}</td>
+                    <td style={{padding:"10px 13px",textAlign:"center",fontWeight:600,color:"#15803d"}}>{u.adjudicadas}</td>
+                    <td style={{padding:"10px 13px"}}>
+                      <button onClick={()=>setUsuarios(prev=>prev.map((x,j)=>j===i?{...x,activo:x.activo===false}:x))}
+                        style={{background:u.activo===false?"#fee2e2":"#dcfce7",border:"none",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:600,color:u.activo===false?"#b91c1c":"#15803d"}}>
+                        {u.activo===false?"Inactivo":"Activo"}
+                      </button>
+                    </td>
+                    <td style={{padding:"10px 13px"}}>
+                      <div style={{display:"flex",gap:5}}>
+                        <button onClick={()=>setModalUser({idx:i,data:{...u}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar</button>
+                        {u.nombre!==perfil?.nombre&&(
+                          <button onClick={()=>setConfirmDelUser({idx:i,nombre:u.nombre})} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#b91c1c",fontWeight:500}}>Eliminar</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── SOLICITUDES ── */}
+      {subTab==="solicitudes"&&(
+        <div>
+          {!solicitudes.length&&<div style={{background:"#fff",borderRadius:12,padding:36,textAlign:"center",color:"#94a3b8",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>Sin solicitudes registradas</div>}
+          {solicitudes.map(s=>(
+            <div key={s.id} style={{background:"#fff",borderRadius:12,padding:"16px",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderLeft:`3px solid ${s.estado==="pendiente"?"#f59e0b":s.estado==="aprobada"?"#10b981":"#ef4444"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontWeight:600,fontSize:14}}>{s.cotNum}</div>
+                  <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Solicitado por <strong>{s.usuario}</strong> · {fmtFecha(s.fecha)}</div>
+                  <div style={{fontSize:13,color:"#475569",marginTop:6,fontStyle:"italic"}}>"{s.motivo}"</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{
+                    background:s.estado==="pendiente"?"#fef9c3":s.estado==="aprobada"?"#dcfce7":"#fee2e2",
+                    color:s.estado==="pendiente"?"#854d0e":s.estado==="aprobada"?"#15803d":"#b91c1c",
+                    padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600
+                  }}>{s.estado}</span>
+                  {s.estado==="pendiente"&&(
+                    <>
+                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x))} size="xs">✓ Aprobar</Btn>
+                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x))} variant="danger" size="xs">✗ Rechazar</Btn>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── ACTIVIDAD ── */}
+      {subTab==="actividad"&&(
+        <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          {!activityLog.length&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Sin actividad registrada aún</div>}
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                {["Fecha/Hora","Usuario","Acción","Referencia"].map(h=>(
+                  <th key={h} style={{padding:"9px 13px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {activityLog.map((l,i)=>(
+                  <tr key={l.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                    <td style={{padding:"8px 13px",fontSize:11,color:"#94a3b8",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>{fmtDateTime(l.ts)}</td>
+                    <td style={{padding:"8px 13px",fontWeight:500}}>{l.usuario}</td>
+                    <td style={{padding:"8px 13px",color:"#475569"}}>{l.accion}</td>
+                    <td style={{padding:"8px 13px",fontSize:11,color:"#94a3b8",fontFamily:"'DM Mono',monospace"}}>{l.ref||"—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal usuario */}
+      {modalUser&&(
+        <Modal onClose={()=>setModalUser(null)} maxWidth={460}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+            <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{modalUser.idx===null?"Nuevo usuario":"Editar usuario"}</h2>
+            <CloseBtn onClose={()=>setModalUser(null)}/>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>
+            {[{k:"nombre",label:"Nombre completo *"},{k:"cargo",label:"Cargo"},{k:"email",label:"Email"}].map((f,fi)=>(
+              <div key={f.k}>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>{f.label}</label>
+                <input autoFocus={fi===0} value={modalUser.data[f.k]||""}
+                  onChange={e=>setModalUser(m=>({...m,data:{...m.data,[f.k]:e.target.value}}))}
+                  style={inp}/>
+              </div>
+            ))}
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ROL</label>
+              <select value={modalUser.data.rol||"ejecutivo"} onChange={e=>setModalUser(m=>({...m,data:{...m.data,rol:e.target.value}}))}
+                style={{...inp,background:"#fff",cursor:"pointer"}}>
+                <option value="admin">Admin — acceso completo</option>
+                <option value="ejecutivo">Ejecutivo — acceso estándar</option>
+              </select>
+            </div>
+            <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"10px 13px",fontSize:12,color:"#64748b"}}>
+              <strong>Admin:</strong> puede editar cotizaciones adjudicadas/facturadas, eliminar gastos, gestionar usuarios y aprobar solicitudes.<br/>
+              <strong>Ejecutivo:</strong> acceso estándar, puede solicitar modificaciones que requieren aprobación.
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+              <Btn onClick={()=>setModalUser(null)} variant="ghost" size="sm">Cancelar</Btn>
+              <Btn onClick={()=>{
+                if(!modalUser.data.nombre?.trim()){toast("El nombre es obligatorio","warning");return;}
+                if(modalUser.idx===null) setUsuarios(prev=>[...prev,{id:uid(),...modalUser.data}]);
+                else setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
+                setModalUser(null);
+                toast(modalUser.idx===null?"Usuario creado":"Usuario actualizado");
+              }} size="sm">Guardar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm delete user */}
+      {confirmDelUser&&(
+        <Modal onClose={()=>setConfirmDelUser(null)} maxWidth={360}>
+          <div style={{textAlign:"center",padding:"8px 0"}}>
+            <div style={{width:48,height:48,background:"#fee2e2",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,color:"#b91c1c",fontWeight:700}}>!</div>
+            <h3 style={{fontWeight:700,fontSize:15,marginBottom:8}}>¿Eliminar a "{confirmDelUser.nombre}"?</h3>
+            <p style={{color:"#64748b",fontSize:13,marginBottom:20}}>Esta acción no se puede deshacer.</p>
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              <Btn onClick={()=>setConfirmDelUser(null)} variant="ghost">Cancelar</Btn>
+              <Btn onClick={()=>{
+                setUsuarios(prev=>prev.filter((_,i)=>i!==confirmDelUser.idx));
+                setConfirmDelUser(null);
+                toast("Usuario eliminado");
+              }} variant="danger">Sí, eliminar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-# 🌲 Boreal — Guía de publicación paso a paso...
+# 🌲 Boreal — Guía de publicación paso a paso
 
 ## PASO 1 — Crear base de datos en Supabase (10 min)
 
@@ -14,7 +14,7 @@
 6. Clic en Run → verás "Success. No rows returned"
 
 ### Copiar tus credenciales:
-7. Menú izquierdo → Settings → API 
+7. Menú izquierdo → Settings → API
 8. Copia y guarda:
    - Project URL (algo como https://abcxyz.supabase.co)
    - anon public key (cadena larga que empieza con eyJ...)

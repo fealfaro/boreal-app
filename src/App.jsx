@@ -1345,107 +1345,279 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
   );
 }
 
-// ── MODAL COTIZACION ──────────────────────────────────────────
+// ── MODAL COTIZACION (Odoo-style) ────────────────────────────
 function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,logoB64,perfil}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
+  const [searchIdx,setSearchIdx]=useState(null); // which row has the dropdown open
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const {subtotalNeto,iva,total,costoTotal,margenProm}=calcTotalesCot(form.items);
 
-  const addItem=p=>{
-    const pv=calcPrecioVenta(p.costo,p.margen);
-    setForm(f=>({...f,items:[...f.items,{productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,cantidad:1,foto_url:p.foto_url||"",proveedor:p.proveedor||""}]}));
+  // Add empty row for Odoo-style inline add
+  const addEmptyRow=()=>{
+    setForm(f=>({...f,items:[...f.items,{productoId:null,nombre:"",sku:"",costo:0,precioVenta:0,cantidad:1,foto_url:"",proveedor:""}]}));
+    setSearchIdx(form.items.length);
   };
+
+  const selectProductInRow=(idx,p)=>{
+    const pv=calcPrecioVenta(p.costo,p.margen);
+    setForm(f=>{
+      const items=[...f.items];
+      items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};
+      return{...f,items};
+    });
+    setSearchIdx(null);
+  };
+
   const removeItem=i=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}));
   const updateItem=(i,k,v)=>{
     setForm(f=>{const items=[...f.items];items[i]={...items[i],[k]:v};return{...f,items};});
-    if(k==="precioVenta") setShowMargen(true); // auto-show margin when price edited
+    if(k==="precioVenta") setShowMargen(true);
   };
+
   const handleSave=()=>{
+    const realItems=form.items.filter(i=>i.nombre);
     if(!form.organismo?.trim()){toast("El organismo es obligatorio","warning");return;}
-    onSave({...form,total,costoTotal,margenProm});
+    onSave({...form,items:realItems,total,costoTotal,margenProm});
   };
-  const inp={width:"100%",padding:"7px 11px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
+
+  const inp={width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
+
+  // Full-screen overlay, not the small Modal wrapper
   return (
-    <Modal onClose={onClose} maxWidth={780}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{form.numero}</h2>
-        <CloseBtn onClose={onClose}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:8,marginBottom:12}}>
-        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Organismo *</label><Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear…"/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>RUT</label><input value={form.rut_cliente||""} onChange={e=>set("rut_cliente",formatRut(e.target.value))} placeholder="76.xxx.xxx-x" style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>ID Oportunidad</label><input value={form.oportunidad_id||""} onChange={e=>set("oportunidad_id",e.target.value)} style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Ejecutivo</label><input value={form.ejecutivo||""} onChange={e=>set("ejecutivo",e.target.value)} style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Fecha</label><input type="date" value={form.fecha||""} onChange={e=>set("fecha",e.target.value)} style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Vencimiento</label><input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)} style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Estado</label>
-          <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff"}}>
-            {[...ESTADOS_COT,"Para revisar"].map(e=><option key={e}>{e}</option>)}
-          </select>
-        </div>
-      </div>
-      {/* Tabla productos estilo Excel */}
-      <div style={{marginBottom:10}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <label style={{fontSize:11,color:"#64748b",fontWeight:600}}>Productos</label>
-          <button onClick={()=>setShowMargen(v=>!v)} style={{fontSize:10,color:showMargen?"#1d4ed8":"#94a3b8",background:"none",border:"none",cursor:"pointer"}}>
-            {showMargen?"Ocultar margen":"Mostrar margen"}
-          </button>
-        </div>
-        {form.items.length>0&&(
-          <div style={{marginBottom:7,overflowX:"auto",border:"1px solid #f1f5f9",borderRadius:8}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead><tr style={{background:"#f8fafc"}}>
-                <th style={{padding:"5px 8px",width:32}}></th>
-                <th style={{padding:"5px 8px",textAlign:"left",fontSize:10,color:"#64748b",fontWeight:600}}>Producto</th>
-                <th style={{padding:"5px 8px",fontSize:10,color:"#64748b",fontWeight:600,width:56}}>Cant.</th>
-                <th style={{padding:"5px 8px",fontSize:10,color:"#64748b",fontWeight:600,width:96}}>P. Venta (IVA)</th>
-                <th style={{padding:"5px 8px",fontSize:10,color:"#64748b",fontWeight:600,width:86}}>Subtotal</th>
-                {showMargen&&<th style={{padding:"5px 8px",fontSize:10,color:"#64748b",fontWeight:600,width:50}}>Mg.</th>}
-                <th style={{width:26}}></th>
-              </tr></thead>
-              <tbody>{form.items.map((item,i)=>{
-                const mgL=item.precioVenta>0&&item.costo>0?((item.precioVenta/1.19-item.costo)/item.costo*100):0;
-                return (<tr key={i} style={{borderTop:"1px solid #f1f5f9"}}>
-                  <td style={{padding:"4px 8px"}}>{item.foto_url?<img src={item.foto_url} alt="" style={{width:24,height:24,objectFit:"cover",borderRadius:4}}/>:<span style={{fontSize:13}}>📦</span>}</td>
-                  <td style={{padding:"4px 8px",fontWeight:500,fontSize:12}}>{item.nombre}</td>
-                  <td style={{padding:"4px 8px"}}><input type="number" value={item.cantidad} min={1} onChange={e=>updateItem(i,"cantidad",Number(e.target.value))} style={{width:46,padding:"3px 5px",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12}}/></td>
-                  <td style={{padding:"4px 8px"}}><input type="number" value={item.precioVenta} onChange={e=>updateItem(i,"precioVenta",Number(e.target.value))} style={{width:84,padding:"3px 5px",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12}}/></td>
-                  <td style={{padding:"4px 8px",fontWeight:600,fontSize:12}}>{fmt(Math.round(item.precioVenta/1.19)*item.cantidad)}</td>
-                  {showMargen&&<td style={{padding:"4px 8px"}}><span style={{fontSize:10,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{fmtPct(mgL)}</span></td>}
-                  <td style={{padding:"4px 8px"}}><button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"#ef4444",cursor:"pointer",fontSize:15}}>×</button></td>
-                </tr>);
-              })}</tbody>
-            </table>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"stretch",justifyContent:"center",zIndex:300,padding:"20px"}}
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:1100,display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* ── Header fijo ─────────────────────────────── */}
+        <div style={{padding:"16px 24px",borderBottom:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700}}>{form.numero}</div>
+            <EstadoBadge estado={form.estado||"Borrador"}/>
           </div>
-        )}
-        <div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:8,padding:"8px 11px"}}>
-          <ProductoSearch productos={productos} onSelect={addItem} placeholder="+ Escribe para buscar y agregar…"/>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Btn onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)} variant="dark" size="sm">📄 PDF</Btn>
+            <Btn onClick={handleSave}>Guardar</Btn>
+            <CloseBtn onClose={onClose}/>
+          </div>
+        </div>
+
+        {/* ── Cuerpo scrolleable ───────────────────────── */}
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+
+          {/* Campos encabezado — 2 columnas */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:20}}>
+            <div style={{gridColumn:"1/-1"}}>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORGANISMO COMPRADOR *</label>
+              <Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…"/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>RUT CLIENTE</label>
+              <input value={form.rut_cliente||""} onChange={e=>set("rut_cliente",formatRut(e.target.value))} placeholder="76.xxx.xxx-x" style={inp}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ID OPORTUNIDAD</label>
+              <input value={form.oportunidad_id||""} onChange={e=>set("oportunidad_id",e.target.value)} style={inp}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>EJECUTIVO</label>
+              <input value={form.ejecutivo||""} onChange={e=>set("ejecutivo",e.target.value)} style={inp}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ESTADO</label>
+              <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
+                {[...ESTADOS_COT,"Para revisar"].map(e=><option key={e}>{e}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>FECHA</label>
+              <input type="date" value={form.fecha||""} onChange={e=>set("fecha",e.target.value)} style={inp}/>
+            </div>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>VENCIMIENTO</label>
+              <input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)} style={inp}/>
+            </div>
+          </div>
+
+          {/* ── Tabla de productos estilo Odoo ──────────── */}
+          <div style={{marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:"0.5px"}}>Líneas de cotización</span>
+              <button onClick={()=>setShowMargen(v=>!v)} style={{fontSize:11,color:showMargen?"#1d4ed8":"#94a3b8",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>
+                {showMargen?"▾ Ocultar margen":"▸ Mostrar margen"}
+              </button>
+            </div>
+
+            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{background:"#f8fafc"}}>
+                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700,width:36}}></th>
+                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700}}>Producto</th>
+                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:70}}>Cant.</th>
+                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:120}}>Precio unit. (IVA)</th>
+                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:110}}>Subtotal neto</th>
+                    {showMargen&&<th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:80}}>Margen</th>}
+                    <th style={{width:36}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((item,i)=>{
+                    const mgL=item.precioVenta>0&&item.costo>0?((item.precioVenta/1.19-item.costo)/item.costo*100):0;
+                    const isEmpty=!item.nombre;
+                    return (
+                      <tr key={i} style={{borderTop:"1px solid #f1f5f9",background:isEmpty?"#fafeff":"#fff"}}>
+                        {/* Foto */}
+                        <td style={{padding:"8px 10px"}}>
+                          {item.foto_url
+                            ?<img src={item.foto_url} alt="" style={{width:28,height:28,objectFit:"cover",borderRadius:5,display:"block"}}/>
+                            :<div style={{width:28,height:28,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}>📦</div>
+                          }
+                        </td>
+                        {/* Producto — buscador inline si está vacío o si es la fila activa */}
+                        <td style={{padding:"6px 10px",minWidth:200}}>
+                          {searchIdx===i||isEmpty ? (
+                            <InlineProductSearch
+                              productos={productos}
+                              value={item.nombre}
+                              onSelect={p=>selectProductInRow(i,p)}
+                              onBlur={()=>{if(!item.nombre)removeItem(i);setSearchIdx(null);}}
+                              autoFocus={searchIdx===i}
+                            />
+                          ) : (
+                            <div onClick={()=>setSearchIdx(i)} style={{cursor:"pointer",padding:"4px 0"}}>
+                              <div style={{fontWeight:500,fontSize:13}}>{item.nombre}</div>
+                              {item.sku&&<div style={{fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace"}}>{item.sku}</div>}
+                            </div>
+                          )}
+                        </td>
+                        {/* Cantidad */}
+                        <td style={{padding:"6px 10px"}}>
+                          <input type="number" value={item.cantidad} min={1}
+                            onChange={e=>updateItem(i,"cantidad",Number(e.target.value))}
+                            style={{width:56,padding:"5px 7px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
+                        </td>
+                        {/* Precio */}
+                        <td style={{padding:"6px 10px"}}>
+                          <input type="number" value={item.precioVenta}
+                            onChange={e=>updateItem(i,"precioVenta",Number(e.target.value))}
+                            style={{width:100,padding:"5px 7px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13}}/>
+                        </td>
+                        {/* Subtotal */}
+                        <td style={{padding:"6px 10px",fontWeight:600,color:"#0f172a"}}>
+                          {item.precioVenta>0?fmt(Math.round(item.precioVenta/1.19)*item.cantidad):"—"}
+                        </td>
+                        {/* Margen */}
+                        {showMargen&&<td style={{padding:"6px 10px"}}>
+                          <span style={{fontSize:11,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{item.costo>0?fmtPct(mgL):"—"}</span>
+                        </td>}
+                        {/* Eliminar */}
+                        <td style={{padding:"6px 8px",textAlign:"center"}}>
+                          <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,lineHeight:1,padding:2,borderRadius:4,transition:"color .12s"}}
+                            onMouseEnter={e=>e.currentTarget.style.color="#ef4444"}
+                            onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Fila "Agregar producto" — siempre visible al final */}
+                  <tr style={{borderTop:"1px solid #f1f5f9",background:"#f8fafc"}}>
+                    <td colSpan={showMargen?7:6} style={{padding:"10px 12px"}}>
+                      <button onClick={addEmptyRow}
+                        style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:0}}>
+                        <span style={{fontSize:18,lineHeight:1}}>+</span> Agregar producto
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Totales + Notas ──────────────────────────── */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:20,alignItems:"start"}}>
+            <div>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
+              <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={3}
+                style={{width:"100%",padding:"8px 11px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+            {total>0&&(
+              <div style={{width:240,background:"#f8fafc",borderRadius:10,padding:"14px 16px",flexShrink:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:13}}><span style={{color:"#64748b"}}>Importe base</span><span style={{fontWeight:500}}>{fmt(subtotalNeto)}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:13}}><span style={{color:"#64748b"}}>IVA 19%</span><span style={{fontWeight:500}}>{fmt(iva)}</span></div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:800,color:"#1d4ed8",borderTop:"2px solid #e2e8f0",paddingTop:8}}>
+                  <span>Total</span><span>{fmt(total)}</span>
+                </div>
+                <div style={{marginTop:6,textAlign:"right"}}>
+                  <MargenBadge pct={margenProm} monto={calcUtilidad(total,costoTotal)}/>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      {total>0&&(
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
-          <div style={{width:226,background:"#f8fafc",borderRadius:8,padding:"10px 13px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}}><span style={{color:"#64748b"}}>Importe base</span><span>{fmt(subtotalNeto)}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:12}}><span style={{color:"#64748b"}}>IVA 19%</span><span>{fmt(iva)}</span></div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:"#1d4ed8",borderTop:"1px solid #e2e8f0",paddingTop:5}}><span>Total</span><span>{fmt(total)}</span></div>
-            <div style={{fontSize:11,color:margenProm>=25?"#15803d":"#b91c1c",marginTop:3,textAlign:"right",fontWeight:600}}>Margen: {fmtPct(margenProm)}</div>
-          </div>
+    </div>
+  );
+}
+
+// ── INLINE PRODUCT SEARCH (para tabla Odoo) ───────────────────
+function InlineProductSearch({productos,value,onSelect,onBlur,autoFocus}) {
+  const [q,setQ]=useState(value||"");
+  const [open,setOpen]=useState(true);
+  const ref=useRef();
+  const inputRef=useRef();
+
+  useEffect(()=>{if(autoFocus&&inputRef.current)inputRef.current.focus();},[autoFocus]);
+
+  const filtered=productos.filter(p=>
+    !q||p.nombre.toLowerCase().includes(q.toLowerCase())||(p.sku||"").toLowerCase().includes(q.toLowerCase())
+  ).slice(0,8);
+
+  const select=p=>{setOpen(false);onSelect(p);};
+
+  return (
+    <div ref={ref} style={{position:"relative"}}>
+      <input
+        ref={inputRef}
+        value={q}
+        onChange={e=>{setQ(e.target.value);setOpen(true);}}
+        onFocus={()=>setOpen(true)}
+        onBlur={()=>setTimeout(()=>{if(!ref.current?.contains(document.activeElement))onBlur?.();},150)}
+        placeholder="Buscar producto…"
+        style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1.5px solid #1d4ed8",fontSize:13,outline:"none",background:"#eff6ff",boxSizing:"border-box"}}
+      />
+      {open&&filtered.length>0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.14)",zIndex:999,maxHeight:280,overflowY:"auto"}}>
+          {filtered.map(p=>{
+            const pv=calcPrecioVenta(p.costo,p.margen);
+            return (
+              <div key={p.id} onMouseDown={e=>{e.preventDefault();select(p);}}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #f8fafc",transition:"background .1s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="#eff6ff"}
+                onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                <div style={{width:36,height:36,borderRadius:6,background:"#f8fafc",flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {p.foto_url?<img src={p.foto_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:18}}>📦</span>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                  <div style={{fontSize:10,color:"#94a3b8"}}>{p.sku} · {p.proveedor}</div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>{fmt(pv)}</div>
+                  <div style={{fontSize:10,color:"#94a3b8"}}>Stock: {fmtN(p.stock||0)}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
-      <div style={{marginBottom:10}}>
-        <label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Notas / Condiciones</label>
-        <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={2} style={{width:"100%",padding:"7px 11px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:12,resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
-        <Btn onClick={onClose} variant="ghost" size="sm">Cancelar</Btn>
-        <div style={{display:"flex",gap:7}}>
-          <Btn onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)} variant="dark" size="sm">📄 PDF</Btn>
-          <Btn onClick={handleSave} size="sm">Guardar</Btn>
+      {open&&q&&filtered.length===0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.14)",zIndex:999,padding:"12px 14px",fontSize:13,color:"#94a3b8"}}>
+          Sin resultados para "{q}"
         </div>
-      </div>
-    </Modal>
+      )}
+    </div>
   );
 }
 

@@ -175,6 +175,7 @@ export default function App() {
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
   const [movimientos,setMovimientos] = useState([]);
+  const [solicitudes,setSolicitudes] = useState([]); // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
   const [proveedores,setProv]    = useState(["Brenntag","Unilever","Diversey","CMPC","Ansell","3M Chile"]);
   const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
   const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
@@ -310,6 +311,7 @@ export default function App() {
             const badge = (() => {
               if(item.id==="revision")    return cots.filter(c=>c.estado==="Para revisar").length;
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
+              if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
                 c.estado==="Modificada"||
@@ -358,13 +360,13 @@ export default function App() {
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
-        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin}/>}
+        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
     </div>
   );
 }
@@ -672,7 +674,7 @@ function ModuloRevision({cots,cambiarEstado,onDetalle}) {
               <Btn onClick={()=>onDetalle(c)} variant="ghost" size="sm">Ver detalle</Btn>
               <div style={{display:"flex",gap:7}}>
                 <Btn onClick={()=>{const m=prompt("Motivo (opcional):");cambiarEstado(c.id,"Rechazada",{nota:m||"Rechazada en revisión"});}} variant="danger" size="sm">✗ Rechazar</Btn>
-                <Btn onClick={()=>cambiarEstado(c.id,"Borrador",{nota:"Aprobada para postulación"})} size="sm">✓ Aprobar</Btn>
+                <Btn onClick={()=>cambiarEstado(c.id,"Enviada",{nota:"Aprobada en revisión — lista para postular"})} size="sm">✓ Aprobar</Btn>
               </div>
             </div>
           </div>
@@ -1129,7 +1131,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
 }
 
 // ── CONFIG ────────────────────────────────────────────────────
-function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,config,setConfigKey,cots,usuarios=[],setUsuarios,isAdmin=false}) {
+function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,config,setConfigKey,cots,usuarios=[],setUsuarios,isAdmin=false,solicitudes=[],setSolicitudes}) {
   const [inputs,setInputs]=useState({prov:"",emp:"",bod:""});
   const si=(k,v)=>setInputs(p=>({...p,[k]:v}));
   const addItem=(items,setItems,val,k)=>{
@@ -1195,6 +1197,28 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
           <input type="number" value={config.alertaVariacionCompra||30} min={5} max={200} onChange={e=>setConfigKey("alertaVariacionCompra",Number(e.target.value))} style={{width:60,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
         </div>
       </div>
+      {/* Solicitudes de modificación pendientes */}
+      {isAdmin&&solicitudes.filter(s=>s.estado==="pendiente").length>0&&(
+        <div style={{background:"#fff",borderRadius:12,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",marginBottom:13,border:"2px solid #fde68a"}}>
+          <div style={{fontWeight:600,fontSize:14,marginBottom:11,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:11,fontWeight:700,padding:"2px 8px"}}>{solicitudes.filter(s=>s.estado==="pendiente").length}</span>
+            Solicitudes de modificación pendientes
+          </div>
+          {solicitudes.filter(s=>s.estado==="pendiente").map(s=>(
+            <div key={s.id} style={{background:"#fef9c3",borderRadius:8,padding:"10px 13px",marginBottom:8,display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13}}>{s.cotNum}</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>Solicitado por <strong>{s.usuario}</strong> · {fmtFecha(s.fecha)}</div>
+                <div style={{fontSize:12,color:"#475569",marginTop:4,fontStyle:"italic"}}>"{s.motivo}"</div>
+              </div>
+              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x));toast("Solicitud aprobada — el usuario puede editar");}} size="sm">✓ Aprobar</Btn>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x));toast("Solicitud rechazada");}} variant="ghost" size="sm">✗ Rechazar</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {/* Umbrales de rentabilidad */}
       <div style={{background:"#fff",borderRadius:12,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",marginBottom:13}}>
         <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Umbrales de rentabilidad</div>
@@ -1388,7 +1412,20 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
         <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
           {(form.stockPorBodega||[]).map((sb,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<(form.stockPorBodega||[]).length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#f8fafc"}}>
-              <select value={sb.bodega} onChange={e=>{const spb=[...(form.stockPorBodega||[])];spb[i]={...spb[i],bodega:e.target.value};set("stockPorBodega",spb);}}
+              <select value={sb.bodega} onChange={e=>{
+                  const newBod=e.target.value;
+                  const spb=[...(form.stockPorBodega||[])];
+                  // If this bodega already exists in another row, merge
+                  const existing=spb.findIndex((b,j)=>j!==i&&b.bodega===newBod);
+                  if(existing>=0){
+                    // Merge: add quantities, remove duplicate
+                    spb[existing]={...spb[existing],cantidad:(spb[existing].cantidad||0)+(spb[i].cantidad||0)};
+                    spb.splice(i,1);
+                  } else {
+                    spb[i]={...spb[i],bodega:newBod};
+                  }
+                  set("stockPorBodega",spb);
+                }}
                 style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="">— Sin bodega —</option>
                 {bodegas.map(b=><option key={b} value={b}>{b}</option>)}
@@ -1444,7 +1481,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
 }
 
 // ── MODAL COTIZACION (Odoo-style) ────────────────────────────
-function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,logoB64,perfil}) {
+function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,logoB64,perfil,isSaved=false}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null); // which row has the dropdown open
@@ -1498,7 +1535,13 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
             <EstadoBadge estado={form.estado||"Borrador"}/>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <Btn onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)} variant="dark" size="sm">📄 PDF</Btn>
+            <div style={{position:"relative",display:"inline-block"}}>
+              <Btn onClick={()=>{
+                if(!isSaved){toast("Guarda la cotización antes de generar el PDF","warning");return;}
+                generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64);
+              }} variant={isSaved?"dark":"ghost"} size="sm" style={{opacity:isSaved?1:.5}}>📄 PDF</Btn>
+              {!isSaved&&<div style={{position:"absolute",top:"calc(100% + 4px)",right:0,background:"#0f172a",color:"#fff",borderRadius:7,padding:"4px 10px",fontSize:11,whiteSpace:"nowrap",zIndex:10,pointerEvents:"none"}}>Guarda primero</div>}
+            </div>
             <Btn onClick={handleSave}>Guardar</Btn>
             <CloseBtn onClose={onClose}/>
           </div>
@@ -1744,7 +1787,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
 }
 
 // ── DETALLE COTIZACION ────────────────────────────────────────
-function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false}) {
+function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes}) {
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
@@ -1858,7 +1901,11 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         </div>
       )}
       <div style={{display:"flex",gap:7,justifyContent:"space-between",flexWrap:"wrap"}}>
-        {(isAdmin||!["Facturada","Adjudicada","Rechazada"].includes(c.estado)) ? <Btn onClick={onEditar} size="sm">Editar</Btn> : <span style={{fontSize:11,color:"#94a3b8",padding:"4px 8px",background:"#f1f5f9",borderRadius:7}} title="Solo admin puede editar">🔒 Solo admin</span>}
+        {["Facturada","Adjudicada"].includes(c.estado) && !isAdmin ? (
+          <SolicitarModificacion cot={c} perfil={perfil} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>
+        ) : (
+          <Btn onClick={onEditar} size="sm">Editar</Btn>
+        )}
         <div style={{display:"flex",gap:7}}>
           <Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">📄 PDF</Btn>
           <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>
@@ -1870,6 +1917,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
 
 // ── MODULO INVENTARIO ─────────────────────────────────────────
 function ModuloInventario({productos,setProductos,movimientos,setMovimientos,perfil,bodegas,stockMinimo=5}) {
+  const [showRecepcion,setShowRecepcion]=useState(false);
   const [subTab,setSubTab]=useState("resumen");
   const [seenMovs,setSeenMovs]=useState(false);
   const [periodoInv,setPeriodoInv]=useState("todo");
@@ -1953,7 +2001,9 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
           <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Inventario</h1>
           <p style={{color:"#64748b",fontSize:13,margin:0}}>{productos.length} productos · {movimientos.length} movimientos registrados</p>
         </div>
+        <Btn onClick={()=>setShowRecepcion(true)}>+ Recepción de productos</Btn>
       </div>
+      {showRecepcion&&<ModalRecepcion productos={productos} setProductos={setProductos} setMovimientos={setMovimientos} bodegas={bodegas} perfil={perfil} onClose={()=>setShowRecepcion(false)}/>}
 
       {/* Sub-tabs */}
       <div style={{display:"flex",gap:2,marginBottom:18,background:"#f1f5f9",borderRadius:10,padding:4,width:"fit-content"}}>
@@ -2546,10 +2596,14 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
             <CloseBtn onClose={()=>setModalOrg(null)}/>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:11}}>
-            {[{k:"nombre",label:"Nombre *"},{k:"rut",label:"RUT"},{k:"direccion",label:"Dirección"},{k:"email",label:"Email"},{k:"telefono",label:"Teléfono"}].map(f=>(
+            {[{k:"nombre",label:"Nombre *"},{k:"rut",label:"RUT"},{k:"direccion",label:"Dirección"},{k:"email",label:"Email"},{k:"telefono",label:"Teléfono"}].map((f,fi)=>(
               <div key={f.k}>
                 <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>{f.label}</label>
-                <input value={modalOrg.data[f.k]||""} onChange={e=>setModalOrg(m=>({...m,data:{...m.data,[f.k]:e.target.value}}))}
+                <input autoFocus={fi===0} value={modalOrg.data[f.k]||""}
+                  onChange={e=>{
+                    const val=f.k==="rut"?formatRut(e.target.value):e.target.value;
+                    setModalOrg(m=>({...m,data:{...m.data,[f.k]:val}}));
+                  }}
                   style={inp} placeholder={f.k==="rut"?"76.xxx.xxx-x":f.k==="email"?"organismo@ejemplo.cl":""}/>
               </div>
             ))}
@@ -2578,10 +2632,14 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
             <CloseBtn onClose={()=>setModalProv(null)}/>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:11}}>
-            {[{k:"nombre",label:"Nombre *"},{k:"rut",label:"RUT"},{k:"contacto",label:"Contacto"},{k:"email",label:"Email"},{k:"telefono",label:"Teléfono"},{k:"web",label:"Sitio web"}].map(f=>(
+            {[{k:"nombre",label:"Nombre *"},{k:"rut",label:"RUT"},{k:"contacto",label:"Contacto"},{k:"email",label:"Email"},{k:"telefono",label:"Teléfono"},{k:"web",label:"Sitio web"}].map((f,fi)=>(
               <div key={f.k}>
                 <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>{f.label}</label>
-                <input value={modalProv.data[f.k]||""} onChange={e=>setModalProv(m=>({...m,data:{...m.data,[f.k]:e.target.value}}))}
+                <input autoFocus={fi===0} value={modalProv.data[f.k]||""}
+                  onChange={e=>{
+                    const val=f.k==="rut"?formatRut(e.target.value):e.target.value;
+                    setModalProv(m=>({...m,data:{...m.data,[f.k]:val}}));
+                  }}
                   style={inp} placeholder={f.k==="web"?"www.proveedor.cl":f.k==="rut"?"76.xxx.xxx-x":""}/>
               </div>
             ))}
@@ -2626,5 +2684,190 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
         </Modal>
       )}
     </div>
+  );
+}
+
+// ── SOLICITAR MODIFICACIÓN (para ejecutivos sin permiso) ──────
+function SolicitarModificacion({cot,perfil,solicitudes,setSolicitudes}) {
+  const [open,setOpen]=useState(false);
+  const [motivo,setMotivo]=useState("");
+  const pendiente=solicitudes.find(s=>s.cotId===cot.id&&s.estado==="pendiente");
+
+  const enviar=()=>{
+    if(!motivo.trim()){toast("Ingresa el motivo del cambio","warning");return;}
+    if(setSolicitudes) setSolicitudes(prev=>[...prev,{
+      id:uid(),tipo:"modificacion",cotId:cot.id,cotNum:cot.numero,
+      usuario:perfil?.nombre||"",ts:nowISO(),fecha:today(),
+      motivo:motivo.trim(),estado:"pendiente"
+    }]);
+    setOpen(false);setMotivo("");
+    toast("Solicitud enviada al administrador");
+  };
+
+  if(pendiente) return (
+    <span style={{fontSize:11,color:"#854d0e",padding:"5px 10px",background:"#fef9c3",border:"1px solid #fde68a",borderRadius:7,display:"inline-flex",alignItems:"center",gap:4}}>
+      ⏳ Solicitud pendiente
+    </span>
+  );
+
+  return (
+    <>
+      <Btn onClick={()=>setOpen(true)} variant="yellow" size="sm">Solicitar modificación</Btn>
+      {open&&(
+        <Modal onClose={()=>setOpen(false)} maxWidth={420}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <h3 style={{margin:0,fontSize:15,fontWeight:700}}>Solicitar modificación</h3>
+            <CloseBtn onClose={()=>setOpen(false)}/>
+          </div>
+          <p style={{color:"#64748b",fontSize:13,marginBottom:14}}>
+            La cotización <strong>{cot.numero}</strong> está en estado <strong>{cot.estado}</strong>. Solo un administrador puede editarla. Tu solicitud le llegará como notificación.
+          </p>
+          <div style={{marginBottom:13}}>
+            <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:5}}>MOTIVO DEL CAMBIO *</label>
+            <textarea autoFocus value={motivo} onChange={e=>setMotivo(e.target.value)} rows={3}
+              placeholder="Ej: Error en el precio del ítem 2, necesita corrección antes de facturar…"
+              style={{width:"100%",padding:"8px 11px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,resize:"vertical",boxSizing:"border-box",outline:"none"}}/>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <Btn onClick={()=>setOpen(false)} variant="ghost" size="sm">Cancelar</Btn>
+            <Btn onClick={enviar} size="sm">Enviar solicitud</Btn>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+// ── MODAL RECEPCIÓN DE PRODUCTOS (Inventario) ─────────────────
+function ModalRecepcion({productos,setProductos,setMovimientos,bodegas,perfil,onClose}) {
+  const [busq,setBusq]=useState("");
+  const [selProd,setSelProd]=useState(null);
+  const [selBodega,setSelBodega]=useState(bodegas[0]||"");
+  const [cantidad,setCantidad]=useState("");
+  const [motivo,setMotivo]=useState("Recepción de mercadería");
+  const inputRef=useRef();
+
+  useEffect(()=>{if(inputRef.current)inputRef.current.focus();},[]);
+
+  const filtrados=productos.filter(p=>!busq||p.nombre.toLowerCase().includes(busq.toLowerCase())||(p.sku||"").toLowerCase().includes(busq.toLowerCase())).slice(0,8);
+
+  const confirmar=()=>{
+    if(!selProd){toast("Selecciona un producto","warning");return;}
+    if(!cantidad||Number(cantidad)<=0){toast("Ingresa una cantidad válida","warning");return;}
+    if(!selBodega){toast("Selecciona una bodega","warning");return;}
+    const cant=Number(cantidad);
+    const spbActual=selProd.stockPorBodega||[];
+    const spbNew=spbActual.some(b=>b.bodega===selBodega)
+      ?spbActual.map(b=>b.bodega===selBodega?{...b,cantidad:(b.cantidad||0)+cant}:b)
+      :[...spbActual,{bodega:selBodega,cantidad:cant}];
+    const stockTotal=spbNew.reduce((a,b)=>a+(b.cantidad||0),0);
+    const stockAntes=getStockTotal(selProd);
+    setProductos(prev=>prev.map(p=>p.id!==selProd.id?p:{...p,stockPorBodega:spbNew,stock:stockTotal,updatedAt:nowISO()}));
+    setMovimientos(prev=>[...prev,{
+      id:uid(),ts:nowISO(),fecha:today(),tipo:"entrada",signo:"+",
+      productoId:selProd.id,nombreProducto:selProd.nombre,
+      cantidad:cant,stockAntes,stockDespues:stockAntes+cant,
+      referencia:"Recepción manual",motivo,
+      bodegaOrigen:"",bodegaDestino:selBodega,
+      usuario:perfil?.nombre||""
+    }]);
+    toast(`+${fmtN(cant)} uds de ${selProd.nombre} → ${selBodega}`,"success");
+    // Reset for next reception
+    setSelProd(null);setBusq("");setCantidad("");
+  };
+
+  const inp={width:"100%",padding:"8px 11px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
+
+  return (
+    <Modal onClose={onClose} maxWidth={520}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div>
+          <h2 style={{fontSize:16,fontWeight:700,margin:0}}>Recepción de productos</h2>
+          <p style={{fontSize:12,color:"#64748b",margin:"3px 0 0"}}>Registra entrada de stock por bodega</p>
+        </div>
+        <CloseBtn onClose={onClose}/>
+      </div>
+
+      {/* Buscador de producto */}
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:5}}>PRODUCTO *</label>
+        {selProd ? (
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9}}>
+            {selProd.foto_url?<img src={selProd.foto_url} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,background:"#fff"}}/>
+              :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📦</div>}
+            <div style={{flex:1}}>
+              <div style={{fontWeight:600,fontSize:14}}>{selProd.nombre}</div>
+              <div style={{fontSize:11,color:"#64748b"}}>{selProd.sku} · Stock actual: {fmtN(getStockTotal(selProd))} uds</div>
+            </div>
+            <button onClick={()=>{setSelProd(null);setBusq("");}} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:18,padding:2}}>×</button>
+          </div>
+        ) : (
+          <div style={{position:"relative"}}>
+            <input ref={inputRef} value={busq} onChange={e=>setBusq(e.target.value)}
+              placeholder="Buscar por nombre o SKU…" style={inp}/>
+            {busq&&filtrados.length>0&&(
+              <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.14)",zIndex:9999,maxHeight:260,overflowY:"auto"}}>
+                {filtrados.map(p=>(
+                  <div key={p.id} onMouseDown={e=>{e.preventDefault();setSelProd(p);setBusq("");}}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"9px 13px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                    onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:500,fontSize:13}}>{p.nombre}</div>
+                      <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · Stock: {fmtN(getStockTotal(p))}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {busq&&filtrados.length===0&&<div style={{marginTop:4,fontSize:12,color:"#94a3b8"}}>Sin resultados</div>}
+          </div>
+        )}
+      </div>
+
+      {/* Bodega y cantidad */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+        <div>
+          <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:5}}>BODEGA DESTINO *</label>
+          <select value={selBodega} onChange={e=>setSelBodega(e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
+            {bodegas.map(b=><option key={b}>{b}</option>)}
+          </select>
+          {selProd&&selBodega&&(
+            <div style={{fontSize:11,color:"#64748b",marginTop:4}}>
+              Stock actual en esta bodega: <strong>{fmtN((selProd.stockPorBodega||[]).find(b=>b.bodega===selBodega)?.cantidad||0)}</strong> uds
+            </div>
+          )}
+        </div>
+        <div>
+          <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:5}}>CANTIDAD A RECIBIR *</label>
+          <MilesInput value={cantidad} onChange={v=>setCantidad(v)} placeholder="0"/>
+          {selProd&&cantidad&&Number(cantidad)>0&&(
+            <div style={{fontSize:11,color:"#15803d",marginTop:4,fontWeight:500}}>
+              Resultado: {fmtN((selProd.stockPorBodega||[]).find(b=>b.bodega===selBodega)?.cantidad||0)} + {fmtN(Number(cantidad))} = <strong>{fmtN(((selProd.stockPorBodega||[]).find(b=>b.bodega===selBodega)?.cantidad||0)+Number(cantidad))}</strong> uds
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{marginBottom:16}}>
+        <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:5}}>MOTIVO</label>
+        <select value={motivo} onChange={e=>setMotivo(e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
+          {["Recepción de mercadería","Compra directa","Devolución de cliente","Ajuste de inventario","Otro"].map(m=><option key={m}>{m}</option>)}
+        </select>
+      </div>
+
+      {/* Nota futura: código de barras */}
+      <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 13px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:16}}>📱</span>
+        <span style={{fontSize:11,color:"#94a3b8"}}>Próximamente: escaneo de código de barras para recepción rápida</span>
+      </div>
+
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>
+        <Btn onClick={confirmar} disabled={!selProd||!cantidad||Number(cantidad)<=0||!selBodega}>
+          ✓ Confirmar recepción
+        </Btn>
+      </div>
+    </Modal>
   );
 }

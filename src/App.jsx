@@ -40,6 +40,7 @@ const Ic = {
   undo:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9,14 4,9 9,4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>,
   x:       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   print:   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6,9 6,2 18,2 18,9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+  warehouse:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>,
   warn:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
 };
 
@@ -50,6 +51,7 @@ const NAV = [
   {id:"revision",    label:"Revisión",     icon:Ic.check},
   {id:"operacional", label:"Operacional",  icon:Ic.clock},
   {id:"compras",     label:"Compras",      icon:Ic.cart},
+  {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
   {id:"gastos",      label:"Gastos",       icon:Ic.wallet},
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
   {id:"config",      label:"Configuración",icon:Ic.settings},
@@ -158,6 +160,7 @@ export default function App() {
   const [productos,setProductos] = useState(SEED_PRODS);
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
+  const [movimientos,setMovimientos] = useState([]);
   const [proveedores,setProv]    = useState(["Brenntag","Unilever","Diversey","CMPC","Ansell","3M Chile"]);
   const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
   const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
@@ -303,6 +306,7 @@ export default function App() {
                 (c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)
               ).length;
               if(item.id==="productos")  return productos.filter(p=>(p.stock||0)<5).length;
+              if(item.id==="inventario") return productos.filter(p=>(p.stock||0)<5).length;
               return 0;
             })();
             return (
@@ -338,8 +342,9 @@ export default function App() {
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stock:0,ubicacion:bodegas[0]||"",historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
-        {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
-        {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config}/>}
+        {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
+        {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos}/>}
+        {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin}/>}
@@ -667,7 +672,7 @@ function ModuloRevision({cots,cambiarEstado,onDetalle}) {
 }
 
 // ── OPERACIONAL (Kanban Jira-style) ───────────────────────────
-function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle}) {
+function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimientos,setProductos,perfil}) {
   const [periodo,setPeriodo]=useState("todo");
   const adj=cots.filter(c=>c.estado==="Adjudicada");
   const allOp=cots.filter(c=>c.estadoOp&&["En compra","En despacho","Entregado"].includes(c.estadoOp));
@@ -690,6 +695,25 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle}) {
       const fechaEnt=prompt("Fecha de entrega (YYYY-MM-DD):",today());
       onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor,fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"Entregado",nota:`Entregado a ${receptor}`,usuario:"Felipe Alfaro"}]});
       toast(`Entregado a ${receptor}`,"success");
+      // Deduct stock for each item and register movement
+      if(setProductos && setMovimientos) {
+        (c.items||[]).forEach(item=>{
+          const prod=productos.find(p=>p.id===item.productoId||p.nombre===item.nombre);
+          if(prod) {
+            const stockAntes=prod.stock||0;
+            const stockDespues=Math.max(0,stockAntes-item.cantidad);
+            setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stock:stockDespues,updatedAt:nowISO()}));
+            setMovimientos(prev=>[...prev,{
+              id:uid(),ts:nowISO(),fecha:today(),tipo:"salida",
+              productoId:prod.id,nombreProducto:prod.nombre,
+              cantidad:item.cantidad,stockAntes,stockDespues,
+              referencia:c.numero,motivo:"Despacho/Entrega",
+              bodegaOrigen:prod.ubicacion||"",bodegaDestino:"Cliente",
+              usuario:perfil?.nombre||""
+            }]);
+          }
+        });
+      }
       return;
     }
     onCambiarEstado(c.id,"Adjudicada",{estadoOp,...extra,nota:`→ ${estadoOp}`});
@@ -767,7 +791,7 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle}) {
 }
 
 // ── COMPRAS ───────────────────────────────────────────────────
-function ModuloCompras({cots,productos,setProductos,perfil,config}) {
+function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos}) {
   const [periodo,setPeriodo]=useState("todo");
   const [historial,setHistorial]=useState([]);
   const [compradas,setCompradas]=useState({});
@@ -818,6 +842,15 @@ function ModuloCompras({cots,productos,setProductos,perfil,config}) {
       const nuevaHist=[...(prod.historialCostos||[]),{fecha:today(),costo:precioReal,cantidad:qty,usuario:perfil?.nombre||"",cpp:costoCPP}];
       setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,costo:costoCPP,stock:(p.stock||0)+qty,historialCostos:nuevaHist,updatedAt:nowISO()}));
       toast(`Comprado: +${fmtN(qty)} uds · Costo CPP: ${fmt(costoCPP)}`);
+    // Register inventory movement
+    if(setMovimientos) setMovimientos(prev=>[...prev,{
+      id:uid(),ts:nowISO(),fecha:today(),tipo:"entrada",
+      productoId:prod.id,nombreProducto:prod.nombre,
+      cantidad:qty,stockAntes:prod.stock||0,stockDespues:(prod.stock||0)+qty,
+      referencia:[...new Set(item?.cotizaciones||[])].join(", ")||"Compra",
+      motivo:"Compra",bodegaDestino:prod.ubicacion||"",bodegaOrigen:"",
+      usuario:perfil?.nombre||""
+    }]);
     }
   };
 
@@ -1767,5 +1800,367 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ── MODULO INVENTARIO ─────────────────────────────────────────
+function ModuloInventario({productos,setProductos,movimientos,setMovimientos,perfil,bodegas}) {
+  const [subTab,setSubTab]=useState("resumen");
+  const [periodoInv,setPeriodoInv]=useState("todo");
+  const [filtroProd,setFiltroProd]=useState("");
+  const [filtroTipo,setFiltroTipo]=useState("todos");
+
+  // Ajuste manual state
+  const [ajuste,setAjuste]=useState({productoId:"",cantidad:"",tipo:"entrada",motivo:"Conteo físico",bodega:"",notas:""});
+  // Transferencia state
+  const [transf,setTransf]=useState({productoId:"",cantidad:"",bodegaOrigen:"",bodegaDestino:"",notas:""});
+
+  const TIPO_COLORS={
+    entrada: {bg:"#dcfce7",text:"#15803d",label:"Entrada"},
+    salida:  {bg:"#fee2e2",text:"#b91c1c",label:"Salida"},
+    ajuste:  {bg:"#fef9c3",text:"#854d0e",label:"Ajuste"},
+    transferencia:{bg:"#e0e7ff",text:"#3730a3",label:"Transferencia"},
+  };
+
+  const movFiltrados = filtrarPorPeriodo(movimientos, periodoInv, "fecha")
+    .filter(m=>filtroTipo==="todos"||m.tipo===filtroTipo)
+    .filter(m=>!filtroProd||m.nombreProducto.toLowerCase().includes(filtroProd.toLowerCase()))
+    .sort((a,b)=>b.ts.localeCompare(a.ts));
+
+  const registrarAjuste=()=>{
+    const prod=productos.find(p=>p.id===ajuste.productoId);
+    if(!prod){toast("Selecciona un producto","warning");return;}
+    const cant=Number(ajuste.cantidad)||0;
+    if(!cant){toast("Ingresa una cantidad","warning");return;}
+    const delta=ajuste.tipo==="entrada"?cant:-cant;
+    const stockAntes=prod.stock||0;
+    const stockDespues=Math.max(0,stockAntes+delta);
+    setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,stock:stockDespues,updatedAt:nowISO()}));
+    setMovimientos(prev=>[...prev,{
+      id:uid(),ts:nowISO(),fecha:today(),tipo:"ajuste",
+      productoId:prod.id,nombreProducto:prod.nombre,
+      cantidad:Math.abs(delta),stockAntes,stockDespues,
+      referencia:"Ajuste manual",motivo:ajuste.motivo,
+      bodegaOrigen:"",bodegaDestino:ajuste.bodega||prod.ubicacion||"",
+      usuario:perfil?.nombre||"",notas:ajuste.notas
+    }]);
+    setAjuste({productoId:"",cantidad:"",tipo:"entrada",motivo:"Conteo físico",bodega:"",notas:""});
+    toast(`Ajuste registrado: ${ajuste.tipo==="entrada"?"+":"-"}${fmtN(cant)} uds de ${prod.nombre}`);
+  };
+
+  const registrarTransferencia=()=>{
+    const prod=productos.find(p=>p.id===transf.productoId);
+    if(!prod){toast("Selecciona un producto","warning");return;}
+    const cant=Number(transf.cantidad)||0;
+    if(!cant||!transf.bodegaOrigen||!transf.bodegaDestino){toast("Completa todos los campos","warning");return;}
+    if(transf.bodegaOrigen===transf.bodegaDestino){toast("Origen y destino no pueden ser iguales","warning");return;}
+    if((prod.stock||0)<cant){toast(`Stock insuficiente (disponible: ${fmtN(prod.stock||0)})`, "warning");return;}
+    const stockAntes=prod.stock||0;
+    setMovimientos(prev=>[...prev,{
+      id:uid(),ts:nowISO(),fecha:today(),tipo:"transferencia",
+      productoId:prod.id,nombreProducto:prod.nombre,
+      cantidad:cant,stockAntes,stockDespues:stockAntes,
+      referencia:"Transferencia entre bodegas",motivo:transf.notas||"Transferencia",
+      bodegaOrigen:transf.bodegaOrigen,bodegaDestino:transf.bodegaDestino,
+      usuario:perfil?.nombre||""
+    }]);
+    setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,ubicacion:transf.bodegaDestino,updatedAt:nowISO()}));
+    setTransf({productoId:"",cantidad:"",bodegaOrigen:"",bodegaDestino:"",notas:""});
+    toast(`Transferencia registrada: ${prod.nombre} → ${transf.bodegaDestino}`);
+  };
+
+  const tabs=[
+    {id:"resumen",label:"Resumen de stock"},
+    {id:"movimientos",label:`Movimientos (${movimientos.length})`},
+    {id:"ajuste",label:"Ajuste manual"},
+    {id:"transferencia",label:"Transferencias"},
+  ];
+
+  const inpS={width:"100%",padding:"8px 11px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none",background:"#fff"};
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Inventario</h1>
+          <p style={{color:"#64748b",fontSize:13,margin:0}}>{productos.length} productos · {movimientos.length} movimientos registrados</p>
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{display:"flex",gap:2,marginBottom:18,background:"#f1f5f9",borderRadius:10,padding:4,width:"fit-content"}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setSubTab(t.id)} style={{
+            padding:"7px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:subTab===t.id?600:400,
+            background:subTab===t.id?"#fff":"transparent",
+            color:subTab===t.id?"#0f172a":"#64748b",
+            boxShadow:subTab===t.id?"0 1px 3px rgba(0,0,0,.1)":"none",
+            transition:"all .15s",whiteSpace:"nowrap"
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* ── RESUMEN ── */}
+      {subTab==="resumen"&&(
+        <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                {["","Producto","SKU","Proveedor","Bodega","Stock actual","Últ. movimiento","Estado"].map(h=>(
+                  <th key={h} style={{padding:"10px 13px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {[...productos].sort((a,b)=>(a.stock||0)-(b.stock||0)).map((p,i)=>{
+                  const ultimoMov=movimientos.filter(m=>m.productoId===p.id).sort((a,b)=>b.ts.localeCompare(a.ts))[0];
+                  const stockStatus=(p.stock||0)===0?"crítico":(p.stock||0)<5?"bajo":"ok";
+                  const statusColors={ok:{bg:"#dcfce7",text:"#15803d",label:"OK"},bajo:{bg:"#fef9c3",text:"#854d0e",label:"Stock bajo"},crítico:{bg:"#fee2e2",text:"#b91c1c",label:"Sin stock"}};
+                  const sc=statusColors[stockStatus];
+                  return (
+                    <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                      <td style={{padding:"9px 10px",width:40}}>
+                        {p.foto_url?<img src={p.foto_url} alt="" style={{width:32,height:32,objectFit:"cover",borderRadius:5}}/>
+                          :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📦</div>}
+                      </td>
+                      <td style={{padding:"9px 13px",fontWeight:600}}>{p.nombre}</td>
+                      <td style={{padding:"9px 13px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</td>
+                      <td style={{padding:"9px 13px",color:"#64748b"}}>{p.proveedor||"—"}</td>
+                      <td style={{padding:"9px 13px",color:"#64748b"}}>{p.ubicacion||"—"}</td>
+                      <td style={{padding:"9px 13px",fontWeight:700,fontSize:15,color:stockStatus==="ok"?"#0f172a":sc.text}}>{fmtN(p.stock||0)}</td>
+                      <td style={{padding:"9px 13px",fontSize:11,color:"#94a3b8"}}>
+                        {ultimoMov?(
+                          <div>
+                            <div style={{color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>{TIPO_COLORS[ultimoMov.tipo]?.label} {ultimoMov.tipo==="entrada"?"+":"-"}{fmtN(ultimoMov.cantidad)}</div>
+                            <div style={{color:"#94a3b8"}}>{fmtFecha(ultimoMov.fecha)}</div>
+                          </div>
+                        ):"Sin movimientos"}
+                      </td>
+                      <td style={{padding:"9px 13px"}}>
+                        <span style={{background:sc.bg,color:sc.text,padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:600}}>{sc.label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── MOVIMIENTOS ── */}
+      {subTab==="movimientos"&&(
+        <div>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            <PeriodoChips periodo={periodoInv} setPeriodo={setPeriodoInv}/>
+            <input value={filtroProd} onChange={e=>setFiltroProd(e.target.value)} placeholder="Filtrar producto…"
+              style={{padding:"6px 11px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none",width:160}}/>
+            <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}
+              style={{padding:"6px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
+              <option value="todos">Todos los tipos</option>
+              {Object.entries(TIPO_COLORS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
+          <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                  {["Fecha/Hora","Tipo","Producto","Cant.","Stock ant.","Stock res.","Referencia","Bodega","Usuario"].map(h=>(
+                    <th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:10,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {movFiltrados.length===0&&(
+                    <tr><td colSpan={9} style={{padding:28,textAlign:"center",color:"#94a3b8"}}>Sin movimientos en este período</td></tr>
+                  )}
+                  {movFiltrados.map((m,i)=>{
+                    const tc=TIPO_COLORS[m.tipo]||{bg:"#f1f5f9",text:"#475569",label:m.tipo};
+                    const esEntrada=m.tipo==="entrada"||m.tipo==="ajuste"&&m.stockDespues>m.stockAntes;
+                    return (
+                      <tr key={m.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                        <td style={{padding:"8px 12px",fontSize:11,color:"#64748b",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                          {fmtDateTime(m.ts)}
+                        </td>
+                        <td style={{padding:"8px 12px"}}>
+                          <span style={{background:tc.bg,color:tc.text,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600}}>{tc.label}</span>
+                        </td>
+                        <td style={{padding:"8px 12px",fontWeight:500}}>{m.nombreProducto}</td>
+                        <td style={{padding:"8px 12px",fontWeight:700,color:esEntrada?"#15803d":"#b91c1c"}}>
+                          {esEntrada?"+":"-"}{fmtN(m.cantidad)}
+                        </td>
+                        <td style={{padding:"8px 12px",color:"#64748b"}}>{fmtN(m.stockAntes)}</td>
+                        <td style={{padding:"8px 12px",fontWeight:600}}>{fmtN(m.stockDespues)}</td>
+                        <td style={{padding:"8px 12px",fontSize:11,color:"#64748b",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={m.referencia}>{m.referencia||"—"}</td>
+                        <td style={{padding:"8px 12px",fontSize:11,color:"#64748b"}}>
+                          {m.bodegaOrigen&&m.bodegaDestino?`${m.bodegaOrigen} → ${m.bodegaDestino}`:m.bodegaDestino||m.bodegaOrigen||"—"}
+                        </td>
+                        <td style={{padding:"8px 12px",fontSize:11,color:"#64748b"}}>{m.usuario||"—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── AJUSTE MANUAL ── */}
+      {subTab==="ajuste"&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
+          <div style={{background:"#fff",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Registrar ajuste de stock</div>
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>PRODUCTO *</label>
+                <select value={ajuste.productoId} onChange={e=>setAjuste(a=>({...a,productoId:e.target.value}))} style={inpS}>
+                  <option value="">Seleccionar producto…</option>
+                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(p.stock||0)})</option>)}
+                </select>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>TIPO</label>
+                  <select value={ajuste.tipo} onChange={e=>setAjuste(a=>({...a,tipo:e.target.value}))} style={inpS}>
+                    <option value="entrada">Entrada (+)</option>
+                    <option value="salida">Salida (-)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>CANTIDAD</label>
+                  <MilesInput value={ajuste.cantidad} onChange={v=>setAjuste(a=>({...a,cantidad:v}))} placeholder="0"/>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>MOTIVO</label>
+                <select value={ajuste.motivo} onChange={e=>setAjuste(a=>({...a,motivo:e.target.value}))} style={inpS}>
+                  {["Conteo físico","Merma","Daño","Devolución","Corrección de error","Otro"].map(m=><option key={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>BODEGA</label>
+                <select value={ajuste.bodega} onChange={e=>setAjuste(a=>({...a,bodega:e.target.value}))} style={inpS}>
+                  <option value="">Sin especificar</option>
+                  {bodegas.map(b=><option key={b}>{b}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS (opcional)</label>
+                <textarea value={ajuste.notas} onChange={e=>setAjuste(a=>({...a,notas:e.target.value}))} rows={2}
+                  style={{...inpS,resize:"vertical"}}/>
+              </div>
+              {ajuste.productoId&&ajuste.cantidad&&(
+                <div style={{background:"#f0f9ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 13px",fontSize:12}}>
+                  <div style={{color:"#1d4ed8",fontWeight:500}}>Resultado del ajuste:</div>
+                  <AjustePreview productos={productos} ajuste={ajuste}/>
+                </div>
+              )}
+              <Btn onClick={registrarAjuste}>Registrar ajuste</Btn>
+            </div>
+          </div>
+
+          {/* Últimos ajustes */}
+          <div style={{background:"#fff",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Últimos ajustes</div>
+            <div style={{maxHeight:400,overflowY:"auto"}}>
+              {movimientos.filter(m=>m.tipo==="ajuste").sort((a,b)=>b.ts.localeCompare(a.ts)).slice(0,10).map(m=>(
+                <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div>
+                      <div style={{fontWeight:500,fontSize:13}}>{m.nombreProducto}</div>
+                      <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{m.motivo} · {m.usuario}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontWeight:700,fontSize:13,color:m.stockDespues>m.stockAntes?"#15803d":"#b91c1c"}}>
+                        {m.stockDespues>m.stockAntes?"+":"-"}{fmtN(m.cantidad)}
+                      </div>
+                      <div style={{fontSize:10,color:"#94a3b8"}}>{fmtFecha(m.fecha)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!movimientos.filter(m=>m.tipo==="ajuste").length&&<div style={{color:"#94a3b8",fontSize:13}}>Sin ajustes registrados</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TRANSFERENCIAS ── */}
+      {subTab==="transferencia"&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
+          <div style={{background:"#fff",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Transferir entre bodegas</div>
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>PRODUCTO *</label>
+                <select value={transf.productoId} onChange={e=>{
+                  const prod=productos.find(p=>p.id===e.target.value);
+                  setTransf(t=>({...t,productoId:e.target.value,bodegaOrigen:prod?.ubicacion||""}));
+                }} style={inpS}>
+                  <option value="">Seleccionar producto…</option>
+                  {productos.map(p=><option key={p.id} value={p.id}>{p.nombre} (Stock: {fmtN(p.stock||0)} · {p.ubicacion||"Sin bodega"})</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>CANTIDAD *</label>
+                <MilesInput value={transf.cantidad} onChange={v=>setTransf(t=>({...t,cantidad:v}))} placeholder="0"/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORIGEN</label>
+                  <select value={transf.bodegaOrigen} onChange={e=>setTransf(t=>({...t,bodegaOrigen:e.target.value}))} style={inpS}>
+                    <option value="">Seleccionar…</option>
+                    {bodegas.map(b=><option key={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div style={{textAlign:"center",color:"#94a3b8",fontSize:18,paddingTop:18}}>→</div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>DESTINO</label>
+                  <select value={transf.bodegaDestino} onChange={e=>setTransf(t=>({...t,bodegaDestino:e.target.value}))} style={inpS}>
+                    <option value="">Seleccionar…</option>
+                    {bodegas.filter(b=>b!==transf.bodegaOrigen).map(b=><option key={b}>{b}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS</label>
+                <textarea value={transf.notas} onChange={e=>setTransf(t=>({...t,notas:e.target.value}))} rows={2} style={{...inpS,resize:"vertical"}}/>
+              </div>
+              <Btn onClick={registrarTransferencia}>Registrar transferencia</Btn>
+            </div>
+          </div>
+
+          {/* Últimas transferencias */}
+          <div style={{background:"#fff",borderRadius:12,padding:"20px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:14}}>Últimas transferencias</div>
+            <div style={{maxHeight:400,overflowY:"auto"}}>
+              {movimientos.filter(m=>m.tipo==="transferencia").sort((a,b)=>b.ts.localeCompare(a.ts)).slice(0,10).map(m=>(
+                <div key={m.id} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+                  <div style={{fontWeight:500,fontSize:13,marginBottom:2}}>{m.nombreProducto}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:12,color:"#475569"}}>{m.bodegaOrigen} → {m.bodegaDestino}</div>
+                    <div style={{fontWeight:700,fontSize:13,color:"#3730a3"}}>{fmtN(m.cantidad)} uds</div>
+                  </div>
+                  <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{fmtFecha(m.fecha)} · {m.usuario}</div>
+                </div>
+              ))}
+              {!movimientos.filter(m=>m.tipo==="transferencia").length&&<div style={{color:"#94a3b8",fontSize:13}}>Sin transferencias registradas</div>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AjustePreview({productos,ajuste}) {
+  const prod=productos.find(p=>p.id===ajuste.productoId);
+  if(!prod) return null;
+  const delta=ajuste.tipo==="entrada"?Number(ajuste.cantidad):-Number(ajuste.cantidad);
+  const res=Math.max(0,(prod.stock||0)+delta);
+  return (
+    <div style={{marginTop:4}}>
+      Stock actual: <strong>{fmtN(prod.stock||0)}</strong>
+      {" → "}Stock resultante: <strong style={{color:res<5?"#b91c1c":"#15803d"}}>{fmtN(res)}</strong>
+    </div>
   );
 }

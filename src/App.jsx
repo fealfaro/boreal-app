@@ -54,6 +54,7 @@ const NAV = [
   {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
   {id:"gastos",      label:"Gastos",       icon:Ic.wallet},
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
+  {id:"maestros",    label:"Maestros",      icon:Ic.box},
   {id:"config",      label:"Configuración",icon:Ic.settings},
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
 ];
@@ -356,6 +357,7 @@ export default function App() {
         {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -529,7 +531,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 22px rgba(0,0,0,.11)";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,.07)";}}>
               <div onClick={()=>onEdit(p)} style={{width:"100%",paddingTop:"75%",position:"relative",background:"#f8fafc",overflow:"hidden"}}>
-                {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
+                {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"contain",padding:"6px",boxSizing:"border-box",background:"#f8fafc"}}/>
                   :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}>📦</div>}
                 {getStockTotal(p)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
               </div>
@@ -1252,10 +1254,12 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
         )}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:13}}>
-        <MaestroSec title="Proveedores" items={proveedores} setItems={setProv} k="prov" tipo="prov"/>
-        <MaestroSec title="Organismos compradores" items={empresas} setItems={setEmpresas} k="emp" tipo="emp"/>
-        <MaestroSec title="Bodegas" items={bodegas} setItems={setBodegas} k="bod" tipo="bod"/>
+      <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:20}}>🏭</span>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600,fontSize:13,color:"#1d4ed8"}}>Proveedores, Organismos y Bodegas</div>
+          <div style={{fontSize:12,color:"#64748b",marginTop:1}}>La gestión de maestros se ha movido a su propia sección en el menú</div>
+        </div>
       </div>
     </div>
   );
@@ -1483,7 +1487,7 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
   // Full-screen overlay, not the small Modal wrapper
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"stretch",justifyContent:"center",zIndex:300,padding:"20px"}}
-      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      onClick={e=>{if(e.target===e.currentTarget){if(form.items.length>0||form.organismo){if(window.confirm("¿Cerrar sin guardar los cambios?"))onClose();}else onClose();}}}>
       <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:1100,display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
         onClick={e=>e.stopPropagation()}>
 
@@ -1901,6 +1905,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
       id:uid(),ts:nowISO(),fecha:today(),tipo:"ajuste",
       productoId:prod.id,nombreProducto:prod.nombre,
       cantidad:Math.abs(delta),stockAntes,stockDespues,
+      signo:ajuste.tipo==="entrada"?"+":"-",
       referencia:"Ajuste manual",motivo:ajuste.motivo,
       bodegaOrigen:"",bodegaDestino:ajuste.bodega||prod.ubicacion||"",
       usuario:perfil?.nombre||"",notas:ajuste.notas
@@ -1930,9 +1935,10 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
     toast(`Transferencia registrada: ${prod.nombre} → ${transf.bodegaDestino}`);
   };
 
+  const hasMovs=movimientos.length>0;
   const tabs=[
     {id:"resumen",label:"Resumen de stock"},
-    {id:"movimientos",label:`Movimientos (${movimientos.length})`},
+    {id:"movimientos",label:"Movimientos",dot:hasMovs},
     {id:"ajuste",label:"Ajuste manual"},
     {id:"transferencia",label:"Transferencias"},
   ];
@@ -1956,8 +1962,12 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
             background:subTab===t.id?"#fff":"transparent",
             color:subTab===t.id?"#0f172a":"#64748b",
             boxShadow:subTab===t.id?"0 1px 3px rgba(0,0,0,.1)":"none",
-            transition:"all .15s",whiteSpace:"nowrap"
-          }}>{t.label}</button>
+            transition:"all .15s",whiteSpace:"nowrap",
+            display:"flex",alignItems:"center",gap:5
+          }}>
+            {t.label}
+            {t.dot&&subTab!==t.id&&<span style={{width:7,height:7,borderRadius:"50%",background:"#1d4ed8",display:"inline-block",flexShrink:0}}/>}
+          </button>
         ))}
       </div>
 
@@ -2003,9 +2013,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
                           <span style={{background:tc.bg,color:tc.text,padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:600}}>{tc.label}</span>
                         </td>
                         <td style={{padding:"8px 12px",fontWeight:500}}>{m.nombreProducto}</td>
-                        <td style={{padding:"8px 12px",fontWeight:700,color:esEntrada?"#15803d":"#b91c1c"}}>
-                          {esEntrada?"+":"-"}{fmtN(m.cantidad)}
-                        </td>
+                        <MovSign m={m}/>
                         <td style={{padding:"8px 12px",color:"#64748b"}}>{fmtN(m.stockAntes)}</td>
                         <td style={{padding:"8px 12px",fontWeight:600}}>{fmtN(m.stockDespues)}</td>
                         <td style={{padding:"8px 12px",fontSize:11,color:"#64748b",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={m.referencia}>{m.referencia||"—"}</td>
@@ -2204,11 +2212,12 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
       id:uid(),ts:nowISO(),fecha:today(),tipo:"ajuste",
       productoId:prod.id,nombreProducto:prod.nombre,
       cantidad:Math.abs(delta),
+      signo:delta>0?"+":"-",
       stockAntes:getStockTotal(prod),
       stockDespues:stockTotal,
       referencia:"Ajuste desde inventario",
       motivo:"Corrección de stock",
-      bodegaOrigen:"",bodegaDestino:prod.stockPorBodega[bIdx].bodega,
+      bodegaOrigen:"",bodegaDestino:(prod.stockPorBodega||[])[bIdx]?.bodega||"",
       usuario:perfil?.nombre||""
     }]);
     setEditando(e=>{const n={...e};delete n[key];return n;});
@@ -2321,6 +2330,167 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── MOV SIGN — movement quantity with correct sign and color ──
+function MovSign({m}) {
+  const signo = m.signo || (
+    m.tipo==="entrada" ? "+" :
+    m.tipo==="salida"  ? "-" :
+    m.stockDespues > m.stockAntes ? "+" : "-"
+  );
+  const color = signo==="+" ? "#15803d" : "#b91c1c";
+  return (
+    <td style={{padding:"8px 12px",fontWeight:700,color,whiteSpace:"nowrap"}}>
+      {signo}{fmtN(m.cantidad)}
+    </td>
+  );
+}
+
+// ── MODULO MAESTROS — full CRUD for proveedores/organismos/bodegas ──
+function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots}) {
+  const [seccion,setSeccion]=useState("proveedores");
+  const [editando,setEditando]=useState(null); // {tipo, idx, valor}
+  const [confirmDel,setConfirmDel]=useState(null); // {tipo, idx, nombre}
+  const [nuevo,setNuevo]=useState("");
+
+  const SECS=[
+    {id:"proveedores",label:"Proveedores",icon:"🏭",items:proveedores,set:setProv},
+    {id:"organismos",label:"Organismos compradores",icon:"🏛️",items:empresas,set:setEmpresas},
+    {id:"bodegas",label:"Bodegas",icon:"🏬",items:bodegas,set:setBodegas},
+  ];
+  const sec=SECS.find(s=>s.id===seccion);
+
+  const isEnUso=(tipo,nombre)=>{
+    if(tipo==="proveedores") return cots.some(c=>(c.items||[]).some(i=>i.proveedor===nombre));
+    if(tipo==="organismos")  return cots.some(c=>c.organismo===nombre);
+    return false;
+  };
+
+  const agregar=()=>{
+    const val=nuevo.trim();
+    if(!val){toast("Ingresa un nombre","warning");return;}
+    if(sec.items.includes(val)){toast("Ya existe","warning");return;}
+    sec.set(prev=>[...prev,val]);
+    setNuevo("");
+    toast(`"${val}" agregado`);
+  };
+
+  const guardarEdicion=()=>{
+    if(!editando) return;
+    const val=editando.valor.trim();
+    if(!val){toast("El nombre no puede estar vacío","warning");return;}
+    if(sec.items.includes(val)&&sec.items[editando.idx]!==val){toast("Ya existe","warning");return;}
+    sec.set(prev=>prev.map((x,i)=>i===editando.idx?val:x));
+    setEditando(null);
+    toast("Actualizado");
+  };
+
+  const confirmarEliminar=()=>{
+    if(!confirmDel) return;
+    const {tipo,idx,nombre}=confirmDel;
+    if(isEnUso(tipo,nombre)){
+      toast(`"${nombre}" está en uso y no se puede eliminar`,"warning");
+      setConfirmDel(null); return;
+    }
+    sec.set(prev=>prev.filter((_,i)=>i!==idx));
+    setConfirmDel(null);
+    toast(`"${nombre}" eliminado`);
+  };
+
+  return (
+    <div style={{maxWidth:700}}>
+      <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Maestros</h1>
+      <p style={{color:"#64748b",fontSize:13,marginBottom:16}}>Gestiona proveedores, organismos y bodegas</p>
+
+      {/* Section tabs */}
+      <div style={{display:"flex",gap:2,marginBottom:18,background:"#f1f5f9",borderRadius:10,padding:4,width:"fit-content"}}>
+        {SECS.map(s=>(
+          <button key={s.id} onClick={()=>{setSeccion(s.id);setEditando(null);setNuevo("");}} style={{
+            padding:"7px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:seccion===s.id?600:400,
+            background:seccion===s.id?"#fff":"transparent",color:seccion===s.id?"#0f172a":"#64748b",
+            boxShadow:seccion===s.id?"0 1px 3px rgba(0,0,0,.1)":"none",transition:"all .15s",whiteSpace:"nowrap"
+          }}>{s.icon} {s.label} <span style={{color:"#94a3b8",fontWeight:400}}>({s.items.length})</span></button>
+        ))}
+      </div>
+
+      <div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 3px rgba(0,0,0,.06)",overflow:"hidden"}}>
+        {/* Add row */}
+        <div style={{padding:"14px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",gap:8}}>
+          <input value={nuevo} onChange={e=>setNuevo(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&agregar()}
+            placeholder={`Nuevo ${sec.label.toLowerCase().slice(0,-1)}…`}
+            style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
+          <Btn onClick={agregar} size="sm">+ Agregar</Btn>
+        </div>
+
+        {/* List */}
+        {sec.items.length===0&&(
+          <div style={{padding:28,textAlign:"center",color:"#94a3b8",fontSize:13}}>Sin {sec.label.toLowerCase()} registrados</div>
+        )}
+        {sec.items.map((item,idx)=>{
+          const enUso=isEnUso(seccion,item);
+          const isEdit=editando?.idx===idx&&editando?.tipo===seccion;
+          return (
+            <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:"11px 16px",borderBottom:"1px solid #f9fafb",background:idx%2===0?"#fff":"#fafafa"}}>
+              <span style={{fontSize:16,flexShrink:0}}>{sec.icon}</span>
+              {isEdit ? (
+                <input autoFocus value={editando.valor}
+                  onChange={e=>setEditando(ed=>({...ed,valor:e.target.value}))}
+                  onKeyDown={e=>{if(e.key==="Enter")guardarEdicion();if(e.key==="Escape")setEditando(null);}}
+                  style={{flex:1,padding:"6px 10px",borderRadius:7,border:"1.5px solid #1d4ed8",fontSize:13,outline:"none",background:"#eff6ff"}}/>
+              ) : (
+                <span style={{flex:1,fontSize:13,fontWeight:500}}>{item}</span>
+              )}
+              {enUso&&<span style={{fontSize:10,color:"#94a3b8",background:"#f1f5f9",padding:"2px 7px",borderRadius:20,flexShrink:0}}>en uso</span>}
+              <div style={{display:"flex",gap:5,flexShrink:0}}>
+                {isEdit ? (
+                  <>
+                    <Btn onClick={guardarEdicion} size="xs">✓ Guardar</Btn>
+                    <Btn onClick={()=>setEditando(null)} variant="ghost" size="xs">✗</Btn>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={()=>setEditando({tipo:seccion,idx,valor:item})}
+                      style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500,transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.background="#eff6ff";e.currentTarget.style.color="#1d4ed8";}}
+                      onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#475569";}}>
+                      Editar
+                    </button>
+                    <button onClick={()=>setConfirmDel({tipo:seccion,idx,nombre:item})}
+                      style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#b91c1c",fontWeight:500,transition:"all .12s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="#fee2e2"}
+                      onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                      Eliminar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDel&&(
+        <Modal onClose={()=>setConfirmDel(null)} maxWidth={380}>
+          <div style={{textAlign:"center",padding:"8px 0"}}>
+            <div style={{fontSize:32,marginBottom:10}}>⚠️</div>
+            <h3 style={{fontWeight:700,fontSize:16,marginBottom:8}}>¿Eliminar "{confirmDel.nombre}"?</h3>
+            <p style={{color:"#64748b",fontSize:13,marginBottom:20}}>
+              {isEnUso(confirmDel.tipo,confirmDel.nombre)
+                ? "Este elemento está en uso en cotizaciones y no se puede eliminar."
+                : "Esta acción no se puede deshacer."}
+            </p>
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              <Btn onClick={()=>setConfirmDel(null)} variant="ghost">Cancelar</Btn>
+              {!isEnUso(confirmDel.tipo,confirmDel.nombre)&&<Btn onClick={confirmarEliminar} variant="danger">Sí, eliminar</Btn>}
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -54,7 +54,7 @@ const NAV = [
   {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
   {id:"gastos",      label:"Gastos",       icon:Ic.wallet},
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
-  {id:"admin",       label:"Admin",         icon:Ic.settings, adminOnly:true},
+  {id:"admin",       label:"Administración",icon:Ic.settings, adminOnly:true},
   {id:"maestros",    label:"Maestros",      icon:Ic.box},
   {id:"config",      label:"Configuración",icon:Ic.settings},
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
@@ -107,7 +107,7 @@ function Modal({onClose,children,maxWidth=480}) {
 function CloseBtn({onClose}) {
   const [h,setH]=useState(false);
   return <button onClick={onClose} onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
-    style={{background:h?"#fee2e2":"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:h?"#b91c1c":"#64748b",transition:"all .15s",flexShrink:0}}>{Ic.x}</button>;
+    style={{background:h?"#fee2e2":"#f1f5f9",border:"none",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:h?"#b91c1c":"#64748b",transition:"all .15s",flexShrink:0}}>{Ic.x}</button>;
 }
 
 function Btn({onClick,children,variant="primary",size="md",disabled=false,style:s={}}) {
@@ -147,11 +147,14 @@ function MargenBadge({pct,monto,umbrales={},size="sm"}) {
 
 function PeriodoChips({periodo,setPeriodo}) {
   return (
-    <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
-      <span style={{fontSize:11,color:"#94a3b8",fontWeight:500,whiteSpace:"nowrap",flexShrink:0}}>Período:</span>
+    <div style={{display:"flex",gap:6,flexWrap:"nowrap",alignItems:"center",overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
       {PERIODOS.map(p=>(
         <button key={p.id} onClick={()=>setPeriodo(p.id)}
-          style={{padding:"4px 10px",borderRadius:20,border:"none",fontSize:11,cursor:"pointer",fontWeight:periodo===p.id?600:400,background:periodo===p.id?"#0f172a":"#f1f5f9",color:periodo===p.id?"#fff":"#475569",transition:"all .12s"}}>
+          style={{padding:"7px 12px",borderRadius:20,border:"none",fontSize:12,cursor:"pointer",
+            fontWeight:periodo===p.id?600:400,
+            background:periodo===p.id?"#1d4ed8":"#f1f5f9",
+            color:periodo===p.id?"#fff":"#475569",
+            transition:"all .12s",minHeight:36,whiteSpace:"nowrap"}}>
           {p.label}
         </button>
       ))}
@@ -312,9 +315,13 @@ export default function App() {
   input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   input[type=number]{-moz-appearance:textfield}
   button:hover{opacity:0.92}
-  *{-webkit-tap-highlight-color:transparent;}
-  input,select,textarea{font-size:16px!important;}
-  @media(min-width:768px){input,select,textarea{font-size:13px!important;}}
+  *{-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+  input,select,textarea,button{font-size:16px!important;touch-action:manipulation;}
+  @media(min-width:768px){input,select,textarea,button{font-size:13px!important;}}
+  select{-webkit-appearance:none;appearance:none;}
+  :focus{outline:none;}
+  ::-webkit-scrollbar{display:none;}
+  *{scrollbar-width:none;}
 `}</style>
       <ToastContainer/>
 
@@ -397,8 +404,8 @@ export default function App() {
         <div className="no-print" style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #e2e8f0",display:"flex",zIndex:200,paddingBottom:"env(safe-area-inset-bottom)",boxShadow:"0 -2px 10px rgba(0,0,0,.06)"}}>
           {[
             {id:"dashboard",   label:"Inicio",    icon:Ic.grid},
-            {id:"cotizaciones",label:"Cots.",      icon:Ic.file},
-            {id:"operacional", label:"Ops.",       icon:Ic.clock},
+            {id:"cotizaciones",label:"Cotizar",    icon:Ic.file},
+            {id:"operacional", label:"Pedidos",    icon:Ic.clock},
             {id:"compras",     label:"Compras",    icon:Ic.cart},
             {id:"__more__",    label:"Más",        icon:Ic.menu},
           ].map(item=>{
@@ -649,7 +656,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
           <option value="margen_desc">Margen ↓</option>
           <option value="estado_asc">Estado A→Z</option>
         </select>
-        <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
           {["Todos",...ESTADOS_COT,"Para revisar"].map(e=>{
             const ec=ESTADO_COLORS[e];
             return <button key={e} onClick={()=>setFiltroEst(e)} style={{padding:"5px 9px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:11,cursor:"pointer",fontWeight:filtroEst===e?600:400,background:filtroEst===e?(ec?.bg||"#0f172a"):"#fff",color:filtroEst===e?(ec?.text||"#fff"):"#64748b",transition:"all .12s"}}>{e}</button>;

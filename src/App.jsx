@@ -294,7 +294,17 @@ export default function App() {
         <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
           {NAV.map(item=>{
             const isAct=tab===item.id;
-            const badge=item.id==="revision"?cots.filter(c=>c.estado==="Para revisar").length:0;
+            const badge = (() => {
+              if(item.id==="revision")    return cots.filter(c=>c.estado==="Para revisar").length;
+              if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
+              if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
+              if(item.id==="cotizaciones")return cots.filter(c=>
+                c.estado==="Modificada"||
+                (c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)
+              ).length;
+              if(item.id==="productos")  return productos.filter(p=>(p.stock||0)<5).length;
+              return 0;
+            })();
             return (
               <button key={item.id} onClick={()=>goTab(item.id)} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 11px",borderRadius:8,background:isAct?"#1e40af":"transparent",color:isAct?"#fff":"#94a3b8",border:"none",cursor:"pointer",textAlign:"left",fontSize:13,fontWeight:isAct?500:400,transition:"all .12s",width:"100%"}}>
                 <span style={{flexShrink:0,opacity:isAct?1:.75}}>{item.icon}</span>
@@ -1157,7 +1167,7 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
                     )}
                   </td>
                   <td style={{padding:"7px 10px"}}>
-                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));toast("Usuario eliminado");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
+                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(window.confirm(`¿Eliminar a "${u.nombre}"? Esta acción no se puede deshacer.`)){if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));toast("Usuario eliminado");}}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
                   </td>
                 </tr>
               ))}

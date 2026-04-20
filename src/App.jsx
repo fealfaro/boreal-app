@@ -1355,17 +1355,20 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
 
   // Add empty row for Odoo-style inline add
   const addEmptyRow=()=>{
-    setForm(f=>({...f,items:[...f.items,{productoId:null,nombre:"",sku:"",costo:0,precioVenta:0,cantidad:1,foto_url:"",proveedor:""}]}));
-    setSearchIdx(form.items.length);
+    setSearchIdx("new");
   };
 
   const selectProductInRow=(idx,p)=>{
     const pv=calcPrecioVenta(p.costo,p.margen);
-    setForm(f=>{
-      const items=[...f.items];
-      items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};
-      return{...f,items};
-    });
+    if(idx==="new"){
+      setForm(f=>({...f,items:[...f.items,{productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,cantidad:1,foto_url:p.foto_url||"",proveedor:p.proveedor||""}]}));
+    } else {
+      setForm(f=>{
+        const items=[...f.items];
+        items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};
+        return{...f,items};
+      });
+    }
     setSearchIdx(null);
   };
 
@@ -1465,73 +1468,84 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
                 <tbody>
                   {form.items.map((item,i)=>{
                     const mgL=item.precioVenta>0&&item.costo>0?((item.precioVenta/1.19-item.costo)/item.costo*100):0;
-                    const isEmpty=!item.nombre;
                     return (
-                      <tr key={i} style={{borderTop:"1px solid #f1f5f9",background:isEmpty?"#fafeff":"#fff"}}>
+                      <tr key={i} style={{borderTop:"1px solid #f1f5f9",background:"#fff"}}>
                         {/* Foto */}
-                        <td style={{padding:"8px 10px"}}>
+                        <td style={{padding:"8px 10px",width:44}}>
                           {item.foto_url
-                            ?<img src={item.foto_url} alt="" style={{width:28,height:28,objectFit:"cover",borderRadius:5,display:"block"}}/>
-                            :<div style={{width:28,height:28,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}>📦</div>
+                            ?<img src={item.foto_url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,display:"block"}}/>
+                            :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}>📦</div>
                           }
                         </td>
-                        {/* Producto — buscador inline si está vacío o si es la fila activa */}
-                        <td style={{padding:"6px 10px",minWidth:200}}>
-                          {searchIdx===i||isEmpty ? (
+                        {/* Nombre del producto — clic abre buscador para reemplazar */}
+                        <td style={{padding:"6px 10px",minWidth:200,position:"relative"}}>
+                          {searchIdx===i ? (
                             <InlineProductSearch
                               productos={productos}
-                              value={item.nombre}
+                              initialValue={item.nombre}
                               onSelect={p=>selectProductInRow(i,p)}
-                              onBlur={()=>{if(!item.nombre)removeItem(i);setSearchIdx(null);}}
-                              autoFocus={searchIdx===i}
+                              onClose={()=>setSearchIdx(null)}
+                              autoFocus
                             />
                           ) : (
-                            <div onClick={()=>setSearchIdx(i)} style={{cursor:"pointer",padding:"4px 0"}}>
+                            <div onClick={()=>setSearchIdx(i)} style={{cursor:"pointer",padding:"4px 6px",borderRadius:6,transition:"background .1s"}}
+                              onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                               <div style={{fontWeight:500,fontSize:13}}>{item.nombre}</div>
                               {item.sku&&<div style={{fontSize:10,color:"#94a3b8",fontFamily:"'DM Mono',monospace"}}>{item.sku}</div>}
                             </div>
                           )}
                         </td>
                         {/* Cantidad */}
-                        <td style={{padding:"6px 10px"}}>
+                        <td style={{padding:"6px 10px",width:80}}>
                           <input type="number" value={item.cantidad} min={1}
                             onChange={e=>updateItem(i,"cantidad",Number(e.target.value))}
-                            style={{width:56,padding:"5px 7px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
+                            style={{width:60,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center",outline:"none"}}/>
                         </td>
                         {/* Precio */}
-                        <td style={{padding:"6px 10px"}}>
+                        <td style={{padding:"6px 10px",width:130}}>
                           <input type="number" value={item.precioVenta}
                             onChange={e=>updateItem(i,"precioVenta",Number(e.target.value))}
-                            style={{width:100,padding:"5px 7px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13}}/>
+                            style={{width:110,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
                         </td>
                         {/* Subtotal */}
-                        <td style={{padding:"6px 10px",fontWeight:600,color:"#0f172a"}}>
+                        <td style={{padding:"6px 10px",fontWeight:600,color:"#0f172a",width:120}}>
                           {item.precioVenta>0?fmt(Math.round(item.precioVenta/1.19)*item.cantidad):"—"}
                         </td>
                         {/* Margen */}
-                        {showMargen&&<td style={{padding:"6px 10px"}}>
+                        {showMargen&&<td style={{padding:"6px 10px",width:80}}>
                           <span style={{fontSize:11,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{item.costo>0?fmtPct(mgL):"—"}</span>
                         </td>}
                         {/* Eliminar */}
-                        <td style={{padding:"6px 8px",textAlign:"center"}}>
-                          <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,lineHeight:1,padding:2,borderRadius:4,transition:"color .12s"}}
+                        <td style={{padding:"6px 8px",textAlign:"center",width:36}}>
+                          <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:18,lineHeight:1,padding:2,borderRadius:4,transition:"color .12s"}}
                             onMouseEnter={e=>e.currentTarget.style.color="#ef4444"}
                             onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
                         </td>
                       </tr>
                     );
                   })}
-                  {/* Fila "Agregar producto" — siempre visible al final */}
-                  <tr style={{borderTop:"1px solid #f1f5f9",background:"#f8fafc"}}>
-                    <td colSpan={showMargen?7:6} style={{padding:"10px 12px"}}>
-                      <button onClick={addEmptyRow}
-                        style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:0}}>
-                        <span style={{fontSize:18,lineHeight:1}}>+</span> Agregar producto
-                      </button>
-                    </td>
-                  </tr>
                 </tbody>
               </table>
+            </div>
+
+            {/* Botón agregar + buscador flotante — FUERA de la tabla */}
+            <div style={{marginTop:0,borderTop:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:"0 0 10px 10px",padding:"10px 12px",position:"relative"}}>
+              {searchIdx==="new" ? (
+                <InlineProductSearch
+                  productos={productos}
+                  initialValue=""
+                  onSelect={p=>selectProductInRow("new",p)}
+                  onClose={()=>setSearchIdx(null)}
+                  autoFocus
+                  placeholder="Buscar y seleccionar producto…"
+                />
+              ) : (
+                <button onClick={addEmptyRow}
+                  style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:0}}>
+                  <span style={{fontSize:20,lineHeight:1,fontWeight:300}}>+</span> Agregar producto
+                </button>
+              )}
             </div>
           </div>
 
@@ -1562,58 +1576,68 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
 }
 
 // ── INLINE PRODUCT SEARCH (para tabla Odoo) ───────────────────
-function InlineProductSearch({productos,value,onSelect,onBlur,autoFocus}) {
-  const [q,setQ]=useState(value||"");
-  const [open,setOpen]=useState(true);
-  const ref=useRef();
+function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFocus,placeholder}) {
+  const [q,setQ]=useState(initialValue);
   const inputRef=useRef();
+  const containerRef=useRef();
 
-  useEffect(()=>{if(autoFocus&&inputRef.current)inputRef.current.focus();},[autoFocus]);
+  useEffect(()=>{
+    if(autoFocus&&inputRef.current) inputRef.current.focus();
+  },[autoFocus]);
+
+  // Close on Escape
+  useEffect(()=>{
+    const h=e=>{ if(e.key==="Escape") onClose?.(); };
+    document.addEventListener("keydown",h);
+    return()=>document.removeEventListener("keydown",h);
+  },[onClose]);
 
   const filtered=productos.filter(p=>
     !q||p.nombre.toLowerCase().includes(q.toLowerCase())||(p.sku||"").toLowerCase().includes(q.toLowerCase())
   ).slice(0,8);
 
-  const select=p=>{setOpen(false);onSelect(p);};
-
   return (
-    <div ref={ref} style={{position:"relative"}}>
+    <div ref={containerRef} style={{position:"relative"}}>
       <input
         ref={inputRef}
         value={q}
-        onChange={e=>{setQ(e.target.value);setOpen(true);}}
-        onFocus={()=>setOpen(true)}
-        onBlur={()=>setTimeout(()=>{if(!ref.current?.contains(document.activeElement))onBlur?.();},150)}
-        placeholder="Buscar producto…"
-        style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1.5px solid #1d4ed8",fontSize:13,outline:"none",background:"#eff6ff",boxSizing:"border-box"}}
+        onChange={e=>setQ(e.target.value)}
+        onBlur={e=>{
+          // Don't close if clicking inside the dropdown
+          setTimeout(()=>{
+            if(containerRef.current&&!containerRef.current.contains(document.activeElement)) onClose?.();
+          },150);
+        }}
+        placeholder={placeholder||"Buscar producto…"}
+        style={{width:"100%",padding:"7px 11px",borderRadius:7,border:"1.5px solid #1d4ed8",fontSize:13,outline:"none",background:"#eff6ff",boxSizing:"border-box"}}
       />
-      {open&&filtered.length>0&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.14)",zIndex:999,maxHeight:280,overflowY:"auto"}}>
+      {/* Dropdown — aparece debajo del input, con z-index alto */}
+      {filtered.length>0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.16)",zIndex:9999,maxHeight:300,overflowY:"auto"}}>
           {filtered.map(p=>{
             const pv=calcPrecioVenta(p.costo,p.margen);
             return (
-              <div key={p.id} onMouseDown={e=>{e.preventDefault();select(p);}}
-                style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #f8fafc",transition:"background .1s"}}
-                onMouseEnter={e=>e.currentTarget.style.background="#eff6ff"}
-                onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+              <div key={p.id}
+                onMouseDown={e=>{e.preventDefault();onSelect(p);}}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}>
                 <div style={{width:36,height:36,borderRadius:6,background:"#f8fafc",flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   {p.foto_url?<img src={p.foto_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:18}}>📦</span>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                  <div style={{fontSize:10,color:"#94a3b8"}}>{p.sku} · {p.proveedor}</div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku&&`${p.sku} · `}{p.proveedor}</div>
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
                   <div style={{fontWeight:700,fontSize:13,color:"#1d4ed8"}}>{fmt(pv)}</div>
-                  <div style={{fontSize:10,color:"#94a3b8"}}>Stock: {fmtN(p.stock||0)}</div>
+                  <div style={{fontSize:10,color:(p.stock||0)<5?"#ef4444":"#94a3b8"}}>Stock: {fmtN(p.stock||0)}</div>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-      {open&&q&&filtered.length===0&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.14)",zIndex:999,padding:"12px 14px",fontSize:13,color:"#94a3b8"}}>
+      {q&&filtered.length===0&&(
+        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.12)",zIndex:9999,padding:"14px",fontSize:13,color:"#94a3b8",textAlign:"center"}}>
           Sin resultados para "{q}"
         </div>
       )}

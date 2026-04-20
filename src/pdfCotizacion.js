@@ -46,7 +46,7 @@ export function generarPDFCotizacion(cot, logoB64) {
   .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;padding-bottom:24px;border-bottom:2px solid #e2e8f0}
   .logo{height:56px;object-fit:contain}
   .company-meta{text-align:right;font-size:9.5px;color:#64748b;line-height:1.7}
-  .doc-badge{display:inline-block;background:#0ea5e9;color:#fff;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;padding:4px 12px;border-radius:4px;margin-bottom:10px}
+  .doc-badge{display:inline-block;background:#1d4ed8;color:#fff;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;padding:4px 12px;border-radius:4px;margin-bottom:10px}
   .doc-title{font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.5px;margin-bottom:4px}
   .doc-number{font-size:13px;color:#64748b;margin-bottom:28px}
   .info-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:28px}
@@ -74,7 +74,7 @@ export function generarPDFCotizacion(cot, logoB64) {
   .totals{width:260px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
   .totals-row{display:flex;justify-content:space-between;padding:9px 16px;font-size:11px;border-bottom:1px solid #f1f5f9}
   .totals-row span:first-child{color:#64748b}
-  .totals-final{display:flex;justify-content:space-between;padding:12px 16px;background:#0ea5e9;color:#fff;font-size:14px;font-weight:700}
+  .totals-final{display:flex;justify-content:space-between;padding:12px 16px;background:#1d4ed8;color:#fff;font-size:14px;font-weight:700}
   .conditions{border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:28px;background:#fafafa}
   .conditions h3{font-size:10px;font-weight:700;color:#0f172a;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px}
   .conditions ul{padding-left:16px}
@@ -84,12 +84,12 @@ export function generarPDFCotizacion(cot, logoB64) {
   .exec-name{font-size:12px;font-weight:700;color:#0f172a;margin-bottom:2px}
   .exec-sub{font-size:10px;color:#0369a1}
   .footer{border-top:1px solid #e2e8f0;padding-top:14px;text-align:center;font-size:9px;color:#94a3b8;line-height:1.7}
-  .footer-brand{font-size:14px;font-weight:700;color:#0ea5e9;margin-bottom:4px}
+  .footer-brand{font-size:14px;font-weight:700;color:#2563eb;margin-bottom:4px}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{padding:32px}}
 </style></head><body>
 <div class="page">
   <div class="header">
-    <div>${logoB64?`<img src="data:image/png;base64,${logoB64}" class="logo"/>`:`<div style="font-size:24px;font-weight:700;color:#0ea5e9">Boreal</div>`}</div>
+    <div>${logoB64?`<img src="data:image/png;base64,${logoB64}" class="logo"/>`:`<div style="font-size:24px;font-weight:700;color:#2563eb">Boreal</div>`}</div>
     <div class="company-meta">
       <div style="font-weight:700;color:#0f172a;font-size:11px;margin-bottom:4px">${EMPRESA_INFO.nombre}</div>
       <div>RUT: ${EMPRESA_INFO.rut}</div><div>${EMPRESA_INFO.giro}</div>

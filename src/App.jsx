@@ -110,6 +110,18 @@ function EstadoBadge({estado}) {
   return <span style={{background:col.bg,color:col.text,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:500,whiteSpace:"nowrap"}}>{estado}</span>;
 }
 
+function MargenBadge({pct,monto,umbrales={},size="sm"}) {
+  const u=colorMargen(pct,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});
+  const pad=size==="md"?"3px 9px":"2px 8px";
+  const fs=size==="md"?12:10;
+  const fw=size==="md"?700:600;
+  return (
+    <span style={{background:u.bg,color:u.text,padding:pad,borderRadius:20,fontSize:fs,fontWeight:fw,whiteSpace:"nowrap"}}>
+      {fmtPct(pct)}{monto!==undefined&&pct>0?` · ${fmt(monto)}`:""}
+    </span>
+  );
+}
+
 function PeriodoChips({periodo,setPeriodo}) {
   return (
     <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
@@ -582,7 +594,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
                     </td>
                     <td style={{padding:"8px 11px",fontWeight:500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.organismo}</td>
                     <td style={{padding:"8px 11px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
-                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}>{()=>{const u=colorMargen(mg2,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600}}>{fmtPct(mg2)}{mg2>0?` · ${fmt(calcUtilidad(c.total,c.costoTotal))}`:""}</span>}()}</td>
+                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}><MargenBadge pct={mg2} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales}/></td>
                     <td style={{padding:"8px 11px"}}><EstadoBadge estado={c.estado}/></td>
                     <td style={{padding:"8px 11px"}} onClick={e=>e.stopPropagation()}>
                       <button onClick={e=>{e.stopPropagation();onEditar(c);}} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#64748b",transition:"all .12s"}}>Editar</button>
@@ -1009,7 +1021,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
             <div style={{flex:1,minWidth:90}}><div style={{fontWeight:500,fontSize:13}}>{c.organismo}</div><div style={{color:"#94a3b8",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{c.numero}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Venta</div><div style={{fontWeight:700,fontSize:13}}>{fmt(c.total||0)}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Util. bruta</div><div style={{fontWeight:700,fontSize:13,color:"#10b981"}}>{fmt(util)}</div></div>
-            {()=>{const u=colorMargen(mg3,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"3px 9px",borderRadius:20,fontSize:12,fontWeight:700}}>{fmtPct(mg3)} · {fmt(calcUtilidad(c.total,c.costoTotal))}</span>}()}
+            <MargenBadge pct={mg3} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales} size="md"/>
           </div>);
         })}
       </div>
@@ -1031,7 +1043,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
                 <td style={{padding:"7px 9px",color:"#10b981",fontWeight:600}}>{ub>0?fmt(ub):"—"}</td>
                 <td style={{padding:"7px 9px",color:"#ef4444"}}>{gm>0?fmt(gm):"—"}</td>
                 <td style={{padding:"7px 9px",color:un>=0?"#6366f1":"#ef4444",fontWeight:600}}>{vn>0?fmt(un):"—"}</td>
-                <td style={{padding:"7px 9px"}}>{mn!==0?()=>{const u=colorMargen(mn,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});return <span style={{background:u.bg,color:u.text,padding:"2px 7px",borderRadius:20,fontSize:10,fontWeight:600}}>{fmtPct(mn)}</span>}():"—"}</td>
+                <td style={{padding:"7px 9px"}}>{mn!==0?<MargenBadge pct={mn} umbrales={umbrales}/>:"—"}</td>
               </tr>);
             })}</tbody>
           </table>

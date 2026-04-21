@@ -329,9 +329,13 @@ export default function App() {
 
       {/* SIDEBAR */}
       <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:220,background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"8px 0 32px rgba(0,0,0,.15)":"none",position:"fixed",top:isMob?56:0}}>
-        <div style={{padding:"16px",borderBottom:"1px solid #f1f5f9",justifyContent:"center",alignItems:"center",minHeight:72}}>
-          <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" style={{height:54,maxWidth:160,objectFit:"contain"}} onError={e=>{e.target.style.display="none";}}/>
-        </div>
+        {!isMob&&(
+          <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72}}>
+            <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal"
+              style={{height:48,maxWidth:160,objectFit:"contain"}}
+              onError={e=>{e.target.style.display="none";}}/>
+          </div>
+        )}
 
         <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
           {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
@@ -371,15 +375,39 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile topbar */}
-      <div className="no-print" style={{position:"sticky",top:0,background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:12,zIndex:100,...(isMob?{}:{display:"none"})}}>
-        <button onClick={()=>setSideOpen(true)} style={{background:"none",border:"none",color:"#fff",cursor:"pointer",padding:4}}>{Ic.menu}</button>
-        <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" style={{height:28,objectFit:"contain"}}/>
-      </div>
+
+      {/* ── MOBILE TOPBAR ── white, clean, logo left, menu right */}
+      {isMob&&(
+        <div className="no-print" style={{
+          position:"sticky",top:0,zIndex:150,
+          background:"#fff",borderBottom:"1px solid #f1f5f9",
+          height:56,padding:"0 16px",
+          display:"flex",alignItems:"center",justifyContent:"space-between",
+          boxShadow:"0 1px 4px rgba(0,0,0,.06)"
+        }}>
+          <img src={`data:image/png;base64,${LOGO_B64_COLOR}`} alt="Boreal"
+            style={{height:34,objectFit:"contain",display:"block"}}/>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {notifList.length>0&&(
+              <span style={{background:"#ef4444",color:"#fff",borderRadius:20,
+                fontSize:10,fontWeight:700,padding:"2px 8px",minWidth:20,textAlign:"center"}}>
+                {notifList.length}
+              </span>
+            )}
+            <button onClick={()=>setSideOpen(v=>!v)} style={{
+              background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,
+              width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",
+              cursor:"pointer",color:"#475569"
+            }}>
+              {sideOpen?Ic.x:Ic.menu}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MAIN */}
-      <div style={{marginLeft:isMob?0:220,padding:isMob?"16px 14px":"24px 24px",minHeight:"100vh"}}>
-        {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab}/>}
+      <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
+        {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
@@ -404,7 +432,7 @@ export default function App() {
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────
-function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,setPeriDash,gastos,dashGastos,goTab}) {
+function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,setPeriDash,gastos,dashGastos,goTab,isMob=false}) {
   const [tooltip,setTooltip]=useState(null);
   const mgNeto=mgBruto-dashGastos;
   const enCurso=cots.filter(c=>["Enviada","Adjudicada"].includes(c.estado)).length;
@@ -430,7 +458,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
         <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Dashboard</h1>
         <PeriodoChips periodo={periDash} setPeriodo={setPeriDash}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
         <KPI label="Ventas adj." value={fmt(totalV)} color="#1d4ed8" tab="cotizaciones"/>
         <KPI label="Margen bruto" value={fmt(mgBruto)} sub={fmtPct(mgPct)} color="#10b981"/>
         <KPI label="Margen neto" value={fmt(mgNeto)} sub={dashGastos>0?`-${fmt(dashGastos)} gastos`:""} color={mgNeto>=0?"#6366f1":"#ef4444"}/>
@@ -457,8 +485,8 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
           </div>
           <div style={{fontSize:10,color:"#94a3b8",marginTop:6}}>Hover → total · Clic → filtrar</div>
         </div>
-        {/* Gestión activa - desktop only */}
-        <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",display:window.innerWidth<768?"none":"block"}}>
+        {!isMob&&(
+        <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
           <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Gestión activa</div>
           {[
             {label:"En curso",     val:enCurso,   color:"#1d4ed8",tab:"cotizaciones"},
@@ -476,6 +504,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
             );
           })}
         </div>
+        )}{/* /gestión activa */}
       </div>
       {/* Estados */}
       <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
@@ -1048,7 +1077,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
     <div>
       <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Gastos</h1>
       <p style={{color:"#64748b",fontSize:13,marginBottom:14}}>Gastos operacionales para calcular margen neto</p>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(auto-fit,minmax(110px,1fr))",gap:8,marginBottom:14}}>
         {[{l:"Margen bruto",v:fmt(ventasMB),c:"#10b981"},{l:"Total gastos",v:fmt(totalG),c:"#ef4444"},{l:"Margen neto",v:fmt(ventasMB-totalG),c:ventasMB-totalG>=0?"#6366f1":"#ef4444"}].map((k,i)=>(
           <div key={i} style={{background:"#fff",borderRadius:12,padding:"13px 15px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderTop:`3px solid ${k.c}`}}>
             <div style={{color:"#64748b",fontSize:11,marginBottom:3}}>{k.l}</div>
@@ -1582,8 +1611,8 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
         {/* ── Cuerpo scrolleable ───────────────────────── */}
         <div style={{flex:1,overflowY:"auto",padding:window.innerWidth<768?"12px 14px":"20px 24px"}}>
 
-          {/* Campos encabezado — 2 columnas */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:20}}>
+          {/* Campos encabezado — 1 col mobile, 2 col desktop */}
+          <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"1fr 1fr",gap:"10px 16px",marginBottom:16}}>
             <div style={{gridColumn:"1/-1"}}>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORGANISMO COMPRADOR *</label>
               <Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…"/>
@@ -1591,10 +1620,6 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>RUT CLIENTE</label>
               <input value={form.rut_cliente||""} onChange={e=>set("rut_cliente",formatRut(e.target.value))} placeholder="76.xxx.xxx-x" style={inp}/>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ID OPORTUNIDAD</label>
-              <input value={form.oportunidad_id||""} onChange={e=>set("oportunidad_id",e.target.value)} style={inp}/>
             </div>
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>EJECUTIVO</label>
@@ -1614,6 +1639,12 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>VENCIMIENTO</label>
               <input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)} style={inp}/>
             </div>
+            {window.innerWidth>=768&&(
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ID OPORTUNIDAD</label>
+                <input value={form.oportunidad_id||""} onChange={e=>set("oportunidad_id",e.target.value)} style={inp}/>
+              </div>
+            )}
           </div>
 
           {/* ── Tabla de productos estilo Odoo ──────────── */}
@@ -1626,14 +1657,15 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
             </div>
 
             <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:window.innerWidth<768?500:"100%"}}>
                 <thead>
                   <tr style={{background:"#f8fafc"}}>
                     <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700,width:36}}></th>
-                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700}}>Producto</th>
+                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700,minWidth:140}}>Producto</th>
                     <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:70}}>Cant.</th>
-                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:120}}>Precio unit. (IVA)</th>
-                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:110}}>Subtotal neto</th>
+                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:110}}>Precio (IVA)</th>
+                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:100}}>Subtotal</th>
                     {showMargen&&<th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:80}}>Margen</th>}
                     <th style={{width:36}}></th>
                   </tr>
@@ -1700,6 +1732,7 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
                   })}
                 </tbody>
               </table>
+              </div>{/* /overflowX */}
             </div>
 
             {/* Botón agregar + buscador flotante — FUERA de la tabla */}
@@ -1723,7 +1756,7 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
           </div>
 
           {/* ── Totales + Notas ──────────────────────────── */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:20,alignItems:"start"}}>
+          <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"1fr auto",gap:window.innerWidth<768?12:20,alignItems:"start"}}>
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
               <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={3}
@@ -2311,12 +2344,14 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
 
   return (
     <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-      {/* Header */}
-      <div style={{display:"grid",gridTemplateColumns:"44px 1fr 90px 100px 140px 130px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",alignItems:"center"}}>
-        {["","Producto","SKU","Stock total","Último mov.",""].map((h,i)=>(
-          <div key={i} style={{padding:"10px 13px",fontSize:11,color:"#64748b",fontWeight:700}}>{h}</div>
-        ))}
-      </div>
+      {/* Header — hidden on mobile */}
+      {window.innerWidth>=768&&(
+        <div style={{display:"grid",gridTemplateColumns:"44px 1fr 90px 100px 160px 140px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",alignItems:"center"}}>
+          {["","Producto","SKU","Stock","Último mov.",""].map((h,i)=>(
+            <div key={i} style={{padding:"9px 12px",fontSize:11,color:"#64748b",fontWeight:700}}>{h}</div>
+          ))}
+        </div>
+      )}
 
       {prodOrdenados.map((p,pi)=>{
         const stockTotal=getStockTotal(p);
@@ -2324,37 +2359,71 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
         const stockColor=stockTotal===0?"#b91c1c":stockTotal<stockMinimo?"#854d0e":"#15803d";
         const isExp=expandidos[p.id];
         const spb=p.stockPorBodega||[{bodega:p.ubicacion||"—",cantidad:stockTotal}];
+        const isMobile=window.innerWidth<768;
 
         return (
           <div key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
             {/* Fila producto */}
-            <div style={{display:"grid",gridTemplateColumns:"40px 1fr 80px 80px 120px 120px",alignItems:"center",background:pi%2===0?"#fff":"#fafafa",cursor:"pointer"}}
-              onClick={()=>toggleExpand(p.id)}>
-              <div style={{padding:"10px 10px"}}>
-                {p.foto_url
-                  ?<img src={p.foto_url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,display:"block"}}/>
-                  :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
-                }
-              </div>
-              <div style={{padding:"10px 13px"}}>
-                <div style={{fontWeight:600,fontSize:13}}>{p.nombre}</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{p.proveedor||""}</div>
-              </div>
-              <div style={{padding:"10px 13px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</div>
-              <div style={{padding:"10px 13px",fontWeight:700,fontSize:15,color:stockColor}}>{fmtN(stockTotal)}</div>
-              <div style={{padding:"10px 13px",fontSize:11,color:"#94a3b8"}}>
-                {ultimoMov
-                  ?<span style={{color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>
-                    {ultimoMov.signo||(ultimoMov.tipo==="entrada"?"+":(ultimoMov.tipo==="salida"?"-":(ultimoMov.stockDespues>ultimoMov.stockAntes?"+":"-")))}{fmtN(ultimoMov.cantidad)} · {fmtFecha(ultimoMov.fecha)}
+            {isMobile ? (
+              /* Mobile: card layout */
+              <div style={{padding:"12px 14px",background:pi%2===0?"#fff":"#fafafa",cursor:"pointer"}}
+                onClick={()=>toggleExpand(p.id)}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {p.foto_url
+                    ?<img src={p.foto_url} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,background:"#f8fafc",flexShrink:0}}/>
+                    :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📦</div>
+                  }
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                    <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · {p.proveedor}</div>
+                  </div>
+                  <div style={{textAlign:"right",flexShrink:0}}>
+                    <div style={{fontWeight:800,fontSize:20,color:stockColor,lineHeight:1}}>{fmtN(stockTotal)}</div>
+                    <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>uds</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8}}>
+                  {ultimoMov
+                    ?<span style={{fontSize:11,color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>
+                      Últ: {ultimoMov.signo||(ultimoMov.tipo==="entrada"?"+":(ultimoMov.tipo==="salida"?"-":"+"))}{fmtN(ultimoMov.cantidad)} · {fmtFecha(ultimoMov.fecha)}
+                    </span>
+                    :<span style={{fontSize:11,color:"#94a3b8"}}>Sin movimientos</span>
+                  }
+                  <span style={{fontSize:12,color:"#1d4ed8",fontWeight:500}}>
+                    {isExp?"▴ Ocultar":"▾ Bodegas"} ({spb.length})
                   </span>
-                  :"—"
-                }
+                </div>
               </div>
-              <div style={{padding:"10px 13px",fontSize:11,color:"#64748b",display:"flex",alignItems:"center",gap:4}}>
-                <span style={{fontSize:16,transition:"transform .2s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>›</span>
-                <span>{isExp?"Ocultar":"Ver bodegas"} ({spb.length})</span>
+            ) : (
+              /* Desktop: grid row */
+              <div style={{display:"grid",gridTemplateColumns:"44px 1fr 90px 100px 160px 140px",alignItems:"center",background:pi%2===0?"#fff":"#fafafa",cursor:"pointer"}}
+                onClick={()=>toggleExpand(p.id)}>
+                <div style={{padding:"10px 10px"}}>
+                  {p.foto_url
+                    ?<img src={p.foto_url} alt="" style={{width:30,height:30,objectFit:"contain",borderRadius:5,display:"block",background:"#f8fafc"}}/>
+                    :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
+                  }
+                </div>
+                <div style={{padding:"10px 12px"}}>
+                  <div style={{fontWeight:600,fontSize:13}}>{p.nombre}</div>
+                  <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{p.proveedor||""}</div>
+                </div>
+                <div style={{padding:"10px 12px",fontFamily:"'DM Mono',monospace",fontSize:11,color:"#94a3b8"}}>{p.sku||"—"}</div>
+                <div style={{padding:"10px 12px",fontWeight:700,fontSize:16,color:stockColor}}>{fmtN(stockTotal)}</div>
+                <div style={{padding:"10px 12px",fontSize:11,color:"#94a3b8"}}>
+                  {ultimoMov
+                    ?<span style={{color:TIPO_COLORS[ultimoMov.tipo]?.text,fontWeight:500}}>
+                      {ultimoMov.signo||(ultimoMov.tipo==="entrada"?"+":(ultimoMov.tipo==="salida"?"-":"+"))}{fmtN(ultimoMov.cantidad)} · {fmtFecha(ultimoMov.fecha)}
+                    </span>
+                    :"—"
+                  }
+                </div>
+                <div style={{padding:"10px 12px",fontSize:11,color:"#1d4ed8",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:16,transition:"transform .2s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                  <span>{isExp?"Ocultar":"Ver bodegas"} ({spb.length})</span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Filas expandidas — una por bodega, con edición inline */}
             {isExp&&(
@@ -2957,7 +3026,8 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
             <Btn onClick={()=>setModalUser({idx:null,data:{...EMPTY_USER}})} size="sm">+ Nuevo usuario</Btn>
           </div>
           <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:600}}>
               <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
                 {["Usuario","Cargo","Email","Rol","Cots.","Adj.","Estado",""].map(h=>(
                   <th key={h} style={{padding:"9px 13px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
@@ -3000,6 +3070,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                 ))}
               </tbody>
             </table>
+            </div>{/* /overflow */}
           </div>
         </div>
       )}

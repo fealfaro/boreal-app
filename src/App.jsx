@@ -330,7 +330,7 @@ export default function App() {
       {isMob&&sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.35)",zIndex:299,top:56}}/>}
 
       {/* SIDEBAR */}
-      <div className="no-print" style={{position:"fixed",left:0,top:0,bottom:0,width:220,background:"#fff",borderRight:"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(-100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"8px 0 32px rgba(0,0,0,.15)":"none",position:"fixed",top:isMob?56:0}}>
+      <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#fff",borderLeft:isMob?"1px solid #e2e8f0":"none",borderRight:isMob?"none":"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
         {!isMob&&(
           <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72}}>
             <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal"
@@ -473,21 +473,27 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
         {/* Gráfico grande */}
         <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
           <div style={{fontWeight:600,fontSize:14,marginBottom:14}}>Ventas mensuales</div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:5,height:160,position:"relative"}}>
-            {vMes.map((v,i)=>(
-              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative"}} onMouseEnter={()=>setTooltip({i,v})} onMouseLeave={()=>setTooltip(null)}>
-                {tooltip?.i===i&&v>0&&(
-                  <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",zIndex:10}}>
-                    {fmt(v)}
-                    <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"4px solid transparent",borderTopColor:"#0f172a"}}/>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <div style={{display:"flex",alignItems:"flex-end",gap:isMob?8:5,height:140,position:"relative",minWidth:isMob?480:"100%",paddingBottom:0}}>
+              {vMes.map((v,i)=>(
+                <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",minWidth:isMob?32:0}}
+                  onMouseEnter={()=>setTooltip({i,v})} onMouseLeave={()=>setTooltip(null)}>
+                  {tooltip?.i===i&&v>0&&(
+                    <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",zIndex:10}}>
+                      {fmt(v)}
+                      <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"4px solid transparent",borderTopColor:"#0f172a"}}/>
+                    </div>
+                  )}
+                  <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
+                    <div style={{width:"100%",background:v>0?"#1d4ed8":"#e2e8f0",borderRadius:"4px 4px 0 0",height:`${Math.max((v/maxV)*120,v>0?4:2)}px`,cursor:"pointer",transition:"all .15s",opacity:tooltip?.i===i?.7:1}}
+                      onClick={()=>setPeriDash(periDash==="mes"&&tooltip?.i===i?"todo":"mes")}/>
                   </div>
-                )}
-                <div style={{width:"100%",background:v>0?"#1d4ed8":"#e2e8f0",borderRadius:"4px 4px 0 0",height:`${Math.max((v/maxV)*140,3)}px`,cursor:"pointer",transition:"opacity .15s",opacity:tooltip?.i===i?.8:1}} onClick={()=>setPeriDash(periDash==="mes"&&tooltip?.i===i?"todo":"mes")}/>
-                <div style={{fontSize:8,color:"#94a3b8"}}>{MESES[i]}</div>
-              </div>
-            ))}
+                  <div style={{fontSize:isMob?9:8,color:"#94a3b8",whiteSpace:"nowrap"}}>{MESES[i]}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{fontSize:10,color:"#94a3b8",marginTop:6}}>Hover → total · Clic → filtrar</div>
+          {!isMob&&<div style={{fontSize:10,color:"#94a3b8",marginTop:6}}>Hover → total · Clic → filtrar</div>}
         </div>
         {!isMob&&(
         <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
@@ -1732,10 +1738,19 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
                         <MilesInput value={Math.round(item.precioVenta||0)} onChange={v=>updateItem(i,"precioVenta",Number(v)||0)}/>
                       </div>
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
-                      <span style={{fontSize:12,color:"#64748b"}}>Subtotal neto</span>
-                      <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(subtotal)}</span>
-                    </div>
+                    {(()=>{
+                      const margenItem=item.costo>0?((item.precioVenta||0)/1.19-item.costo)/item.costo*100:null;
+                      const mColor=margenItem===null?"#64748b":margenItem<0?"#b91c1c":margenItem<15?"#854d0e":"#15803d";
+                      return (
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",gap:8}}>
+                          <span style={{fontSize:12,color:"#64748b"}}>Subtotal neto</span>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            {margenItem!==null&&<span style={{fontSize:11,fontWeight:700,color:mColor,background:margenItem<0?"#fee2e2":margenItem<15?"#fef9c3":"#dcfce7",padding:"2px 7px",borderRadius:20}}>{fmtPct(margenItem)}</span>}
+                            <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(subtotal)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -1777,7 +1792,7 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
                 {costoTotal>0&&(
                   <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 12px",marginTop:10,display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontSize:12,color:"#64748b"}}>Margen promedio</span>
-                    <span style={{fontSize:13,fontWeight:700,color:"#15803d"}}>{fmtPct(margenProm)}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:margenProm<0?"#b91c1c":margenProm<15?"#854d0e":"#15803d"}}>{fmtPct(margenProm)}</span>
                   </div>
                 )}
               </div>

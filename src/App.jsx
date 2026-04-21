@@ -56,6 +56,7 @@ const NAV = [
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
   {id:"admin",       label:"Administración",icon:Ic.settings, adminOnly:true},
   {id:"maestros",    label:"Maestros",      icon:Ic.box},
+  {id:"oportunidades",label:"Oportunidades", icon:Ic.file},
   {id:"config",      label:"Configuración",icon:Ic.settings},
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
 ];
@@ -186,7 +187,8 @@ export default function App() {
   const [gastos,setGastos]       = useState([]);
   const [movimientos,setMovimientos] = useState([]);
   const [solicitudes,setSolicitudes] = useState([]);
-  const [activityLog,setActivityLog] = useState([]); // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
+  const [activityLog,setActivityLog] = useState([]);
+  const [oportunidades,setOportunidades] = useState([]); // licitaciones importadas de Mercado Público // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
   const [proveedores,setProv]    = useState(["Brenntag","Unilever","Diversey","CMPC","Ansell","3M Chile"]);
   const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
   const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
@@ -345,6 +347,7 @@ export default function App() {
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
               if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
+              if(item.id==="oportunidades") return oportunidades.filter(o=>o.estado==="nueva").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
                 c.estado==="Modificada"||
@@ -418,6 +421,7 @@ export default function App() {
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
+        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresas} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -1545,27 +1549,22 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
 function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,logoB64,perfil,isSaved=false}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
-  const [searchIdx,setSearchIdx]=useState(null); // which row has the dropdown open
+  const [searchIdx,setSearchIdx]=useState(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const {subtotalNeto,iva,total,costoTotal,margenProm}=calcTotalesCot(form.items);
+  const [wizStep,setWizStep]=useState(1); // 1=datos, 2=productos, 3=totales
+  const [prodSearch,setProdSearch]=useState("");
 
-  // Add empty row for Odoo-style inline add
-  const addEmptyRow=()=>{
-    setSearchIdx("new");
-  };
+  const addEmptyRow=()=>{ setSearchIdx("new"); };
 
   const selectProductInRow=(idx,p)=>{
     const pv=calcPrecioVenta(p.costo,p.margen);
     if(idx==="new"){
       setForm(f=>({...f,items:[...f.items,{productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,cantidad:1,foto_url:p.foto_url||"",proveedor:p.proveedor||""}]}));
     } else {
-      setForm(f=>{
-        const items=[...f.items];
-        items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};
-        return{...f,items};
-      });
+      setForm(f=>{const items=[...f.items];items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};return{...f,items};});
     }
-    setSearchIdx(null);
+    setSearchIdx(null);setProdSearch("");
   };
 
   const removeItem=i=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}));
@@ -1580,7 +1579,258 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
     onSave({...form,items:realItems,total,costoTotal,margenProm});
   };
 
-  const inp={width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"};
+  const inp={width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid #e2e8f0",fontSize:15,boxSizing:"border-box",outline:"none",background:"#fff"};
+  const inpSm={...inp,padding:"7px 10px",fontSize:13,borderRadius:6};
+
+  // ── MOBILE WIZARD ─────────────────────────────────────────
+  const isMob=window.innerWidth<768;
+  if(isMob) {
+    const STEPS=[
+      {n:1,label:"Datos"},
+      {n:2,label:"Productos"},
+      {n:3,label:"Resumen"},
+    ];
+    const filtProd=productos.filter(p=>!prodSearch||p.nombre.toLowerCase().includes(prodSearch.toLowerCase())||(p.sku||"").toLowerCase().includes(prodSearch.toLowerCase()));
+
+    return (
+      <div style={{position:"fixed",inset:0,background:"#f8fafc",zIndex:300,display:"flex",flexDirection:"column"}}>
+
+        {/* ── Topbar wizard ── */}
+        <div style={{background:"#fff",borderBottom:"1px solid #f1f5f9",padding:"0 16px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+          <div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700,lineHeight:1}}>{form.numero}</div>
+            <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{form.organismo||"Sin organismo"}</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {wizStep===3&&(
+              <Btn onClick={handleSave} size="sm">Guardar</Btn>
+            )}
+            <button onClick={()=>{if(form.items.length>0||form.organismo){if(window.confirm("¿Cerrar sin guardar?"))onClose();}else onClose();}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",fontSize:18}}>
+              ×
+            </button>
+          </div>
+        </div>
+
+        {/* ── Step indicator ── */}
+        <div style={{background:"#fff",borderBottom:"1px solid #f1f5f9",padding:"12px 16px",display:"flex",gap:0,flexShrink:0}}>
+          {STEPS.map((s,i)=>(
+            <div key={s.n} style={{flex:1,display:"flex",alignItems:"center"}}>
+              <div onClick={()=>s.n<wizStep&&setWizStep(s.n)}
+                style={{display:"flex",alignItems:"center",gap:6,cursor:s.n<wizStep?"pointer":"default"}}>
+                <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,
+                  background:wizStep===s.n?"#1d4ed8":wizStep>s.n?"#dcfce7":"#f1f5f9",
+                  color:wizStep===s.n?"#fff":wizStep>s.n?"#15803d":"#94a3b8",
+                  border:wizStep===s.n?"2px solid #1d4ed8":wizStep>s.n?"2px solid #15803d":"2px solid #e2e8f0",
+                  transition:"all .2s"}}>
+                  {wizStep>s.n?"✓":s.n}
+                </div>
+                <span style={{fontSize:12,fontWeight:wizStep===s.n?600:400,color:wizStep===s.n?"#1d4ed8":wizStep>s.n?"#15803d":"#94a3b8"}}>{s.label}</span>
+              </div>
+              {i<STEPS.length-1&&<div style={{flex:1,height:2,background:wizStep>s.n?"#bbf7d0":"#e2e8f0",margin:"0 8px",borderRadius:2}}/>}
+            </div>
+          ))}
+        </div>
+
+        {/* ── Step content ── */}
+        <div style={{flex:1,overflowY:"auto",padding:"16px 16px 100px",WebkitOverflowScrolling:"touch"}}>
+
+          {/* PASO 1: Datos */}
+          {wizStep===1&&(
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>ORGANISMO COMPRADOR</div>
+                <Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…"/>
+              </div>
+              <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>INFORMACIÓN</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div>
+                    <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>RUT cliente</label>
+                    <input value={form.rut_cliente||""} onChange={e=>set("rut_cliente",formatRut(e.target.value))} placeholder="76.xxx.xxx-x" style={inp}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Ejecutivo</label>
+                    <input value={form.ejecutivo||""} onChange={e=>set("ejecutivo",e.target.value)} style={inp}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Fecha</label>
+                      <input type="date" value={form.fecha||""} onChange={e=>set("fecha",e.target.value)} style={inp}/>
+                    </div>
+                    <div>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Vence</label>
+                      <input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)} style={inp}/>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Estado</label>
+                    <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff"}}>
+                      {[...ESTADOS_COT,"Para revisar"].map(e=><option key={e}>{e}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 2: Productos */}
+          {wizStep===2&&(
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Buscador */}
+              <div style={{background:"#fff",borderRadius:12,padding:"12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",position:"relative"}}>
+                <input value={prodSearch} onChange={e=>setProdSearch(e.target.value)}
+                  placeholder="Buscar producto por nombre o SKU…"
+                  style={{...inp,paddingLeft:36}}/>
+                <span style={{position:"absolute",left:22,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:16}}>🔍</span>
+                {prodSearch&&(
+                  <div style={{marginTop:8,maxHeight:220,overflowY:"auto",borderRadius:10,border:"1px solid #e2e8f0"}}>
+                    {filtProd.slice(0,6).map(p=>(
+                      <div key={p.id} onMouseDown={e=>{e.preventDefault();selectProductInRow("new",p);}}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:"1px solid #f8fafc",background:"#fff",cursor:"pointer",active:{background:"#f0f9ff"}}}>
+                        {p.foto_url?<img src={p.foto_url} alt="" style={{width:32,height:32,objectFit:"contain",borderRadius:6,background:"#f8fafc"}}/>
+                          :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📦</div>}
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:500}}>{p.nombre}</div>
+                          <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · Stock: {fmtN(getStockTotal(p))}</div>
+                        </div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#1d4ed8"}}>{fmt(calcPrecioVenta(p.costo,p.margen))}</div>
+                      </div>
+                    ))}
+                    {filtProd.length===0&&<div style={{padding:"12px",color:"#94a3b8",fontSize:13,textAlign:"center"}}>Sin resultados</div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Lista de items agregados */}
+              {form.items.length===0&&(
+                <div style={{textAlign:"center",padding:"32px 20px",background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                  <div style={{fontSize:32,marginBottom:8}}>📋</div>
+                  <div style={{fontSize:14,color:"#64748b"}}>Busca productos arriba para agregarlos</div>
+                </div>
+              )}
+              {form.items.map((item,i)=>{
+                const subtotal=(item.cantidad||0)*(item.precioVenta||0)/1.19;
+                return (
+                  <div key={i} style={{background:"#fff",borderRadius:14,padding:"14px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
+                      {item.foto_url?<img src={item.foto_url} alt="" style={{width:40,height:40,objectFit:"contain",borderRadius:8,background:"#f8fafc",flexShrink:0}}/>
+                        :<div style={{width:40,height:40,background:"#f1f5f9",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📦</div>}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.nombre}</div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{item.sku}</div>
+                      </div>
+                      <button onClick={()=>removeItem(i)} style={{background:"#fee2e2",border:"none",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#b91c1c",fontSize:16,flexShrink:0}}>×</button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div>
+                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:4}}>CANTIDAD</label>
+                        <MilesInput value={item.cantidad} onChange={v=>updateItem(i,"cantidad",Number(v)||0)}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:4}}>PRECIO (IVA)</label>
+                        <MilesInput value={Math.round(item.precioVenta||0)} onChange={v=>updateItem(i,"precioVenta",Number(v)||0)}/>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+                      <span style={{fontSize:12,color:"#64748b"}}>Subtotal neto</span>
+                      <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(subtotal)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* PASO 3: Resumen */}
+          {wizStep===3&&(
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Totales */}
+              <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>RESUMEN</div>
+                {[
+                  {label:"Organismo",val:form.organismo||"—"},
+                  {label:"Ejecutivo",val:form.ejecutivo||"—"},
+                  {label:"Productos",val:`${form.items.filter(i=>i.nombre).length} ítems`},
+                ].map(r=>(
+                  <div key={r.label} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f8fafc"}}>
+                    <span style={{fontSize:13,color:"#64748b"}}>{r.label}</span>
+                    <span style={{fontSize:13,fontWeight:500}}>{r.val}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>TOTALES</div>
+                {[
+                  {label:"Neto",val:fmt(subtotalNeto)},
+                  {label:"IVA 19%",val:fmt(iva)},
+                ].map(r=>(
+                  <div key={r.label} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f8fafc"}}>
+                    <span style={{fontSize:13,color:"#64748b"}}>{r.label}</span>
+                    <span style={{fontSize:13}}>{r.val}</span>
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",padding:"12px 0 0",marginTop:4}}>
+                  <span style={{fontSize:16,fontWeight:700}}>Total</span>
+                  <span style={{fontSize:20,fontWeight:800,color:"#1d4ed8"}}>{fmt(total)}</span>
+                </div>
+                {costoTotal>0&&(
+                  <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 12px",marginTop:10,display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontSize:12,color:"#64748b"}}>Margen promedio</span>
+                    <span style={{fontSize:13,fontWeight:700,color:"#15803d"}}>{fmtPct(margenProm)}</span>
+                  </div>
+                )}
+              </div>
+              {/* Notas */}
+              <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>NOTAS / CONDICIONES</div>
+                <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={3}
+                  placeholder="Condiciones de pago, plazos de entrega…"
+                  style={{...inp,resize:"vertical",minHeight:80,lineHeight:1.5}}/>
+              </div>
+              {/* Items resumen */}
+              {form.items.filter(i=>i.nombre).length>0&&(
+                <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:10,letterSpacing:".05em"}}>PRODUCTOS ({form.items.filter(i=>i.nombre).length})</div>
+                  {form.items.filter(i=>i.nombre).map((item,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #f8fafc"}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{item.nombre}</div>
+                        <div style={{fontSize:11,color:"#94a3b8"}}>{fmtN(item.cantidad)} × {fmt(item.precioVenta||0)}</div>
+                      </div>
+                      <span style={{fontSize:13,fontWeight:600}}>{fmt((item.cantidad||0)*(item.precioVenta||0)/1.19)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Bottom navigation bar ── */}
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #f1f5f9",padding:"12px 16px",display:"flex",gap:10,boxShadow:"0 -4px 16px rgba(0,0,0,.08)"}}>
+          {wizStep>1&&(
+            <Btn onClick={()=>setWizStep(s=>s-1)} variant="ghost" style={{flex:1,minHeight:48,fontSize:15}}>← Atrás</Btn>
+          )}
+          {wizStep<3&&(
+            <Btn onClick={()=>{
+              if(wizStep===1&&!form.organismo?.trim()){toast("Elige el organismo comprador","warning");return;}
+              if(wizStep===2&&form.items.filter(i=>i.nombre).length===0){toast("Agrega al menos un producto","warning");return;}
+              setWizStep(s=>s+1);
+            }} style={{flex:2,minHeight:48,fontSize:15}}>
+              {wizStep===1?"Agregar productos →":wizStep===2?"Ver resumen →":""}
+            </Btn>
+          )}
+          {wizStep===3&&(
+            <Btn onClick={handleSave} style={{flex:2,minHeight:48,fontSize:16,fontWeight:700}}>
+              💾 Guardar cotización
+            </Btn>
+          )}
+        </div>
+      </div>
+    );
+  }
+  // ── END MOBILE WIZARD ─────────────────────────────────────
 
   // Full-screen overlay, not the small Modal wrapper
   return (
@@ -3191,6 +3441,402 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
             </div>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
+function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot}) {
+  const [subTab,setSubTab]=useState("lista");
+  const [filtro,setFiltro]=useState("nueva");
+  const [busqueda,setBusqueda]=useState("");
+  const [analizando,setAnalizando]=useState(null); // id de oportunidad siendo analizada
+  const [expandida,setExpandida]=useState(null);
+  const fileRef=useRef();
+
+  // ── PALABRAS CLAVE ────────────────────────────────────────
+  // Combina productos del catálogo + palabras definidas en config
+  const kwConfig=(config.palabrasClave||"").split("\n").map(s=>s.trim().toLowerCase()).filter(Boolean);
+  const kwProductos=productos.map(p=>p.nombre.toLowerCase().split(" ")).flat().filter(w=>w.length>4);
+  const todasKW=[...new Set([...kwConfig,...kwProductos])];
+
+  const matchKW=(nombre)=>{
+    const n=nombre.toLowerCase();
+    return todasKW.filter(kw=>n.includes(kw));
+  };
+
+  // ── IMPORTAR EXCEL ────────────────────────────────────────
+  const importarExcel=async(file)=>{
+    try {
+      const XLSX=window.XLSX;
+      if(!XLSX){toast("Librería Excel no cargada, recarga la página","danger");return;}
+      const buf=await file.arrayBuffer();
+      const wb=XLSX.read(buf,{type:"array"});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{raw:false});
+
+      const nuevas=rows.map(r=>({
+        id: r["ID"]||uid(),
+        nombre: r["Nombre"]||"",
+        institucion: r["Institución"]||"",
+        unidadCompra: r["Unidad de compra"]||"",
+        fechaPublicacion: r["Fecha de publicación"]||"",
+        fechaCierre: r["Fecha de cierre"]||"",
+        presupuesto: parseFloat(String(r["Presupuesto estimado"]||"0").replace(/[^0-9.]/g,""))||0,
+        estadoConvocatoria: r["Estado de Convocatoria"]||"",
+        cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
+        estado: "nueva",       // nueva | descartada | analizada | cotizada
+        matches: [],           // palabras clave encontradas
+        analisisIA: null,      // resultado del análisis IA
+        cotizacionId: null,    // si se generó cotización
+        importadaEn: nowISO(),
+      })).filter(o=>o.nombre);
+
+      // Marcar matches de palabras clave
+      const conMatches=nuevas.map(o=>({...o, matches:matchKW(o.nombre)}));
+
+      // Deduplicar por ID
+      setOportunidades(prev=>{
+        const existingIds=new Set(prev.map(o=>o.id));
+        const novas=conMatches.filter(o=>!existingIds.has(o.id));
+        toast(`${novas.length} nuevas oportunidades importadas (${conMatches.length-novas.length} ya existían)`);
+        return [...novas,...prev];
+      });
+    } catch(e) {
+      console.error(e);
+      toast("Error al leer el Excel. Verifica el formato.","danger");
+    }
+  };
+
+  // ── ANÁLISIS IA ────────────────────────────────────────────
+  const analizarConIA=async(op)=>{
+    setAnalizando(op.id);
+    try {
+      const catalogoResumen=productos.map(p=>
+        `- ${p.nombre} (SKU:${p.sku}, precio:${fmt(calcPrecioVenta(p.costo,p.margen))}, stock:${getStockTotal(p)} uds)`
+      ).join("\n");
+
+      const prompt=`Eres un asistente de ventas para una empresa de suministros de limpieza en Chile.
+
+LICITACIÓN DE MERCADO PÚBLICO:
+- ID: ${op.id}
+- Nombre: "${op.nombre}"
+- Institución: ${op.institucion}
+- Presupuesto estimado: ${fmt(op.presupuesto)} CLP
+- Cierre: ${op.fechaCierre}
+
+CATÁLOGO DISPONIBLE:
+${catalogoResumen}
+
+INSTRUCCIONES:
+Analiza la licitación y responde SOLO en JSON con esta estructura exacta:
+{
+  "relevante": true/false,
+  "razon": "explicación breve de por qué es o no relevante",
+  "productosEncontrados": [
+    {"sku": "ASE-001", "nombre": "...", "cantidadEstimada": 10, "confianza": "alta/media/baja"}
+  ],
+  "productosNuevos": [
+    {"nombre": "...", "descripcion": "...", "cantidadEstimada": 5}
+  ],
+  "resumen": "qué piden en 1-2 oraciones",
+  "recomendacion": "cotizar/descartar/revisar"
+}`;
+
+      const resp=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          messages:[{role:"user",content:prompt}]
+        })
+      });
+      const data=await resp.json();
+      const txt=data.content?.[0]?.text||"{}";
+      const clean=txt.replace(/```json|```/g,"").trim();
+      const analisis=JSON.parse(clean);
+
+      setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
+      toast("Análisis completado");
+    } catch(e) {
+      console.error(e);
+      toast("Error en análisis IA","danger");
+    }
+    setAnalizando(null);
+  };
+
+  // ── GENERAR COTIZACIÓN ─────────────────────────────────────
+  const generarCotizacion=async(op)=>{
+    const {analisisIA}=op;
+    if(!analisisIA?.productosEncontrados?.length){
+      toast("No hay productos identificados para cotizar","warning");
+      return;
+    }
+    // Armar items con productos del catálogo
+    const items=analisisIA.productosEncontrados.map(pi=>{
+      const prod=productos.find(p=>p.sku===pi.sku||p.nombre.toLowerCase()===pi.nombre.toLowerCase());
+      if(!prod) return null;
+      const pv=calcPrecioVenta(prod.costo,prod.margen);
+      return {
+        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
+        costo:prod.costo,precioVenta:pv,
+        cantidad:pi.cantidadEstimada||1,
+        foto_url:prod.foto_url||"",proveedor:prod.proveedor||""
+      };
+    }).filter(Boolean);
+
+    // Registrar organismo si no existe
+    const instNorm=op.institucion.trim();
+    if(instNorm&&!empresas.includes(instNorm)){
+      setEmpresas(prev=>[...prev,instNorm]);
+    }
+
+    // Crear cotización en estado Para revisar
+    const cot={
+      id:uid(),numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
+      organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
+      ejecutivo:perfil?.nombre||"",estado:"Para revisar",
+      fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]||"",
+      items,notas:`Generada automáticamente desde licitación Mercado Público.\nID: ${op.id}\nPresupuesto estimado: ${fmt(op.presupuesto)}`,
+      creadaEn:nowISO(),origenMP:true,
+    };
+    const {total,costoTotal,margenProm}=calcTotalesCot(items);
+    cot.total=total; cot.costoTotal=costoTotal; cot.margenProm=margenProm;
+
+    setCots(prev=>[cot,...prev]);
+    setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
+    toast(`Cotización ${cot.numero} creada → Para revisar`);
+
+    // Sugerir productos nuevos si hay
+    if(analisisIA.productosNuevos?.length){
+      toast(`${analisisIA.productosNuevos.length} producto(s) nuevo(s) sugerido(s) para revisar`,"warning");
+    }
+  };
+
+  // ── FILTROS ────────────────────────────────────────────────
+  const filtradas=oportunidades.filter(o=>{
+    if(filtro!=="todas"&&o.estado!==filtro) return false;
+    if(busqueda&&!o.nombre.toLowerCase().includes(busqueda.toLowerCase())&&
+       !o.institucion.toLowerCase().includes(busqueda.toLowerCase())) return false;
+    return true;
+  });
+
+  const conMatches=filtradas.filter(o=>o.matches?.length>0);
+  const sinMatches=filtradas.filter(o=>!o.matches?.length);
+
+  const ESTADOS_OP_COLORS={
+    nueva:{bg:"#eff6ff",text:"#1d4ed8",label:"Nueva"},
+    analizada:{bg:"#fef9c3",text:"#854d0e",label:"Analizada"},
+    cotizada:{bg:"#dcfce7",text:"#15803d",label:"Cotizada"},
+    descartada:{bg:"#f1f5f9",text:"#94a3b8",label:"Descartada"},
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,flexWrap:"wrap",gap:10}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Oportunidades</h1>
+          <p style={{color:"#64748b",fontSize:13,margin:0}}>
+            Licitaciones de Mercado Público · {oportunidades.filter(o=>o.matches?.length).length} con coincidencias · {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar
+          </p>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input type="file" ref={fileRef} accept=".xlsx,.xls" style={{display:"none"}}
+            onChange={e=>{if(e.target.files[0])importarExcel(e.target.files[0]);e.target.value="";}}/>
+          <Btn onClick={()=>fileRef.current?.click()} variant="dark">↑ Importar Excel</Btn>
+        </div>
+      </div>
+
+      {/* Stats cards */}
+      {oportunidades.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginBottom:16}}>
+          {[
+            {label:"Importadas",val:oportunidades.length,color:"#e2e8f0",text:"#475569"},
+            {label:"Con coincidencias",val:oportunidades.filter(o=>o.matches?.length).length,color:"#dbeafe",text:"#1d4ed8"},
+            {label:"Analizadas con IA",val:oportunidades.filter(o=>o.analisisIA).length,color:"#fef9c3",text:"#854d0e"},
+            {label:"Cotizadas",val:oportunidades.filter(o=>o.estado==="cotizada").length,color:"#dcfce7",text:"#15803d"},
+          ].map(s=>(
+            <div key={s.label} style={{background:"#fff",borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderTop:`3px solid ${s.color}`}}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>{s.label}</div>
+              <div style={{fontSize:20,fontWeight:800,color:s.text}}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!oportunidades.length&&(
+        <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <div style={{fontSize:40,marginBottom:12}}>📋</div>
+          <h3 style={{fontSize:16,fontWeight:700,marginBottom:8}}>Sin oportunidades cargadas</h3>
+          <p style={{color:"#64748b",fontSize:13,marginBottom:20,maxWidth:380,margin:"0 auto 20px"}}>
+            Descarga el Excel de Compras Ágiles desde Mercado Público y súbelo aquí. El sistema filtrará automáticamente las licitaciones relevantes para tu catálogo.
+          </p>
+          <Btn onClick={()=>fileRef.current?.click()}>↑ Importar Excel de Mercado Público</Btn>
+        </div>
+      )}
+
+      {/* Filters */}
+      {oportunidades.length>0&&(
+        <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
+          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre o institución…"
+            style={{flex:1,minWidth:200,padding:"8px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
+          <div style={{display:"flex",gap:4}}>
+            {[["todas","Todas"],["nueva","Nuevas"],["analizada","Analizadas"],["cotizada","Cotizadas"],["descartada","Descartadas"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setFiltro(v)} style={{
+                padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:filtro===v?600:400,
+                background:filtro===v?"#1d4ed8":"#f1f5f9",color:filtro===v?"#fff":"#475569",whiteSpace:"nowrap"
+              }}>{l} {v!=="todas"&&`(${oportunidades.filter(o=>o.estado===v).length})`}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Oportunidades con coincidencias primero */}
+      {filtradas.length>0&&(
+        <div>
+          {conMatches.length>0&&(
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#1d4ed8",marginBottom:8,letterSpacing:".05em"}}>
+                ✓ COINCIDENCIAS CON TU CATÁLOGO ({conMatches.length})
+              </div>
+              {conMatches.map(op=><OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
+                analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
+                onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
+                ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>)}
+            </div>
+          )}
+          {sinMatches.length>0&&(
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:8,letterSpacing:".05em"}}>
+                SIN COINCIDENCIAS DIRECTAS ({sinMatches.length})
+              </div>
+              {sinMatches.map(op=><OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
+                analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
+                onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
+                ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>)}
+            </div>
+          )}
+        </div>
+      )}
+      {oportunidades.length>0&&filtradas.length===0&&(
+        <div style={{background:"#fff",borderRadius:12,padding:28,textAlign:"center",color:"#94a3b8"}}>Sin resultados para este filtro</div>
+      )}
+    </div>
+  );
+}
+
+// ── TARJETA DE OPORTUNIDAD ────────────────────────────────────
+function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDescartar,ESTADOS_OP_COLORS,productos}) {
+  const isExp=expandida===op.id;
+  const ec=ESTADOS_OP_COLORS[op.estado]||ESTADOS_OP_COLORS.nueva;
+  const ia=op.analisisIA;
+  const diasCierre=op.fechaCierre?Math.ceil((new Date(op.fechaCierre.split(" ")[0].split("/").reverse().join("-"))-new Date())/(1000*60*60*24)):null;
+
+  return (
+    <div style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.06)",border:op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}
+        onClick={()=>setExpandida(isExp?null:op.id)}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#94a3b8"}}>{op.id}</span>
+            <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:ec.bg,color:ec.text}}>{ec.label}</span>
+            {op.matches?.length>0&&op.matches.slice(0,3).map(kw=>(
+              <span key={kw} style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8",fontWeight:500}}>"{kw}"</span>
+            ))}
+          </div>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
+          <div style={{fontSize:11,color:"#64748b"}}>{op.institucion}</div>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(op.presupuesto)}</div>
+          {diasCierre!==null&&(
+            <div style={{fontSize:10,color:diasCierre<=1?"#b91c1c":diasCierre<=3?"#854d0e":"#64748b",fontWeight:diasCierre<=3?700:400,marginTop:2}}>
+              {diasCierre<=0?"Vence hoy":diasCierre===1?"Cierra mañana":`${diasCierre}d para cierre`}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Expandido */}
+      {isExp&&(
+        <div style={{borderTop:"1px solid #f1f5f9",padding:"12px 16px",background:"#fafafa"}}>
+
+          {/* Análisis IA result */}
+          {ia&&(
+            <div style={{background:"#fff",borderRadius:10,padding:"12px",marginBottom:12,border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8}}>ANÁLISIS IA</div>
+              <p style={{fontSize:13,color:"#475569",marginBottom:10}}>{ia.resumen}</p>
+
+              {ia.productosEncontrados?.length>0&&(
+                <div style={{marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#15803d",marginBottom:5}}>✓ Productos disponibles</div>
+                  {ia.productosEncontrados.map((p,i)=>{
+                    const prod=productos.find(pr=>pr.sku===p.sku);
+                    return (
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
+                        <span>{p.nombre} × {p.cantidadEstimada}</span>
+                        <span style={{color:"#64748b",fontSize:10,padding:"1px 6px",background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",borderRadius:20}}>
+                          {p.confianza}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {ia.productosNuevos?.length>0&&(
+                <div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#92400e",marginBottom:5}}>⚠ Productos no en catálogo</div>
+                  {ia.productosNuevos.map((p,i)=>(
+                    <div key={i} style={{padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12,color:"#64748b"}}>
+                      {p.nombre} — {p.descripcion}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
+              <>
+                {!ia&&(
+                  <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
+                    disabled={analizando===op.id}
+                    style={{opacity:analizando===op.id?.6:1}}>
+                    {analizando===op.id?"⏳ Analizando…":"🤖 Analizar con IA"}
+                  </Btn>
+                )}
+                {ia&&ia.recomendacion!=="descartar"&&ia.productosEncontrados?.length>0&&(
+                  <Btn onClick={()=>onCotizar(op)} size="sm">📋 Generar cotización</Btn>
+                )}
+                {ia&&(
+                  <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
+                    disabled={analizando===op.id}>
+                    🔄 Re-analizar
+                  </Btn>
+                )}
+                <Btn onClick={onDescartar} variant="ghost" size="sm">Descartar</Btn>
+              </>
+            )}
+            {op.estado==="cotizada"&&(
+              <span style={{fontSize:12,color:"#15803d",fontWeight:600,padding:"5px 0"}}>
+                ✓ Cotización generada → Para revisar
+              </span>
+            )}
+            <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${op.id}`}
+              target="_blank" rel="noreferrer"
+              style={{fontSize:12,color:"#1d4ed8",padding:"5px 0",textDecoration:"none"}}>
+              Ver en Mercado Público ↗
+            </a>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -328,16 +328,54 @@ export default function App() {
   // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
   useEffect(()=>{
     const cargar=async()=>{
+      if(!supabase){
+        console.error("Supabase no configurado — verifica las variables de entorno en Cloudflare");
+        toast("⚠️ Base de datos no conectada — revisa la configuración","danger");
+        setDbReady(true);
+        return;
+      }
       try {
-        const [
-          {data:prods},{data:cotsDb},{data:movsDb},{data:gastosDb},
-          {data:orgsDb},{data:provsDb},{data:bodDb},{data:usuDb},
-          {data:solDb},{data:opDb},{data:cfgDb},
-        ] = await Promise.all([
-          dbProductos.getAll(), dbCotizaciones.getAll(), dbMovimientos.getAll(), dbGastos.getAll(),
-          dbOrganismos.getAll(), dbProveedores.getAll(), dbBodegas.getAll(), dbPerfiles.getAll(),
-          dbSolicitudes.getAll(), dbOportunidades.getAll(), dbConfig.get(),
+        // Load in parallel, handle config separately (returns single object not array)
+        const results = await Promise.allSettled([
+          dbProductos.getAll(),
+          dbCotizaciones.getAll(),
+          dbMovimientos.getAll(),
+          dbGastos.getAll(),
+          dbOrganismos.getAll(),
+          dbProveedores.getAll(),
+          dbBodegas.getAll(),
+          dbPerfiles.getAll(),
+          dbSolicitudes.getAll(),
+          dbOportunidades.getAll(),
+          dbConfig.get(),
         ]);
+
+        const [
+          resProd, resCots, resMov, resGastos,
+          resOrgs, resProvs, resBod, resUsu,
+          resSol, resOp, resCfg
+        ] = results;
+
+        const get = (r) => r.status==="fulfilled" ? r.value.data : null;
+
+        const prods   = get(resProd);
+        const cotsDb  = get(resCots);
+        const movsDb  = get(resMov);
+        const gastosDb= get(resGastos);
+        const orgsDb  = get(resOrgs);
+        const provsDb = get(resProvs);
+        const bodDb   = get(resBod);
+        const usuDb   = get(resUsu);
+        const solDb   = get(resSol);
+        const opDb    = get(resOp);
+        const cfgDb   = get(resCfg);
+
+        // Log any errors
+        results.forEach((r,i)=>{
+          if(r.status==="rejected") console.error(`DB load error [${i}]:`,r.reason);
+          else if(r.value?.error) console.error(`DB query error [${i}]:`,r.value.error);
+        });
+        console.log("DB loaded:",{prods:prods?.length,cots:cotsDb?.length,cfg:cfgDb});
         if(prods?.length)   setProductos(prods.map(fromDbProducto));
         if(cotsDb?.length)  setCots(cotsDb.map(fromDbCot));
         if(movsDb?.length)  setMovimientos(movsDb.map(fromDbMov));
@@ -370,8 +408,14 @@ export default function App() {
   // ── GUARDAR EN DB CUANDO CAMBIA EL ESTADO ──────────────────
   // Productos
   const guardarProductoDB=async(p)=>{
-    const {error}=await dbProductos.upsert(p);
-    if(error) console.error("Error guardando producto:",error);
+    console.log("Guardando producto en DB:",p.nombre, p.id);
+    const {data,error}=await dbProductos.upsert(p);
+    if(error) {
+      console.error("Error guardando producto:",error);
+      toast("Error guardando en base de datos: "+error.message,"danger");
+    } else {
+      console.log("Producto guardado OK:",data?.id);
+    }
   };
   // Cotizaciones
   const guardarCotDB=async(c)=>{

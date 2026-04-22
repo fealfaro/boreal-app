@@ -3,102 +3,93 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+if(!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ Supabase env vars missing. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Cloudflare Pages.');
+}
 
-// ── HELPERS ───────────────────────────────────────────────────
+export const supabase = SUPABASE_URL && SUPABASE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
 
-// Productos
+const ok = () => !!supabase;
+const noDb = () => ({data:null, error:"No DB connection"});
+
+// ── PRODUCTOS ─────────────────────────────────────────────────
 export const dbProductos = {
-  getAll: () => supabase.from('productos').select('*').eq('activo', true).order('nombre'),
-  upsert: (p) => supabase.from('productos').upsert(toDbProducto(p)).select().single(),
-  delete: (id) => supabase.from('productos').update({ activo: false }).eq('id', id),
+  getAll: () => ok() ? supabase.from('productos').select('*').eq('activo',true).order('nombre') : noDb(),
+  upsert: (p) => ok() ? supabase.from('productos').upsert(toDbProducto(p)).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('productos').update({activo:false}).eq('id',id) : noDb(),
 };
 
-// Cotizaciones
+// ── COTIZACIONES ──────────────────────────────────────────────
 export const dbCotizaciones = {
-  getAll: () => supabase.from('cotizaciones').select('*').order('created_at', { ascending: false }),
-  upsert: (c) => supabase.from('cotizaciones').upsert(toDbCot(c)).select().single(),
-  delete: (id) => supabase.from('cotizaciones').delete().eq('id', id),
+  getAll: () => ok() ? supabase.from('cotizaciones').select('*').order('created_at',{ascending:false}) : noDb(),
+  upsert: (c) => ok() ? supabase.from('cotizaciones').upsert(toDbCot(c)).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('cotizaciones').delete().eq('id',id) : noDb(),
 };
 
-// Movimientos
+// ── MOVIMIENTOS ───────────────────────────────────────────────
 export const dbMovimientos = {
-  getAll: () => supabase.from('movimientos').select('*').order('created_at', { ascending: false }),
-  insert: (m) => supabase.from('movimientos').insert(toDbMov(m)).select().single(),
+  getAll: () => ok() ? supabase.from('movimientos').select('*').order('created_at',{ascending:false}) : noDb(),
+  insert: (m) => ok() ? supabase.from('movimientos').insert(toDbMov(m)).select().single() : noDb(),
 };
 
-// Gastos
+// ── GASTOS ────────────────────────────────────────────────────
 export const dbGastos = {
-  getAll: () => supabase.from('gastos').select('*').order('fecha', { ascending: false }),
-  upsert: (g) => supabase.from('gastos').upsert(g).select().single(),
-  delete: (id) => supabase.from('gastos').delete().eq('id', id),
+  getAll: () => ok() ? supabase.from('gastos').select('*').order('fecha',{ascending:false}) : noDb(),
+  upsert: (g) => ok() ? supabase.from('gastos').upsert(g).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('gastos').delete().eq('id',id) : noDb(),
 };
 
-// Maestros
+// ── MAESTROS ──────────────────────────────────────────────────
 export const dbOrganismos = {
-  getAll: () => supabase.from('organismos').select('*').order('nombre'),
-  upsert: (o) => supabase.from('organismos').upsert(o).select().single(),
-  delete: (id) => supabase.from('organismos').delete().eq('id', id),
+  getAll: () => ok() ? supabase.from('organismos').select('*').order('nombre') : noDb(),
+  upsert: (o) => ok() ? supabase.from('organismos').upsert(o).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('organismos').delete().eq('id',id) : noDb(),
 };
 
 export const dbProveedores = {
-  getAll: () => supabase.from('proveedores').select('*').order('nombre'),
-  upsert: (p) => supabase.from('proveedores').upsert(p).select().single(),
-  delete: (id) => supabase.from('proveedores').delete().eq('id', id),
+  getAll: () => ok() ? supabase.from('proveedores').select('*').order('nombre') : noDb(),
+  upsert: (p) => ok() ? supabase.from('proveedores').upsert(p).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('proveedores').delete().eq('id',id) : noDb(),
 };
 
 export const dbBodegas = {
-  getAll: () => supabase.from('bodegas').select('*').order('nombre'),
-  upsert: (b) => supabase.from('bodegas').upsert(b).select().single(),
-  delete: (id) => supabase.from('bodegas').delete().eq('id', id),
+  getAll: () => ok() ? supabase.from('bodegas').select('*').order('nombre') : noDb(),
+  upsert: (b) => ok() ? supabase.from('bodegas').upsert(b).select().single() : noDb(),
+  delete: (id) => ok() ? supabase.from('bodegas').delete().eq('id',id) : noDb(),
 };
 
-// Oportunidades
+// ── OPORTUNIDADES ─────────────────────────────────────────────
 export const dbOportunidades = {
-  getAll: () => supabase.from('oportunidades').select('*').order('importada_en', { ascending: false }),
-  upsert: (o) => supabase.from('oportunidades').upsert(toDbOp(o)),
-  update: (id, data) => supabase.from('oportunidades').update(data).eq('id', id),
+  getAll: () => ok() ? supabase.from('oportunidades').select('*').order('importada_en',{ascending:false}) : noDb(),
+  upsert: (o) => ok() ? supabase.from('oportunidades').upsert(toDbOp(o)) : noDb(),
+  update: (id,data) => ok() ? supabase.from('oportunidades').update(data).eq('id',id) : noDb(),
 };
 
-// Solicitudes
+// ── SOLICITUDES ───────────────────────────────────────────────
 export const dbSolicitudes = {
-  getAll: () => supabase.from('solicitudes').select('*').order('created_at', { ascending: false }),
-  insert: (s) => supabase.from('solicitudes').insert(s).select().single(),
-  update: (id, data) => supabase.from('solicitudes').update(data).eq('id', id),
+  getAll: () => ok() ? supabase.from('solicitudes').select('*').order('created_at',{ascending:false}) : noDb(),
+  insert: (s) => ok() ? supabase.from('solicitudes').insert(s).select().single() : noDb(),
+  update: (id,data) => ok() ? supabase.from('solicitudes').update(data).eq('id',id) : noDb(),
 };
 
-// Config
+// ── CONFIG ────────────────────────────────────────────────────
 export const dbConfig = {
-  get: () => supabase.from('configuracion').select('*').eq('id', 1).single(),
-  update: (data) => supabase.from('configuracion').update({ ...data, updated_at: new Date().toISOString() }).eq('id', 1),
+  get: () => ok() ? supabase.from('configuracion').select('*').eq('id',1).single() : noDb(),
+  update: (data) => ok() ? supabase.from('configuracion').update({...data,updated_at:new Date().toISOString()}).eq('id',1) : noDb(),
 };
 
-// Perfiles
+// ── PERFILES ──────────────────────────────────────────────────
 export const dbPerfiles = {
-  getAll: () => supabase.from('perfiles').select('*').order('nombre'),
-  upsert: (p) => supabase.from('perfiles').upsert(p).select().single(),
-  update: (id, data) => supabase.from('perfiles').update(data).eq('id', id),
+  getAll: () => ok() ? supabase.from('perfiles').select('*').order('nombre') : noDb(),
+  upsert: (p) => ok() ? supabase.from('perfiles').upsert(p).select().single() : noDb(),
+  update: (id,data) => ok() ? supabase.from('perfiles').update(data).eq('id',id) : noDb(),
 };
 
-// ── CONVERSORES (camelCase app ↔ snake_case DB) ──────────────
+// ── CONVERSORES camelCase ↔ snake_case ─────────────────────────
 
 export const toDbProducto = (p) => ({
-  id:                 p.id,
-  sku:                p.sku,
-  nombre:             p.nombre,
-  proveedor:          p.proveedor,
-  costo:              p.costo,
-  margen:             p.margen,
-  foto_url:           p.foto_url,
-  categoria:          p.categoria,
-  stock:              p.stock,
-  stock_por_bodega:   p.stockPorBodega || [],
-  historial_costos:   p.historialCostos || [],
-  activo:             p.activo !== false,
-  updated_at:         new Date().toISOString(),
-});
-
-export const fromDbProducto = (p) => ({
   id:               p.id,
   sku:              p.sku,
   nombre:           p.nombre,
@@ -108,10 +99,26 @@ export const fromDbProducto = (p) => ({
   foto_url:         p.foto_url,
   categoria:        p.categoria,
   stock:            p.stock,
-  stockPorBodega:   p.stock_por_bodega || [],
-  historialCostos:  p.historial_costos || [],
-  activo:           p.activo,
-  updatedAt:        p.updated_at,
+  stock_por_bodega: p.stockPorBodega||[],
+  historial_costos: p.historialCostos||[],
+  activo:           p.activo!==false,
+  updated_at:       new Date().toISOString(),
+});
+
+export const fromDbProducto = (p) => ({
+  id:             p.id,
+  sku:            p.sku,
+  nombre:         p.nombre,
+  proveedor:      p.proveedor,
+  costo:          Number(p.costo)||0,
+  margen:         Number(p.margen)||0,
+  foto_url:       p.foto_url,
+  categoria:      p.categoria,
+  stock:          Number(p.stock)||0,
+  stockPorBodega: p.stock_por_bodega||[],
+  historialCostos:p.historial_costos||[],
+  activo:         p.activo,
+  updatedAt:      p.updated_at,
 });
 
 export const toDbCot = (c) => ({
@@ -124,14 +131,14 @@ export const toDbCot = (c) => ({
   estado:           c.estado,
   estado_op:        c.estadoOp,
   fecha:            c.fecha,
-  fecha_vencimiento: c.fechaVencimiento,
-  items:            c.items || [],
+  fecha_vencimiento:c.fechaVencimiento,
+  items:            c.items||[],
   notas:            c.notas,
   total:            c.total,
   costo_total:      c.costoTotal,
   margen_prom:      c.margenProm,
-  origen_mp:        c.origenMP || false,
-  log:              c.log || [],
+  origen_mp:        c.origenMP||false,
+  log:              c.log||[],
   updated_at:       new Date().toISOString(),
 });
 
@@ -146,13 +153,13 @@ export const fromDbCot = (c) => ({
   estadoOp:         c.estado_op,
   fecha:            c.fecha,
   fechaVencimiento: c.fecha_vencimiento,
-  items:            c.items || [],
+  items:            c.items||[],
   notas:            c.notas,
-  total:            c.total,
-  costoTotal:       c.costo_total,
-  margenProm:       c.margen_prom,
+  total:            Number(c.total)||0,
+  costoTotal:       Number(c.costo_total)||0,
+  margenProm:       Number(c.margen_prom)||0,
   origenMP:         c.origen_mp,
-  log:              c.log || [],
+  log:              c.log||[],
   creadaEn:         c.created_at,
 });
 
@@ -179,9 +186,9 @@ export const fromDbMov = (m) => ({
   signo:          m.signo,
   productoId:     m.producto_id,
   nombreProducto: m.nombre_producto,
-  cantidad:       m.cantidad,
-  stockAntes:     m.stock_antes,
-  stockDespues:   m.stock_despues,
+  cantidad:       Number(m.cantidad)||0,
+  stockAntes:     Number(m.stock_antes)||0,
+  stockDespues:   Number(m.stock_despues)||0,
   referencia:     m.referencia,
   motivo:         m.motivo,
   bodegaOrigen:   m.bodega_origen,
@@ -192,19 +199,19 @@ export const fromDbMov = (m) => ({
 });
 
 export const toDbOp = (o) => ({
-  id:                     o.id,
-  nombre:                 o.nombre,
-  institucion:            o.institucion,
-  unidad_compra:          o.unidadCompra,
-  fecha_publicacion:      o.fechaPublicacion,
-  fecha_cierre:           o.fechaCierre,
-  presupuesto:            o.presupuesto,
-  estado_convocatoria:    o.estadoConvocatoria,
-  cotizaciones_enviadas:  o.cotizacionesEnviadas,
-  estado:                 o.estado,
-  matches:                o.matches || [],
-  analisis_ia:            o.analisisIA,
-  cotizacion_id:          o.cotizacionId,
+  id:                   o.id,
+  nombre:               o.nombre,
+  institucion:          o.institucion,
+  unidad_compra:        o.unidadCompra,
+  fecha_publicacion:    o.fechaPublicacion,
+  fecha_cierre:         o.fechaCierre,
+  presupuesto:          o.presupuesto,
+  estado_convocatoria:  o.estadoConvocatoria,
+  cotizaciones_enviadas:o.cotizacionesEnviadas,
+  estado:               o.estado,
+  matches:              o.matches||[],
+  analisis_ia:          o.analisisIA,
+  cotizacion_id:        o.cotizacionId,
 });
 
 export const fromDbOp = (o) => ({
@@ -214,11 +221,11 @@ export const fromDbOp = (o) => ({
   unidadCompra:         o.unidad_compra,
   fechaPublicacion:     o.fecha_publicacion,
   fechaCierre:          o.fecha_cierre,
-  presupuesto:          o.presupuesto,
+  presupuesto:          Number(o.presupuesto)||0,
   estadoConvocatoria:   o.estado_convocatoria,
   cotizacionesEnviadas: o.cotizaciones_enviadas,
   estado:               o.estado,
-  matches:              o.matches || [],
+  matches:              o.matches||[],
   analisisIA:           o.analisis_ia,
   cotizacionId:         o.cotizacion_id,
   importadaEn:          o.importada_en,

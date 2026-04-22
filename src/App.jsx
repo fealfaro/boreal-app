@@ -54,7 +54,6 @@ const Ic = {
 
 const NAV = [
   {id:"dashboard",   label:"Dashboard",    icon:Ic.grid},
-  {id:"notificaciones",label:"Notificaciones",icon:Ic.bell},
   {id:"productos",   label:"Productos",    icon:Ic.box},
   {id:"cotizaciones",label:"Cotizaciones", icon:Ic.file},
   {id:"revision",    label:"Revisión",     icon:Ic.check},
@@ -192,6 +191,7 @@ export default function App() {
   const [tab,setTab]             = useState("dashboard");
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
+  const [seenNotifs,setSeenNotifs] = useState(false);
   const [productos,setProductos] = useState([]);
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
@@ -339,6 +339,7 @@ export default function App() {
   const [winW,setWinW]=useState(window.innerWidth);
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
+  useEffect(()=>{setSeenNotifs(false);},[notifList.length]);
   const isMob=winW<768;
 
   // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
@@ -517,11 +518,16 @@ export default function App() {
       {/* SIDEBAR */}
       <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#fff",borderLeft:isMob?"1px solid #e2e8f0":"none",borderRight:isMob?"none":"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
         {!isMob&&(
-          <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72,cursor:"pointer"}}
-            onClick={()=>goTab("dashboard")}>
-            <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal"
-              style={{height:48,maxWidth:160,objectFit:"contain"}}
+          <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:64}}>
+            <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" onClick={()=>goTab("dashboard")}
+              style={{height:40,maxWidth:140,objectFit:"contain",cursor:"pointer"}}
               onError={e=>{e.target.style.display="none";}}/>
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center",borderRadius:8,transition:"background .12s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f1f5f9"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              {Ic.bell}
+              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:2,right:2,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:7,fontWeight:700,padding:"1px 3px",minWidth:12,textAlign:"center",lineHeight:"12px"}}>{notifList.length}</span>}
+            </button>
           </div>
         )}
 
@@ -533,7 +539,6 @@ export default function App() {
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
               if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
-              if(item.id==="notificaciones") return notifList.length;
               if(item.id==="oportunidades") return oportunidades.filter(o=>o.estado==="nueva").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
@@ -555,13 +560,7 @@ export default function App() {
         </nav>
         <div style={{padding:"10px 12px",borderTop:"1px solid #f1f5f9"}}>
 
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8}}>
-            <span style={{fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</span>
-            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0?"#ef4444":"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
-              {Ic.bell}
-              {notifList.length>0&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
-            </button>
-          </div>
+          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</div>
         </div>
       </div>
 
@@ -578,9 +577,9 @@ export default function App() {
           <img src={`data:image/png;base64,${LOGO_B64_COLOR}`} alt="Boreal"
             style={{height:34,objectFit:"contain",display:"block"}}/>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0?"#ef4444":"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
               {Ic.bell}
-              {notifList.length>0&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
+              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
             </button>
             <button onClick={()=>setSideOpen(v=>!v)} style={{
               background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,
@@ -595,7 +594,7 @@ export default function App() {
 
       {/* MAIN */}
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
-        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config}/>}
+        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -1614,7 +1613,19 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
   const handleFoto=e=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
-    reader.onload=ev=>set("foto_url",ev.target.result);
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=400;
+        const scale=Math.min(1,MAX/Math.max(img.width,img.height));
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.round(img.width*scale);
+        canvas.height=Math.round(img.height*scale);
+        canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+        set("foto_url",canvas.toDataURL("image/jpeg",0.75));
+      };
+      img.src=ev.target.result;
+    };
     reader.readAsDataURL(file);
   };
   const handlePVFocus=()=>{setPvFocus(true);setPvRaw(pv>0?String(pv):"");};
@@ -4147,7 +4158,8 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
 }
 
 // ── MÓDULO NOTIFICACIONES ─────────────────────────────────────
-function ModuloNotificaciones({notifList,goTab,cots,config}) {
+function ModuloNotificaciones({notifList,goTab,cots,config,onSeen}) {
+  useEffect(()=>{if(onSeen)onSeen();},[]);
   const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0);
   const stockBajo=notifList.filter(n=>n.tipo==="warning"&&n.id.startsWith("s"));
   const paraRev=cots.filter(c=>c.estado==="Para revisar");

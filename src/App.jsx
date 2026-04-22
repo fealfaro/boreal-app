@@ -395,7 +395,7 @@ export default function App() {
         if(prods?.length)   setProductos(prods.map(fromDbProducto));
         if(cotsDb?.length)  setCots(cotsDb.map(fromDbCot));
         if(movsDb?.length)  setMovimientos(movsDb.map(fromDbMov));
-        if(gastosDb?.length)setGastos(gastosDb);
+        if(gastosDb?.length) setGastos(gastosDb.map(g=>({...g, declaradoPor:g.usuario||""})));
         if(orgsDb?.length)  setEmpresas(orgsDb); // keep as objects {id,nombre,rut,...}
         if(provsDb?.length) setProv(provsDb);     // keep as objects {id,nombre,rut,...}
         if(bodDb?.length)   setBodegas(bodDb.map(b=>b.nombre));
@@ -461,8 +461,17 @@ export default function App() {
   };
   // Gastos
   const guardarGastoDB=async(g)=>{
-    const {error}=await dbGastos.upsert(g);
+    const dbGasto={
+      id: g.id,
+      fecha: g.fecha,
+      categoria: g.categoria,
+      descripcion: g.descripcion,
+      monto: g.monto,
+      usuario: g.declaradoPor||g.usuario||"",
+    };
+    const {error}=await dbGastos.upsert(dbGasto);
     if(error) console.error("Error guardando gasto:",error);
+    else console.log("Gasto guardado OK");
   };
   // Config
   const guardarConfigDB=async(data)=>{
@@ -545,14 +554,14 @@ export default function App() {
           })}
         </nav>
         <div style={{padding:"10px 12px",borderTop:"1px solid #f1f5f9"}}>
-          <button onClick={()=>setShowNotifs(v=>!v)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",cursor:"pointer",color:"#64748b"}}>
-            <span style={{display:"flex",alignItems:"center",gap:6,fontSize:12}}>{Ic.bell} Alertas</span>
-            {notifList.length>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{notifList.length}</span>}
-          </button>
-          {showNotifs&&notifList.slice(0,4).map(n=>(
-            <div key={n.id} onClick={()=>goTab(n.tab)} style={{marginTop:3,background:n.tipo==="danger"?"#fee2e2":n.tipo==="warning"?"#fef3c7":"#dbeafe",borderRadius:6,padding:"5px 8px",fontSize:10,cursor:"pointer",color:n.tipo==="danger"?"#b91c1c":n.tipo==="warning"?"#92400e":"#1d4ed8",lineHeight:1.4}}>{n.msg}</div>
-          ))}
-          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</div>
+
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8}}>
+            <span style={{fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</span>
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0?"#ef4444":"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
+              {Ic.bell}
+              {notifList.length>0&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -569,12 +578,10 @@ export default function App() {
           <img src={`data:image/png;base64,${LOGO_B64_COLOR}`} alt="Boreal"
             style={{height:34,objectFit:"contain",display:"block"}}/>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {notifList.length>0&&(
-              <span style={{background:"#ef4444",color:"#fff",borderRadius:20,
-                fontSize:10,fontWeight:700,padding:"2px 8px",minWidth:20,textAlign:"center"}}>
-                {notifList.length}
-              </span>
-            )}
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0?"#ef4444":"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
+              {Ic.bell}
+              {notifList.length>0&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
+            </button>
             <button onClick={()=>setSideOpen(v=>!v)} style={{
               background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,
               width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",
@@ -953,11 +960,11 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
       }
     }
     if(estadoOp==="Entregado"){
-      const receptor=prompt("¿Quién recibió el pedido?");
-      if(!receptor) return;
+      const receptor=prompt("¿Quién recibió el pedido? (obligatorio)");
+      if(!receptor?.trim()){toast("Debes ingresar el nombre de quien recibió","warning");return;}
       const fechaEnt=prompt("Fecha de entrega (YYYY-MM-DD):",today());
-      onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor,fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"Entregado",nota:`Entregado a ${receptor}`,usuario:"Felipe Alfaro"}]});
-      toast(`Entregado a ${receptor}`,"success");
+      onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor:receptor.trim(),fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor.trim()}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"Entregado",nota:`Entregado a ${receptor.trim()}`,usuario:"Felipe Alfaro"}]});
+      toast(`Entregado a ${receptor.trim()}`,"success");
       // Deduct stock for each item and register movement
       if(setProductos && setMovimientos) {
         (c.items||[]).forEach(item=>{
@@ -987,7 +994,7 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
       }
       return;
     }
-    onCambiarEstado(c.id,"Adjudicada",{estadoOp,...extra,nota:`→ ${estadoOp}`});
+    onCambiarEstado(c.id,"Adjudicada",{estadoOp,...extra,receptor:null,fechaEntrega:null,nota:`→ ${estadoOp}`});
   };
 
   const deshacerOp=c=>{
@@ -1562,7 +1569,7 @@ function ModuloPerfil({perfil,setPerfil}) {
           <div style={{flex:1}}>
             <div style={{fontWeight:700,fontSize:17,color:"#0f172a"}}>{(edit?form:perfil).nombre||"—"}</div>
             <div style={{fontSize:13,color:"#64748b",marginTop:1}}>{(edit?form:perfil).cargo||"—"}</div>
-            {edit&&<label style={{display:"inline-block",marginTop:6,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 11px",cursor:"pointer",fontSize:12,color:"#475569"}}>Foto<input type="file" accept="image/*" onChange={e=>{const f=e.target.files[0];if(f)set("foto",URL.createObjectURL(f));}} style={{display:"none"}}/></label>}
+            {edit&&<label style={{display:"inline-block",marginTop:6,background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 11px",cursor:"pointer",fontSize:12,color:"#475569"}}>Foto<input type="file" accept="image/*" onChange={e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>set("foto",ev.target.result);r.readAsDataURL(f);}} style={{display:"none"}}/></label>}
           </div>
         </div>
         {edit?(
@@ -1604,7 +1611,12 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
   const pv=form.costo>0?calcPrecioVenta(form.costo,form.margen):0;
   const margenNeg=Number(form.margen)<0;
 
-  const handleFoto=e=>{const file=e.target.files[0];if(!file)return;set("foto_url",URL.createObjectURL(file));};
+  const handleFoto=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>set("foto_url",ev.target.result);
+    reader.readAsDataURL(file);
+  };
   const handlePVFocus=()=>{setPvFocus(true);setPvRaw(pv>0?String(pv):"");};
   const handlePVChange=e=>{
     const raw=e.target.value.replace(/[^0-9]/g,"");

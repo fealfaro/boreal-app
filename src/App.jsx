@@ -493,6 +493,7 @@ export default function App() {
   :focus{outline:none;}
   ::-webkit-scrollbar{display:none;}
   *{scrollbar-width:none;}
+  input[type=date]{font-family:'DM Sans',sans-serif!important;color:#0f172a;}
 `}</style>
       <ToastContainer/>
 
@@ -589,7 +590,7 @@ export default function App() {
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
-        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB}/>}
+        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos}/>}
         {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
@@ -1239,6 +1240,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
 
 // ── GASTOS ────────────────────────────────────────────────────
 function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}}) {
+  const isMob=window.innerWidth<768;
   const [form,setForm]=useState({descripcion:"",categoria:"Transporte",monto:"",fecha:today(),declaradoPor:perfil?.nombre||"",boletaUrl:""});
   const [periodo,setPeriodo]=useState("mes");
   const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
@@ -1247,7 +1249,9 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
   const ventasMB=filtrarPorPeriodo(adjFact,periodo).reduce((a,c)=>a+(c.total||0)-(c.costoTotal||0),0);
   const agregar=()=>{
     if(!form.descripcion.trim()||!form.monto){toast("Completa descripción y monto","warning");return;}
-    setGastos(prev=>[...prev,{...form,id:uid(),monto:Number(form.monto),declaradoPor:perfil?.nombre||form.declaradoPor}]);
+    const nuevo={...form,id:uid(),monto:Number(form.monto),declaradoPor:perfil?.nombre||form.declaradoPor};
+    setGastos(prev=>[...prev,nuevo]);
+    import("./supabase.js").then(({dbGastos})=>dbGastos.upsert(nuevo).then(({error})=>{if(error)console.error("Error gasto DB:",error);}));
     sf("descripcion","");sf("monto","");sf("boletaUrl","");
     toast("Gasto registrado");
   };
@@ -1650,15 +1654,17 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
           <span style={{fontSize:12,color:"#64748b"}}>Total: <strong>{fmtN((form.stockPorBodega||[]).reduce((a,b)=>a+(b.cantidad||0),0))}</strong> uds</span>
         </div>
         <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
-          {(form.stockPorBodega||[]).map((sb,i)=>(
+          {(form.stockPorBodega||[]).map((sb,i)=>{
+            // Bodegas disponibles para este row = todas menos las ya usadas en otros rows
+            const usadas=(form.stockPorBodega||[]).filter((_,j)=>j!==i).map(b=>b.bodega).filter(Boolean);
+            const disponibles=bodegas.filter(b=>!usadas.includes(b));
+            return (
             <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 11px",borderBottom:i<(form.stockPorBodega||[]).length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#f8fafc"}}>
               <select value={sb.bodega} onChange={e=>{
                   const newBod=e.target.value;
                   const spb=[...(form.stockPorBodega||[])];
-                  // If this bodega already exists in another row, merge
                   const existing=spb.findIndex((b,j)=>j!==i&&b.bodega===newBod);
                   if(existing>=0){
-                    // Merge: add quantities, remove duplicate
                     spb[existing]={...spb[existing],cantidad:(spb[existing].cantidad||0)+(spb[i].cantidad||0)};
                     spb.splice(i,1);
                   } else {
@@ -1668,19 +1674,34 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
                 }}
                 style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="">— Sin bodega —</option>
-                {bodegas.map(b=><option key={b} value={b}>{b}</option>)}
+                {disponibles.map(b=><option key={b} value={b}>{b}</option>)}
+                {/* Si la bodega actual no está en disponibles, igual la mostramos */}
+                {sb.bodega&&!disponibles.includes(sb.bodega)&&<option value={sb.bodega}>{sb.bodega}</option>}
               </select>
               <MilesInput value={sb.cantidad} onChange={v=>{const spb=[...form.stockPorBodega];spb[i]={...spb[i],cantidad:Number(v)||0};set("stockPorBodega",spb);}} style={{width:90}}/>
               <span style={{fontSize:11,color:"#94a3b8"}}>uds</span>
               <button onClick={()=>set("stockPorBodega",(form.stockPorBodega||[]).filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,padding:2,transition:"color .12s"}}
                 onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
             </div>
-          ))}
+            );
+          })}
           <div style={{padding:"7px 11px",background:"#f8fafc"}}>
-            <button onClick={()=>set("stockPorBodega",[...(form.stockPorBodega||[]),{bodega:bodegas[0]||"",cantidad:0}])}
-              style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:12,fontWeight:500,display:"flex",alignItems:"center",gap:4,padding:0}}>
-              <span style={{fontSize:16,lineHeight:1}}>+</span> Agregar bodega
-            </button>
+            {(()=>{
+              const usadas=(form.stockPorBodega||[]).map(b=>b.bodega).filter(Boolean);
+              const libre=bodegas.find(b=>!usadas.includes(b));
+              if(!libre&&bodegas.length>0) return <span style={{fontSize:12,color:"#94a3b8"}}>Todas las bodegas ya están agregadas</span>;
+              return (
+                <button onClick={()=>{
+                  const usadas2=(form.stockPorBodega||[]).map(b=>b.bodega).filter(Boolean);
+                  const libre2=bodegas.find(b=>!usadas2.includes(b));
+                  if(!libre2){toast("Todas las bodegas ya están agregadas","warning");return;}
+                  set("stockPorBodega",[...(form.stockPorBodega||[]),{bodega:libre2,cantidad:0}]);
+                }}
+                  style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:12,fontWeight:500,display:"flex",alignItems:"center",gap:4,padding:0}}>
+                  <span style={{fontSize:16,lineHeight:1}}>+</span> Agregar bodega
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1754,8 +1775,8 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
     onSave({...form,items:realItems,total,costoTotal,margenProm});
   };
 
-  const inp={width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid #e2e8f0",fontSize:15,boxSizing:"border-box",outline:"none",background:"#fff"};
-  const inpSm={...inp,padding:"7px 10px",fontSize:13,borderRadius:6};
+  const inp={width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid #e2e8f0",fontSize:15,boxSizing:"border-box",outline:"none",background:"#fff",fontFamily:"'DM Sans',sans-serif"};
+  const inpSm={...inp,padding:"7px 10px",fontSize:13,borderRadius:6,fontFamily:"'DM Sans',sans-serif"};
 
   // ── MOBILE WIZARD ─────────────────────────────────────────
   const isMob=window.innerWidth<768;
@@ -2744,6 +2765,7 @@ function AjustePreview({productos,ajuste}) {
 
 // ── RESUMEN STOCK — expandable per-bodega with inline edit ────
 function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMinimo,perfil,TIPO_COLORS}) {
+  const isMob=window.innerWidth<768;
   const [expandidos,setExpandidos]=useState({});
   const [editando,setEditando]=useState({}); // {productoId_bodegaIdx: cantidad}
 
@@ -2937,7 +2959,7 @@ function MovSign({m}) {
 
 // ── MODULO MAESTROS — full CRUD for proveedores/organismos/bodegas ──
 // ── MODULO MAESTROS ───────────────────────────────────────────
-function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots,guardarBodegaDB}) {
+function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots,guardarBodegaDB,products=[]}) {
   const [seccion,setSeccion]=useState("organismos");
   const [confirmDel,setConfirmDel]=useState(null);
   // Organismos: rich objects {nombre, rut, direccion, email, telefono}
@@ -3098,7 +3120,8 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
           <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
             {bodegas.map((b,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 15px",borderBottom:i<bodegas.length-1?"1px solid #f1f5f9":"none",background:i%2===0?"#fff":"#fafafa"}}>
-                {editBodega?.idx===i ? (
+                {(()=>{const enUso=products.some(p=>(p.stockPorBodega||[]).some(sb=>sb.bodega===b&&(sb.cantidad||0)>0));return enUso&&<span style={{fontSize:10,color:"#94a3b8",background:"#f1f5f9",padding:"1px 6px",borderRadius:20,flexShrink:0,marginRight:4}}>en uso</span>;})()}
+              {editBodega?.idx===i ? (
                   <>
                     <input autoFocus value={editBodega.valor} onChange={e=>setEditBodega(eb=>({...eb,valor:e.target.value}))}
                       onKeyDown={e=>{
@@ -3209,7 +3232,15 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                   if(confirmDel.tipo==="org") deleteOrg(confirmDel.idx);
                   else deleteProv(confirmDel.idx);
                 } else if(confirmDelBod) {
+                  // Check if any product has stock in this bodega
+                  const enUso=products&&products.some(p=>(p.stockPorBodega||[]).some(b=>b.bodega===confirmDelBod.nombre&&(b.cantidad||0)>0));
+                  if(enUso){
+                    toast(`"${confirmDelBod.nombre}" tiene productos con stock — no se puede eliminar`,"warning");
+                    setConfirmDelBod(null);
+                    return;
+                  }
                   setBodegas(prev=>prev.filter((_,i)=>i!==confirmDelBod.idx));
+                  if(supabase) supabase.from('bodegas').delete().eq('nombre',confirmDelBod.nombre).then(({error})=>{if(error)console.error("Error eliminando bodega:",error);});
                   setConfirmDelBod(null);
                   toast("Bodega eliminada");
                 }

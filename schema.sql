@@ -1,76 +1,192 @@
--- ============================================================
--- BOREAL — Schema Supabase
--- Ejecuta esto en: supabase.com → tu proyecto → SQL Editor
--- ============================================================
+-- ── BOREAL APP — Schema Supabase ─────────────────────────────
+-- Ejecutar en Supabase → SQL Editor → New query
 
--- Tabla de productos
-CREATE TABLE IF NOT EXISTS productos (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  sku TEXT NOT NULL,
-  nombre TEXT NOT NULL,
-  proveedor TEXT,
-  costo NUMERIC(12,2) NOT NULL DEFAULT 0,
-  margen NUMERIC(5,2) NOT NULL DEFAULT 25,
-  unidad TEXT DEFAULT 'UN',
-  foto_url TEXT,
-  emoji TEXT DEFAULT '📦',
-  activo BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ── EXTENSIONES ───────────────────────────────────────────────
+create extension if not exists "uuid-ossp";
+
+-- ── USUARIOS / PERFILES ───────────────────────────────────────
+create table if not exists perfiles (
+  id          uuid primary key default uuid_generate_v4(),
+  nombre      text not null,
+  cargo       text,
+  email       text,
+  rol         text default 'ejecutivo', -- admin | ejecutivo
+  activo      boolean default true,
+  created_at  timestamptz default now()
 );
 
--- Tabla de cotizaciones
-CREATE TABLE IF NOT EXISTS cotizaciones (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  numero TEXT NOT NULL UNIQUE,
-  fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-  organismo TEXT NOT NULL,
-  oportunidad_id TEXT,
-  estado TEXT DEFAULT 'Borrador' CHECK (estado IN ('Borrador','Enviada','Adjudicada','Rechazada','Facturada')),
-  subtotal NUMERIC(14,2) DEFAULT 0,
-  costo_total NUMERIC(14,2) DEFAULT 0,
-  margen_prom NUMERIC(5,2) DEFAULT 0,
-  notas TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ── MAESTROS ──────────────────────────────────────────────────
+create table if not exists organismos (
+  id          uuid primary key default uuid_generate_v4(),
+  nombre      text not null,
+  rut         text,
+  direccion   text,
+  email       text,
+  telefono    text,
+  created_at  timestamptz default now()
 );
 
--- Tabla de items de cotización
-CREATE TABLE IF NOT EXISTS cotizacion_items (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  cotizacion_id UUID REFERENCES cotizaciones(id) ON DELETE CASCADE,
-  producto_id UUID REFERENCES productos(id),
-  nombre TEXT NOT NULL,
-  sku TEXT,
-  costo NUMERIC(12,2) NOT NULL DEFAULT 0,
-  precio_venta NUMERIC(12,2) NOT NULL DEFAULT 0,
-  cantidad NUMERIC(10,2) NOT NULL DEFAULT 1,
-  unidad TEXT DEFAULT 'UN'
+create table if not exists proveedores (
+  id          uuid primary key default uuid_generate_v4(),
+  nombre      text not null,
+  rut         text,
+  contacto    text,
+  email       text,
+  telefono    text,
+  web         text,
+  created_at  timestamptz default now()
 );
 
--- Storage bucket para fotos de productos
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('productos-fotos', 'productos-fotos', true)
-ON CONFLICT DO NOTHING;
+create table if not exists bodegas (
+  id          uuid primary key default uuid_generate_v4(),
+  nombre      text not null,
+  created_at  timestamptz default now()
+);
 
--- Política de storage: permitir subida y lectura pública
-CREATE POLICY "Fotos públicas" ON storage.objects
-  FOR SELECT USING (bucket_id = 'productos-fotos');
+-- ── PRODUCTOS ─────────────────────────────────────────────────
+create table if not exists productos (
+  id                uuid primary key default uuid_generate_v4(),
+  sku               text unique,
+  nombre            text not null,
+  proveedor         text,
+  costo             numeric default 0,
+  margen            numeric default 30,
+  foto_url          text,
+  categoria         text,
+  stock             numeric default 0,
+  stock_por_bodega  jsonb default '[]',
+  historial_costos  jsonb default '[]',
+  activo            boolean default true,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
+);
 
-CREATE POLICY "Subir fotos" ON storage.objects
-  FOR INSERT WITH CHECK (bucket_id = 'productos-fotos');
+-- ── COTIZACIONES ──────────────────────────────────────────────
+create table if not exists cotizaciones (
+  id                uuid primary key default uuid_generate_v4(),
+  numero            text unique not null,
+  organismo         text,
+  rut_cliente       text,
+  oportunidad_id    text,
+  ejecutivo         text,
+  estado            text default 'Borrador',
+  estado_op         text,
+  fecha             date,
+  fecha_vencimiento date,
+  items             jsonb default '[]',
+  notas             text,
+  total             numeric default 0,
+  costo_total       numeric default 0,
+  margen_prom       numeric default 0,
+  origen_mp         boolean default false,
+  log               jsonb default '[]',
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now()
+);
 
-CREATE POLICY "Actualizar fotos" ON storage.objects
-  FOR UPDATE USING (bucket_id = 'productos-fotos');
+-- ── MOVIMIENTOS DE INVENTARIO ─────────────────────────────────
+create table if not exists movimientos (
+  id               uuid primary key default uuid_generate_v4(),
+  tipo             text not null, -- entrada | salida | ajuste | transferencia
+  signo            text,          -- + | -
+  producto_id      uuid references productos(id),
+  nombre_producto  text,
+  cantidad         numeric not null,
+  stock_antes      numeric,
+  stock_despues    numeric,
+  referencia       text,
+  motivo           text,
+  bodega_origen    text,
+  bodega_destino   text,
+  usuario          text,
+  fecha            date,
+  created_at       timestamptz default now()
+);
 
-CREATE POLICY "Eliminar fotos" ON storage.objects
-  FOR DELETE USING (bucket_id = 'productos-fotos');
+-- ── GASTOS ────────────────────────────────────────────────────
+create table if not exists gastos (
+  id          uuid primary key default uuid_generate_v4(),
+  fecha       date not null,
+  categoria   text,
+  descripcion text,
+  monto       numeric default 0,
+  usuario     text,
+  created_at  timestamptz default now()
+);
 
--- RLS: habilitar pero permitir todo (sin login por ahora)
-ALTER TABLE productos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cotizaciones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cotizacion_items ENABLE ROW LEVEL SECURITY;
+-- ── OPORTUNIDADES (Mercado Público) ───────────────────────────
+create table if not exists oportunidades (
+  id                    text primary key, -- ID de Mercado Público
+  nombre                text not null,
+  institucion           text,
+  unidad_compra         text,
+  fecha_publicacion     text,
+  fecha_cierre          text,
+  presupuesto           numeric default 0,
+  estado_convocatoria   text,
+  cotizaciones_enviadas integer default 0,
+  estado                text default 'nueva', -- nueva | analizada | cotizada | descartada
+  matches               jsonb default '[]',
+  analisis_ia           jsonb,
+  cotizacion_id         uuid references cotizaciones(id),
+  importada_en          timestamptz default now()
+);
 
-CREATE POLICY "Acceso total productos" ON productos FOR ALL USING (true);
-CREATE POLICY "Acceso total cotizaciones" ON cotizaciones FOR ALL USING (true);
-CREATE POLICY "Acceso total items" ON cotizacion_items FOR ALL USING (true);
+-- ── SOLICITUDES DE MODIFICACIÓN ───────────────────────────────
+create table if not exists solicitudes (
+  id          uuid primary key default uuid_generate_v4(),
+  tipo        text default 'modificacion',
+  cot_id      uuid references cotizaciones(id),
+  cot_num     text,
+  usuario     text,
+  motivo      text,
+  estado      text default 'pendiente', -- pendiente | aprobada | rechazada
+  fecha       date,
+  created_at  timestamptz default now()
+);
+
+-- ── CONFIGURACIÓN ─────────────────────────────────────────────
+create table if not exists configuracion (
+  id                      integer primary key default 1,
+  stock_minimo            integer default 5,
+  umbral_verde            numeric default 30,
+  umbral_amarillo         numeric default 15,
+  dias_alerta_vencimiento integer default 3,
+  alerta_variacion_compra numeric default 10,
+  palabras_clave          text default 'detergente
+limpieza
+guante
+cloro
+desinfectante
+papel
+jabon
+aseo',
+  updated_at              timestamptz default now(),
+  constraint single_row check (id = 1)
+);
+
+-- Insert config por defecto
+insert into configuracion (id) values (1) on conflict (id) do nothing;
+
+-- ── ROW LEVEL SECURITY ────────────────────────────────────────
+-- Por ahora deshabilitado para desarrollo — habilitar antes de producción real
+alter table perfiles         disable row level security;
+alter table organismos       disable row level security;
+alter table proveedores      disable row level security;
+alter table bodegas          disable row level security;
+alter table productos        disable row level security;
+alter table cotizaciones     disable row level security;
+alter table movimientos      disable row level security;
+alter table gastos           disable row level security;
+alter table oportunidades    disable row level security;
+alter table solicitudes      disable row level security;
+alter table configuracion    disable row level security;
+
+-- ── ÍNDICES ÚTILES ─────────────────────────────────────────────
+create index if not exists idx_cots_estado       on cotizaciones(estado);
+create index if not exists idx_cots_fecha        on cotizaciones(fecha);
+create index if not exists idx_movs_producto     on movimientos(producto_id);
+create index if not exists idx_movs_fecha        on movimientos(fecha);
+create index if not exists idx_opor_estado       on oportunidades(estado);
+create index if not exists idx_gastos_fecha      on gastos(fecha);
+

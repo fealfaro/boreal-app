@@ -6,6 +6,14 @@ import { ToastContainer, toast } from "./Toast.jsx";
 import { generarPDFCotizacion } from "./pdfCotizacion.js";
 import { ESTADOS_COT, ESTADOS_OP, ESTADO_COLORS, MESES_FULL, MESES, EMPRESA_INFO, CATEGORIAS_GASTO } from "./constants.js";
 import {
+  supabase,
+  dbProductos, dbCotizaciones, dbMovimientos, dbGastos,
+  dbOrganismos, dbProveedores, dbBodegas, dbOportunidades,
+  dbSolicitudes, dbConfig, dbPerfiles,
+  fromDbProducto, fromDbCot, fromDbMov, fromDbOp,
+  toDbProducto, toDbCot, toDbMov, toDbOp,
+} from "./supabase.js";
+import {
   uid, today, nowISO, fmtDateTime, fmt, fmtN, fmtPct, fmtMiles,
   calcPrecioVenta, calcMargenDesde, calcTotalesCot, calcCPP,
   formatRut, addDays, diffDays, PERIODOS, filtrarPorPeriodo,
@@ -182,23 +190,21 @@ function buildNotifs(cots, prods, stockMin=5) {
 export default function App() {
   const [tab,setTab]             = useState("dashboard");
   const [sideOpen,setSideOpen]   = useState(false);
-  const [productos,setProductos] = useState(SEED_PRODS);
+  const [dbReady,setDbReady]     = useState(false);
+  const [productos,setProductos] = useState([]);
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
   const [movimientos,setMovimientos] = useState([]);
   const [solicitudes,setSolicitudes] = useState([]);
   const [activityLog,setActivityLog] = useState([]);
-  const [oportunidades,setOportunidades] = useState([]); // licitaciones importadas de Mercado Público // {id,tipo,cotId,cotNum,usuario,ts,motivo,estado}
-  const [proveedores,setProv]    = useState(["Brenntag","Unilever","Diversey","CMPC","Ansell","3M Chile"]);
-  const [empresas,setEmpresas]   = useState(["MINSAL","MINEDUC","MOP","SERVIU RM","Hospital Sótero del Río","Gendarmería","JUNAEB","SENAME"]);
-  const [bodegas,setBodegas]     = useState(["Bodega A-1","Bodega A-2","Bodega B-1","Bodega B-2","Bodega C-1"]);
+  const [oportunidades,setOportunidades] = useState([]);
+  const [proveedores,setProv]    = useState([]);
+  const [empresas,setEmpresas]   = useState([]);
+  const [bodegas,setBodegas]     = useState([]);
   const [perfil,setPerfil]       = useState(USUARIO_DEFAULT);
-  const [usuarios,setUsuarios]   = useState([
-    {id:"u1",nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",email:"fealfaro@gmail.com",rol:"admin"},
-    {id:"u2",nombre:"Jorge Díaz",cargo:"Ejecutivo Comercial",email:"jorge@borealgroup.cl",rol:"ejecutivo"},
-  ]);
+  const [usuarios,setUsuarios]   = useState([]);
   const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
-  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5});
+  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5,palabrasClave:"detergente\nlimpieza\nguante\ncloro\ndesinfectante"});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
   const [detalleCot,setDetalleCot]= useState(null);
@@ -244,30 +250,41 @@ export default function App() {
     return arr;
   })();
 
-  const setConfigKey=(k,v)=>{setConfig(p=>({...p,[k]:v}));toast("Configuración guardada");};
+  const setConfigKey=(k,v)=>{
+    setConfig(p=>({...p,[k]:v}));
+    // Map camelCase keys to snake_case for DB
+    const keyMap={stockMinimo:"stock_minimo",umbralVerde:"umbral_verde",umbralAmarillo:"umbral_amarillo",diasAlertaVenc:"dias_alerta_vencimiento",alertaVariacionCompra:"alerta_variacion_compra",palabrasClave:"palabras_clave"};
+    if(keyMap[k]) guardarConfigDB({[keyMap[k]]:v});
+    toast("Configuración guardada");
+  };
 
   const guardarProd=p=>{
     try {
-      if(p.proveedor&&!proveedores.includes(p.proveedor)) setProv(prev=>[...prev,p.proveedor]);
+      if(p.proveedor&&!proveedores.find(x=>(typeof x==="string"?x:x.nombre)===p.proveedor)) setProv(prev=>[...prev,p.proveedor]);
       const spb=(p.stockPorBodega||[]).filter(b=>b.bodega&&b.cantidad>=0);
       const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stockPorBodega:spb,stock:spb.reduce((a,b)=>a+(b.cantidad||0),0),updatedAt:nowISO()};
-      if(productos.find(x=>x.id===p.id)) setProductos(prev=>prev.map(x=>x.id===p.id?limpio:x));
-      else setProductos(prev=>[...prev,{...limpio,id:uid()}]);
+      const isNew=!productos.find(x=>x.id===p.id);
+      const withId={...limpio,id:limpio.id||uid()};
+      if(!isNew) setProductos(prev=>prev.map(x=>x.id===p.id?withId:x));
+      else setProductos(prev=>[...prev,withId]);
       setModalProd(null);
+      guardarProductoDB(withId);
       toast("Producto guardado");
     } catch(e){console.error(e);toast("Error al guardar","error");}
   };
+
   const elimProd=id=>{
     if(cots.some(c=>(c.items||[]).some(i=>i.productoId===id))){toast("Producto en cotizaciones — no se puede eliminar","warning");return;}
-    setProductos(prev=>prev.filter(x=>x.id!==id));setModalProd(null);toast("Producto eliminado");
+    setProductos(prev=>prev.filter(x=>x.id!==id));
+    dbProductos.delete(id);
+    setModalProd(null);toast("Producto eliminado");
   };
   const clonarProd=p=>setModalProd({...p,id:uid(),sku:p.sku+"-2",nombre:p.nombre+" (copia)"});
 
   const guardarCot=c=>{
-    if(c.organismo&&!empresas.includes(c.organismo)) setEmpresas(prev=>[...prev,c.organismo]);
+    if(c.organismo&&!empresas.find(x=>(typeof x==="string"?x:x.nombre)===c.organismo)) setEmpresas(prev=>[...prev,c.organismo]);
     const isNew=!cots.find(x=>x.id===c.id);
     const old=cots.find(x=>x.id===c.id);
-    // If editing an Enviada/Adjudicada cot → back to Borrador
     let estadoFinal=c.estado;
     if(!isNew&&old&&["Enviada","Adjudicada"].includes(old.estado)&&old.estado===c.estado){
       estadoFinal="Borrador";
@@ -278,9 +295,9 @@ export default function App() {
     const entry={...c,estado:estadoFinal,log,updatedAt:nowISO()};
     if(isNew) setCots(prev=>[entry,...prev]);
     else setCots(prev=>prev.map(x=>x.id===entry.id?entry:x));
-    // Sync if detalle open
     setDetalleCot(prev=>prev?.id===entry.id?entry:prev);
     setModalCot(null);
+    guardarCotDB(entry);
     toast(isNew?"Cotización creada":"Cotización actualizada");
   };
 
@@ -290,7 +307,7 @@ export default function App() {
     setCots(prev=>prev.map(c=>{
       if(c.id!==id) return c;
       const updated={...c,estado,...extra,log:[...(c.log||[]),logEntry],updatedAt:nowISO()};
-      // Sync detalle in real-time
+      guardarCotDB(updated);
       setDetalleCot(prev2=>prev2?.id===id?updated:prev2);
       return updated;
     }));
@@ -307,6 +324,93 @@ export default function App() {
   const [winW,setWinW]=useState(window.innerWidth);
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   const isMob=winW<768;
+
+  // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
+  useEffect(()=>{
+    const cargar=async()=>{
+      try {
+        const [
+          {data:prods},{data:cotsDb},{data:movsDb},{data:gastosDb},
+          {data:orgsDb},{data:provsDb},{data:bodDb},{data:usuDb},
+          {data:solDb},{data:opDb},{data:cfgDb},
+        ] = await Promise.all([
+          dbProductos.getAll(), dbCotizaciones.getAll(), dbMovimientos.getAll(), dbGastos.getAll(),
+          dbOrganismos.getAll(), dbProveedores.getAll(), dbBodegas.getAll(), dbPerfiles.getAll(),
+          dbSolicitudes.getAll(), dbOportunidades.getAll(), dbConfig.get(),
+        ]);
+        if(prods?.length)   setProductos(prods.map(fromDbProducto));
+        if(cotsDb?.length)  setCots(cotsDb.map(fromDbCot));
+        if(movsDb?.length)  setMovimientos(movsDb.map(fromDbMov));
+        if(gastosDb?.length)setGastos(gastosDb);
+        if(orgsDb?.length)  setEmpresas(orgsDb.map(o=>typeof o==="string"?o:o));
+        if(provsDb?.length) setProv(provsDb.map(p=>typeof p==="string"?p:p));
+        if(bodDb?.length)   setBodegas(bodDb.map(b=>b.nombre));
+        if(usuDb?.length)   setUsuarios(usuDb);
+        if(solDb?.length)   setSolicitudes(solDb);
+        if(opDb?.length)    setOportunidades(opDb.map(fromDbOp));
+        if(cfgDb) setConfig(prev=>({
+          ...prev,
+          stockMinimo:        cfgDb.stock_minimo||5,
+          umbralVerde:        cfgDb.umbral_verde||30,
+          umbralAmarillo:     cfgDb.umbral_amarillo||15,
+          diasAlertaVenc:     cfgDb.dias_alerta_vencimiento||3,
+          alertaVariacionCompra: cfgDb.alerta_variacion_compra||10,
+          palabrasClave:      cfgDb.palabras_clave||"",
+        }));
+        setDbReady(true);
+      } catch(e) {
+        console.error("Error cargando DB:",e);
+        toast("Error conectando a la base de datos","danger");
+        setDbReady(true); // igual mostramos la app
+      }
+    };
+    cargar();
+  },[]);
+
+  // ── GUARDAR EN DB CUANDO CAMBIA EL ESTADO ──────────────────
+  // Productos
+  const guardarProductoDB=async(p)=>{
+    const {error}=await dbProductos.upsert(p);
+    if(error) console.error("Error guardando producto:",error);
+  };
+  // Cotizaciones
+  const guardarCotDB=async(c)=>{
+    const {error}=await dbCotizaciones.upsert(c);
+    if(error) console.error("Error guardando cotización:",error);
+  };
+  // Movimientos
+  const guardarMovDB=async(m)=>{
+    const {error}=await dbMovimientos.insert(toDbMov(m));
+    if(error) console.error("Error guardando movimiento:",error);
+  };
+  // Wrapper que persiste movimientos nuevos
+  const addMovimiento=(mov)=>{
+    setMovimientos(prev=>[mov,...prev]);
+    guardarMovDB(mov);
+  };
+  // Gastos
+  const guardarGastoDB=async(g)=>{
+    const {error}=await dbGastos.upsert(g);
+    if(error) console.error("Error guardando gasto:",error);
+  };
+  // Config
+  const guardarConfigDB=async(data)=>{
+    await dbConfig.update(data);
+  };
+
+  // ── Loading screen ──────────────────────────────────────────
+  if(!dbReady) return (
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f8fafc",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <img src={`data:image/png;base64,${LOGO_B64_COLOR}`} alt="Boreal" style={{height:60,objectFit:"contain"}}/>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        {[0,1,2].map(i=>(
+          <div key={i} style={{width:8,height:8,borderRadius:"50%",background:"#1d4ed8",animation:"pulse 1s ease-in-out infinite",animationDelay:`${i*0.2}s`,opacity:.6}}/>
+        ))}
+      </div>
+      <div style={{fontSize:13,color:"#64748b"}}>Conectando con la base de datos…</div>
+      <style>{`@keyframes pulse{0%,100%{transform:scale(.8);opacity:.4}50%{transform:scale(1);opacity:1}}`}</style>
+    </div>
+  );
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:"#f8fafc",minHeight:"100vh",color:"#0f172a"}}>

@@ -204,6 +204,9 @@ export default function App() {
   const [perfil,setPerfil]       = useState(USUARIO_DEFAULT);
   const [usuarios,setUsuarios]   = useState([]);
   const isAdmin = usuarios.find(u=>u.nombre===perfil.nombre)?.rol==="admin" || perfil.rol==="admin";
+  // Normalize maestros to string arrays for Combobox/selects
+  const empresasNombres = empresas.map(e=>typeof e==="string"?e:e.nombre).filter(Boolean);
+  const proveedoresNombres = proveedores.map(p=>typeof p==="string"?p:p.nombre).filter(Boolean);
   const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5,palabrasClave:"detergente\nlimpieza\nguante\ncloro\ndesinfectante"});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
@@ -260,7 +263,7 @@ export default function App() {
 
   const guardarProd=p=>{
     try {
-      if(p.proveedor&&!proveedores.find(x=>(typeof x==="string"?x:x.nombre)===p.proveedor)) setProv(prev=>[...prev,p.proveedor]);
+      if(p.proveedor&&!proveedoresNombres.includes(p.proveedor)) setProv(prev=>[...prev,{nombre:p.proveedor}]);
       const spb=(p.stockPorBodega||[]).filter(b=>b.bodega&&b.cantidad>=0);
       const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stockPorBodega:spb,stock:spb.reduce((a,b)=>a+(b.cantidad||0),0),updatedAt:nowISO()};
       const isNew=!productos.find(x=>x.id===p.id);
@@ -269,6 +272,15 @@ export default function App() {
       else setProductos(prev=>[...prev,withId]);
       setModalProd(null);
       guardarProductoDB(withId);
+      // Auto-agregar bodegas nuevas al maestro
+      spb.forEach(sb=>{
+        if(sb.bodega&&!bodegas.includes(sb.bodega)){
+          setBodegas(prev=>[...prev,sb.bodega]);
+          if(supabase) supabase.from('bodegas').insert({nombre:sb.bodega}).then(({error})=>{
+            if(error&&error.code!=='23505') console.error("Error guardando bodega:",error); // 23505 = duplicate
+          });
+        }
+      });
       toast("Producto guardado");
     } catch(e){console.error(e);toast("Error al guardar","error");}
   };
@@ -282,7 +294,7 @@ export default function App() {
   const clonarProd=p=>setModalProd({...p,id:uid(),sku:p.sku+"-2",nombre:p.nombre+" (copia)"});
 
   const guardarCot=c=>{
-    if(c.organismo&&!empresas.find(x=>(typeof x==="string"?x:x.nombre)===c.organismo)) setEmpresas(prev=>[...prev,c.organismo]);
+    if(c.organismo&&!empresasNombres.includes(c.organismo)) setEmpresas(prev=>[...prev,{nombre:c.organismo,rut:'',direccion:'',email:'',telefono:''}]);
     const isNew=!cots.find(x=>x.id===c.id);
     const old=cots.find(x=>x.id===c.id);
     let estadoFinal=c.estado;
@@ -380,9 +392,14 @@ export default function App() {
         if(cotsDb?.length)  setCots(cotsDb.map(fromDbCot));
         if(movsDb?.length)  setMovimientos(movsDb.map(fromDbMov));
         if(gastosDb?.length)setGastos(gastosDb);
-        if(orgsDb?.length)  setEmpresas(orgsDb.map(o=>typeof o==="string"?o:o));
-        if(provsDb?.length) setProv(provsDb.map(p=>typeof p==="string"?p:p));
+        if(orgsDb?.length)  setEmpresas(orgsDb); // keep as objects {id,nombre,rut,...}
+        if(provsDb?.length) setProv(provsDb);     // keep as objects {id,nombre,rut,...}
         if(bodDb?.length)   setBodegas(bodDb.map(b=>b.nombre));
+        else if(prods?.length) {
+          // Fallback: extraer bodegas únicas de los productos
+          const bodFromProds=[...new Set(prods.flatMap(p=>(p.stock_por_bodega||[]).map(s=>s.bodega).filter(Boolean)))];
+          if(bodFromProds.length) setBodegas(bodFromProds);
+        }
         if(usuDb?.length)   setUsuarios(usuDb);
         if(solDb?.length)   setSolicitudes(solDb);
         if(opDb?.length)    setOportunidades(opDb.map(fromDbOp));
@@ -568,16 +585,16 @@ export default function App() {
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
-        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
-        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresas} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
-        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresas} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
+        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
+        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
+        {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
 
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
     </div>
   );

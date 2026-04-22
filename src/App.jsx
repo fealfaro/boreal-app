@@ -273,14 +273,12 @@ export default function App() {
       setModalProd(null);
       guardarProductoDB(withId);
       // Auto-agregar bodegas nuevas al maestro
-      spb.forEach(sb=>{
+      for(const sb of spb){
         if(sb.bodega&&!bodegas.includes(sb.bodega)){
           setBodegas(prev=>[...prev,sb.bodega]);
-          if(supabase) supabase.from('bodegas').insert({nombre:sb.bodega}).then(({error})=>{
-            if(error&&error.code!=='23505') console.error("Error guardando bodega:",error); // 23505 = duplicate
-          });
+          guardarBodegaDB(sb.bodega);
         }
-      });
+      }
       toast("Producto guardado");
     } catch(e){console.error(e);toast("Error al guardar","error");}
   };
@@ -440,6 +438,12 @@ export default function App() {
     if(error) console.error("Error guardando cotización:",error);
   };
   // Movimientos
+  const guardarBodegaDB=async(nombre)=>{
+    if(!supabase) return;
+    const {error}=await supabase.from('bodegas').insert({nombre}).select().single();
+    if(error&&error.code!=='23505') console.error("Error guardando bodega:",error);
+    else console.log("Bodega guardada:",nombre);
+  };
   const guardarMovDB=async(m)=>{
     const {error}=await dbMovimientos.insert(toDbMov(m));
     if(error) console.error("Error guardando movimiento:",error);
@@ -585,7 +589,7 @@ export default function App() {
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
-        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots}/>}
+        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB}/>}
         {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
@@ -2933,7 +2937,7 @@ function MovSign({m}) {
 
 // ── MODULO MAESTROS — full CRUD for proveedores/organismos/bodegas ──
 // ── MODULO MAESTROS ───────────────────────────────────────────
-function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots}) {
+function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots,guardarBodegaDB}) {
   const [seccion,setSeccion]=useState("organismos");
   const [confirmDel,setConfirmDel]=useState(null);
   // Organismos: rich objects {nombre, rut, direccion, email, telefono}
@@ -3086,10 +3090,10 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
         <div style={{maxWidth:480}}>
           <div style={{display:"flex",gap:8,marginBottom:14}}>
             <input value={nuevaBodega} onChange={e=>setNuevaBodega(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&nuevaBodega.trim()){if(bodegas.includes(nuevaBodega.trim())){toast("Ya existe","warning");return;}setBodegas(prev=>[...prev,nuevaBodega.trim()]);setNuevaBodega("");toast("Bodega agregada");}}}
+              onKeyDown={e=>{if(e.key==="Enter"&&nuevaBodega.trim()){if(bodegas.includes(nuevaBodega.trim())){toast("Ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");toast("Bodega agregada");}}}
               placeholder="Nombre de la bodega…"
               style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
-            <Btn onClick={()=>{if(!nuevaBodega.trim()||bodegas.includes(nuevaBodega.trim())){toast("Nombre inválido o ya existe","warning");return;}setBodegas(prev=>[...prev,nuevaBodega.trim()]);setNuevaBodega("");toast("Bodega agregada");}} size="sm">+ Agregar</Btn>
+            <Btn onClick={()=>{if(!nuevaBodega.trim()||bodegas.includes(nuevaBodega.trim())){toast("Nombre inválido o ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");toast("Bodega agregada");}} size="sm">+ Agregar</Btn>
           </div>
           <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
             {bodegas.map((b,i)=>(

@@ -89,36 +89,23 @@ export default {
           .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
           .replace(/\s+/g, ' ')
-          .slice(0, 8000); // límite de contexto
+          .trim()
+          .slice(0, 6000); // límite conservador
 
         // 3. Analizar con Claude
-        const prompt = `Eres un asistente de ventas para empresa de suministros de limpieza en Chile.
+        const prompt = `Analiza esta licitación chilena de Mercado Público y responde en JSON.
 
-PÁGINA DE LICITACIÓN (ID: ${id}):
+LICITACIÓN ID: ${id}
+CONTENIDO DE LA PÁGINA:
 ${textoLimpio}
 
-CATÁLOGO DISPONIBLE:
-${catalogo}
+CATÁLOGO DE LA EMPRESA:
+${catalogo.slice(0, 2000)}
 
-Analiza qué productos pide esta licitación y si el catálogo los tiene.
-Responde SOLO en JSON:
-{
-  "titulo": "...",
-  "institucion": "...",
-  "descripcion": "resumen de qué piden en 2-3 oraciones",
-  "productosDetectados": [
-    {"nombre": "...", "cantidad": 10, "unidad": "unidades/cajas/etc", "especificacion": "..."}
-  ],
-  "productosEnCatalogo": [
-    {"sku": "...", "nombre": "...", "cantidadEstimada": 10, "confianza": "alta/media/baja", "nota": "..."}
-  ],
-  "productosNuevos": [
-    {"nombre": "...", "descripcion": "...", "cantidadEstimada": 5}
-  ],
-  "relevante": true,
-  "recomendacion": "cotizar/revisar/descartar",
-  "resumen": "..."
-}`;
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.
+
+Formato exacto requerido:
+{"titulo":"nombre de la licitación","institucion":"nombre institución","descripcion":"qué productos o servicios piden en 2 oraciones","productosDetectados":[{"nombre":"producto","cantidad":10,"unidad":"unidades"}],"productosEnCatalogo":[{"sku":"ASE-001","nombre":"nombre","cantidadEstimada":10,"confianza":"alta"}],"productosNuevos":[{"nombre":"producto","descripcion":"descripción","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar","resumen":"resumen ejecutivo"}`;
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -135,8 +122,30 @@ Responde SOLO en JSON:
         });
 
         const claudeData = await claudeResp.json();
-        const txt = claudeData.content?.[0]?.text || '{}';
-        const analisis = JSON.parse(txt.replace(/```json|```/g, '').trim());
+        const txt = claudeData.content?.[0]?.text || '';
+        
+        // Log para debug
+        console.log('Claude raw response:', txt.slice(0, 500));
+        
+        let analisis = {};
+        try {
+          // Intentar extraer JSON del texto
+          const jsonMatch = txt.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            analisis = JSON.parse(jsonMatch[0]);
+          }
+        } catch(parseErr) {
+          console.error('JSON parse error:', parseErr.message, 'Text:', txt.slice(0, 200));
+          // Si no parsea, crear estructura básica con el texto raw
+          analisis = {
+            resumen: txt.slice(0, 300),
+            relevante: true,
+            recomendacion: 'revisar',
+            productosDetectados: [],
+            productosEnCatalogo: [],
+            productosNuevos: [],
+          };
+        }
 
         return new Response(JSON.stringify({
           ok: true,

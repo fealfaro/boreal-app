@@ -3902,6 +3902,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       } else {
         const analisis=data.analisis;
         console.log("Analisis IA recibido:", JSON.stringify(analisis, null, 2));
+        console.log("Worker response data:", JSON.stringify(data, null, 2));
         analisis._source="web";
         // Map productosEnCatalogo → productosEncontrados for compatibility
         if(analisis.productosEnCatalogo&&!analisis.productosEncontrados)

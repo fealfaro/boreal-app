@@ -1673,7 +1673,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
         <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Nombre *</label><input value={form.nombre} onChange={e=>set("nombre",e.target.value)} style={inp}/></div>
         <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>SKU</label><input value={form.sku} onChange={e=>set("sku",e.target.value)} style={inp}/></div>
-        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Proveedor</label><Combobox value={form.proveedor} onChange={v=>set("proveedor",v)} options={proveedores} placeholder="Buscar o crear…"/></div>
+        <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Proveedor</label><Combobox value={form.proveedor} onChange={v=>set("proveedor",v)} options={proveedores.map(p=>typeof p==="string"?p:p.nombre).filter(Boolean)} placeholder="Buscar o crear…"/></div>
         <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Costo neto ($)</label><MilesInput value={form.costo} onChange={v=>set("costo",v)}/></div>
         <div><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>Margen (%)</label>
           <input type="number" value={form.margen} onChange={e=>set("margen",e.target.value)} style={{...inp,borderColor:margenNeg?"#ef4444":"#e2e8f0",background:margenNeg?"#fff5f5":"#fff"}}/>
@@ -4135,33 +4135,68 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
 
           {/* Análisis IA result */}
           {ia&&(
-            <div style={{background:"#fff",borderRadius:10,padding:"12px",marginBottom:12,border:"1px solid #e2e8f0"}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8}}>ANÁLISIS IA</div>
-              <p style={{fontSize:13,color:"#475569",marginBottom:10}}>{ia.resumen}</p>
+            <div style={{background:"#fff",borderRadius:10,padding:"14px",marginBottom:12,border:"1px solid #e2e8f0"}}>
+              {/* Header con fuente y recomendación */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>ANÁLISIS IA</span>
+                  {ia._source==="web"&&<span style={{fontSize:10,background:"#dcfce7",color:"#15803d",padding:"1px 7px",borderRadius:20}}>con detalle MP</span>}
+                  {ia._source==="nombre"&&<span style={{fontSize:10,background:"#fef9c3",color:"#854d0e",padding:"1px 7px",borderRadius:20}}>solo nombre</span>}
+                </div>
+                {ia.recomendacion&&(
+                  <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,
+                    background:ia.recomendacion==="cotizar"?"#dcfce7":ia.recomendacion==="descartar"?"#fee2e2":"#fef9c3",
+                    color:ia.recomendacion==="cotizar"?"#15803d":ia.recomendacion==="descartar"?"#b91c1c":"#854d0e"}}>
+                    {ia.recomendacion==="cotizar"?"Cotizar":ia.recomendacion==="descartar"?"Descartar":"Revisar"}
+                  </span>
+                )}
+              </div>
 
-              {ia.productosEncontrados?.length>0&&(
-                <div style={{marginBottom:8}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#15803d",marginBottom:5}}>✓ Productos disponibles</div>
-                  {ia.productosEncontrados.map((p,i)=>{
-                    const prod=productos.find(pr=>pr.sku===p.sku);
-                    return (
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
-                        <span>{p.nombre} × {p.cantidadEstimada}</span>
-                        <span style={{color:"#64748b",fontSize:10,padding:"1px 6px",background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",borderRadius:20}}>
-                          {p.confianza}
-                        </span>
-                      </div>
-                    );
-                  })}
+              {/* Resumen */}
+              {ia.resumen&&<p style={{fontSize:13,color:"#475569",marginBottom:10,lineHeight:1.5}}>{ia.resumen}</p>}
+
+              {/* Productos detectados (del scraping) */}
+              {ia.productosDetectados?.length>0&&(
+                <div style={{marginBottom:10}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#64748b",marginBottom:5}}>PIDEN EN LA LICITACIÓN</div>
+                  {ia.productosDetectados.map((p,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
+                      <span style={{color:"#0f172a"}}>{p.nombre}</span>
+                      <span style={{color:"#64748b"}}>{p.cantidad} {p.unidad||"uds"}</span>
+                    </div>
+                  ))}
                 </div>
               )}
 
+              {/* Productos en catálogo */}
+              {ia.productosEncontrados?.length>0&&(
+                <div style={{marginBottom:8}}>
+                  <div style={{fontSize:11,fontWeight:600,color:"#15803d",marginBottom:5}}>EN TU CATÁLOGO</div>
+                  {ia.productosEncontrados.map((p,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
+                      <div>
+                        <span style={{fontWeight:500}}>{p.nombre}</span>
+                        <span style={{color:"#94a3b8"}}> × {p.cantidadEstimada}</span>
+                        {p.nota&&<div style={{fontSize:10,color:"#94a3b8"}}>{p.nota}</div>}
+                      </div>
+                      <span style={{fontSize:10,padding:"2px 7px",borderRadius:20,fontWeight:600,
+                        background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",
+                        color:p.confianza==="alta"?"#15803d":p.confianza==="media"?"#854d0e":"#b91c1c"}}>
+                        {p.confianza}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Productos nuevos */}
               {ia.productosNuevos?.length>0&&(
                 <div>
-                  <div style={{fontSize:11,fontWeight:600,color:"#92400e",marginBottom:5}}>⚠ Productos no en catálogo</div>
+                  <div style={{fontSize:11,fontWeight:600,color:"#92400e",marginBottom:5}}>NO EN CATÁLOGO</div>
                   {ia.productosNuevos.map((p,i)=>(
                     <div key={i} style={{padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12,color:"#64748b"}}>
-                      {p.nombre} — {p.descripcion}
+                      <span style={{fontWeight:500,color:"#475569"}}>{p.nombre}</span>
+                      {p.descripcion&&` — ${p.descripcion}`}
                     </div>
                   ))}
                 </div>

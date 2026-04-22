@@ -54,6 +54,7 @@ const Ic = {
 
 const NAV = [
   {id:"dashboard",   label:"Dashboard",    icon:Ic.grid},
+  {id:"notificaciones",label:"Notificaciones",icon:Ic.bell},
   {id:"productos",   label:"Productos",    icon:Ic.box},
   {id:"cotizaciones",label:"Cotizaciones", icon:Ic.file},
   {id:"revision",    label:"Revisión",     icon:Ic.check},
@@ -507,7 +508,8 @@ export default function App() {
       {/* SIDEBAR */}
       <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#fff",borderLeft:isMob?"1px solid #e2e8f0":"none",borderRight:isMob?"none":"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
         {!isMob&&(
-          <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72}}>
+          <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"center",alignItems:"center",minHeight:72,cursor:"pointer"}}
+            onClick={()=>goTab("dashboard")}>
             <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal"
               style={{height:48,maxWidth:160,objectFit:"contain"}}
               onError={e=>{e.target.style.display="none";}}/>
@@ -522,6 +524,7 @@ export default function App() {
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
               if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
+              if(item.id==="notificaciones") return notifList.length;
               if(item.id==="oportunidades") return oportunidades.filter(o=>o.estado==="nueva").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
@@ -585,6 +588,7 @@ export default function App() {
 
       {/* MAIN */}
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
+        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -592,10 +596,10 @@ export default function App() {
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
         {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
-        {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} onGuardarDB={guardarGastoDB} onEliminarDB={(id)=>{if(supabase)supabase.from("gastos").delete().eq("id",id).then(({error})=>{if(error)console.error("Error delete gasto:",error);});}}/>}
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
-        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos}/>}
+        {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos} dbOrg={dbOrganismos} dbProv={dbProveedores}/>}
         {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
@@ -648,15 +652,15 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
         {/* Gráfico grande */}
         <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
           <div style={{fontWeight:600,fontSize:14,marginBottom:14}}>Ventas mensuales</div>
-          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",paddingTop:40}}>
             <div style={{display:"flex",alignItems:"flex-end",gap:isMob?8:5,height:140,position:"relative",minWidth:isMob?480:"100%",paddingBottom:0}}>
               {vMes.map((v,i)=>(
                 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,position:"relative",minWidth:isMob?32:0}}
                   onMouseEnter={()=>setTooltip({i,v})} onMouseLeave={()=>setTooltip(null)}>
                   {tooltip?.i===i&&v>0&&(
-                    <div style={{position:"absolute",bottom:"calc(100% + 4px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",zIndex:10}}>
-                      {fmt(v)}
-                      <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"4px solid transparent",borderTopColor:"#0f172a"}}/>
+                    <div style={{position:"absolute",bottom:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,whiteSpace:"nowrap",zIndex:20,boxShadow:"0 4px 12px rgba(0,0,0,.2)"}}>
+                      {MESES_FULL[i]}: {fmt(v)}
+                      <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"5px solid transparent",borderTopColor:"#0f172a"}}/>
                     </div>
                   )}
                   <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
@@ -1244,7 +1248,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
 }
 
 // ── GASTOS ────────────────────────────────────────────────────
-function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}}) {
+function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={},onGuardarDB,onEliminarDB}) {
   const isMob=window.innerWidth<768;
   const [form,setForm]=useState({descripcion:"",categoria:"Transporte",monto:"",fecha:today(),declaradoPor:perfil?.nombre||"",boletaUrl:""});
   const [periodo,setPeriodo]=useState("mes");
@@ -1256,7 +1260,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
     if(!form.descripcion.trim()||!form.monto){toast("Completa descripción y monto","warning");return;}
     const nuevo={...form,id:uid(),monto:Number(form.monto),declaradoPor:perfil?.nombre||form.declaradoPor};
     setGastos(prev=>[...prev,nuevo]);
-    import("./supabase.js").then(({dbGastos})=>dbGastos.upsert(nuevo).then(({error})=>{if(error)console.error("Error gasto DB:",error);}));
+    if(onGuardarDB) onGuardarDB(nuevo);
     sf("descripcion","");sf("monto","");sf("boletaUrl","");
     toast("Gasto registrado");
   };
@@ -1315,7 +1319,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:7}}>
                   <span style={{fontWeight:700,fontSize:13,color:"#ef4444"}}>{fmt(g.monto)}</span>
-                  {isAdmin ? <button onClick={()=>setGastos(prev=>prev.filter(x=>x.id!==g.id))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,transition:"color .12s"}} title="Solo admin">×</button> : <span style={{fontSize:10,color:"#cbd5e1",padding:"0 4px"}} title="Solo admin puede eliminar">🔒</span>}
+                  {isAdmin ? <button onClick={()=>{setGastos(prev=>prev.filter(x=>x.id!==g.id));onEliminarDB&&onEliminarDB(g.id);}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,transition:"color .12s"}} title="Solo admin">×</button> : <span style={{fontSize:10,color:"#cbd5e1",padding:"0 4px"}} title="Solo admin puede eliminar">🔒</span>}
                 </div>
               </div>
             ))}
@@ -3012,7 +3016,7 @@ function MovSign({m}) {
 
 // ── MODULO MAESTROS — full CRUD for proveedores/organismos/bodegas ──
 // ── MODULO MAESTROS ───────────────────────────────────────────
-function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots,guardarBodegaDB,products=[]}) {
+function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBodegas,cots,guardarBodegaDB,products=[],dbOrg,dbProv}) {
   const [seccion,setSeccion]=useState("organismos");
   const [confirmDel,setConfirmDel]=useState(null);
   // Organismos: rich objects {nombre, rut, direccion, email, telefono}
@@ -3026,7 +3030,16 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
 
   // ── Organismos (objetos enriquecidos) ─────────────────────
   const orgList = empresas.map(e => typeof e==="object" ? e : {nombre:e,rut:"",direccion:"",email:"",telefono:""});
-  const saveOrgList = list => setEmpresas(list);
+  const saveOrgList = (list, changedItem=null) => {
+    setEmpresas(list);
+    if(changedItem && dbOrg) {
+      const obj = typeof changedItem==="string" ? {nombre:changedItem} : changedItem;
+      dbOrg.upsert(obj).then(({error})=>{if(error)console.error("Error org DB:",error);});
+    }
+  };
+  const deleteOrgDB = (nombre) => {
+    if(dbOrg) dbOrg.delete&&supabase?.from('organismos').delete().eq('nombre',nombre).then(({error})=>{if(error)console.error("Error delete org:",error);});
+  };
 
   const EMPTY_ORG = {nombre:"",rut:"",direccion:"",email:"",telefono:""};
   const EMPTY_PROV = {nombre:"",rut:"",contacto:"",email:"",telefono:"",web:""};
@@ -3038,17 +3051,28 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
     const org=orgList[idx];
     if(isOrgEnUso(org.nombre)){toast(`"${org.nombre}" está en uso`,"warning");setConfirmDel(null);return;}
     saveOrgList(orgList.filter((_,i)=>i!==idx));
+    deleteOrgDB(org.nombre);
     setConfirmDel(null); toast("Eliminado");
   };
 
   // ── Proveedores (objetos enriquecidos) ────────────────────
   const provList = proveedores.map(p => typeof p==="object" ? p : {nombre:p,rut:"",contacto:"",email:"",telefono:"",web:""});
-  const saveProvList = list => setProv(list);
+  const saveProvList = (list, changedItem=null) => {
+    setProv(list);
+    if(changedItem && dbProv) {
+      const obj = typeof changedItem==="string" ? {nombre:changedItem} : changedItem;
+      dbProv.upsert(obj).then(({error})=>{if(error)console.error("Error prov DB:",error);});
+    }
+  };
+  const deleteProvDB = (nombre) => {
+    if(dbProv) supabase?.from('proveedores').delete().eq('nombre',nombre).then(({error})=>{if(error)console.error("Error delete prov:",error);});
+  };
 
   const deleteProv = idx => {
     const p=provList[idx];
     if(isProvEnUso(p.nombre)){toast(`"${p.nombre}" está en uso`,"warning");setConfirmDel(null);return;}
     saveProvList(provList.filter((_,i)=>i!==idx));
+    deleteProvDB(p.nombre);
     setConfirmDel(null); toast("Eliminado");
   };
 
@@ -3226,7 +3250,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                 const newList=[...orgList];
                 if(modalOrg.idx===null) newList.push(d);
                 else newList[modalOrg.idx]=d;
-                saveOrgList(newList);
+                saveOrgList(newList, d);
                 setModalOrg(null);
                 toast(modalOrg.idx===null?"Organismo creado":"Organismo actualizado");
               }} size="sm">Guardar</Btn>
@@ -3262,7 +3286,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                 const newList=[...provList];
                 if(modalProv.idx===null) newList.push(d);
                 else newList[modalProv.idx]=d;
-                saveProvList(newList);
+                saveProvList(newList, d);
                 setModalProv(null);
                 toast(modalProv.idx===null?"Proveedor creado":"Proveedor actualizado");
               }} size="sm">Guardar</Btn>
@@ -4106,6 +4130,78 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── MÓDULO NOTIFICACIONES ─────────────────────────────────────
+function ModuloNotificaciones({notifList,goTab,cots,config}) {
+  const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0);
+  const stockBajo=notifList.filter(n=>n.tipo==="warning"&&n.id.startsWith("s"));
+  const paraRev=cots.filter(c=>c.estado==="Para revisar");
+  const enCompra=cots.filter(c=>c.estadoOp==="En compra");
+
+  const GRUPOS=[
+    {
+      id:"urgente",label:"Urgente",color:"#b91c1c",bg:"#fee2e2",
+      items:[
+        ...porVencer.map(c=>({id:"v"+c.id,msg:`Cotización ${c.numero} vence en ${diffDays(c.fechaVencimiento)}d`,sub:c.organismo,tab:"cotizaciones",tipo:"danger"})),
+      ]
+    },
+    {
+      id:"atencion",label:"Requiere atención",color:"#854d0e",bg:"#fef9c3",
+      items:[
+        ...paraRev.map(c=>({id:"r"+c.id,msg:`${c.numero} pendiente de revisión`,sub:c.organismo,tab:"revision",tipo:"warning"})),
+        ...enCompra.map(c=>({id:"c"+c.id,msg:`${c.numero} en proceso de compra`,sub:c.organismo,tab:"compras",tipo:"warning"})),
+      ]
+    },
+    {
+      id:"stock",label:"Stock bajo",color:"#1d4ed8",bg:"#eff6ff",
+      items:stockBajo.map(n=>({...n,tab:"inventario",tipo:"info"}))
+    },
+  ].filter(g=>g.items.length>0);
+
+  return (
+    <div>
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Notificaciones</h1>
+        <p style={{color:"#64748b",fontSize:13,margin:0}}>
+          {notifList.length===0?"Todo al día — sin alertas pendientes":`${notifList.length} alerta${notifList.length>1?"s":""} activa${notifList.length>1?"s":""}`}
+        </p>
+      </div>
+
+      {notifList.length===0&&(
+        <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+          <div style={{width:56,height:56,background:"#dcfce7",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",color:"#15803d"}}>
+            {Ic.check}
+          </div>
+          <h3 style={{fontSize:16,fontWeight:700,marginBottom:6,color:"#15803d"}}>Todo al día</h3>
+          <p style={{color:"#64748b",fontSize:13}}>No hay alertas ni notificaciones pendientes</p>
+        </div>
+      )}
+
+      {GRUPOS.map(g=>(
+        <div key={g.id} style={{marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <span style={{fontSize:11,fontWeight:700,color:g.color,letterSpacing:".06em"}}>{g.label.toUpperCase()}</span>
+            <span style={{background:g.bg,color:g.color,fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:20}}>{g.items.length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {g.items.map(item=>(
+              <div key={item.id} onClick={()=>goTab(item.tab)}
+                style={{background:"#fff",borderRadius:12,padding:"14px 16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderLeft:`3px solid ${g.color}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"box-shadow .12s"}}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,.1)"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,.06)"}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.msg}</div>
+                  {item.sub&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.sub}</div>}
+                </div>
+                <div style={{color:"#94a3b8",flexShrink:0,fontSize:16}}>›</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

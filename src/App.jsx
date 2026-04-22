@@ -292,7 +292,11 @@ export default function App() {
   const clonarProd=p=>setModalProd({...p,id:uid(),sku:p.sku+"-2",nombre:p.nombre+" (copia)"});
 
   const guardarCot=c=>{
-    if(c.organismo&&!empresasNombres.includes(c.organismo)) setEmpresas(prev=>[...prev,{nombre:c.organismo,rut:'',direccion:'',email:'',telefono:''}]);
+    if(c.organismo&&!empresasNombres.includes(c.organismo)){
+      const nuevoOrg={nombre:c.organismo,rut:c.rut_cliente||'',direccion:'',email:'',telefono:''};
+      setEmpresas(prev=>[...prev,nuevoOrg]);
+      dbOrganismos.upsert(nuevoOrg).then(({error})=>{if(error)console.error("Error guardando organismo:",error);});
+    }
     const isNew=!cots.find(x=>x.id===c.id);
     const old=cots.find(x=>x.id===c.id);
     let estadoFinal=c.estado;
@@ -341,7 +345,7 @@ export default function App() {
     const cargar=async()=>{
       if(!supabase){
         console.error("Supabase no configurado — verifica las variables de entorno en Cloudflare");
-        toast("⚠️ Base de datos no conectada — revisa la configuración","danger");
+        toast("⚠ Base de datos no conectada — revisa la configuración","danger");
         setDbReady(true);
         return;
       }
@@ -776,7 +780,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,.07)";}}>
               <div onClick={()=>onEdit(p)} style={{width:"100%",paddingTop:"75%",position:"relative",background:"#f8fafc",overflow:"hidden"}}>
                 {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"contain",padding:"6px",boxSizing:"border-box",background:"#f8fafc"}}/>
-                  :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}>📦</div>}
+                  :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}></div>}
                 {getStockTotal(p)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
               </div>
               <div style={{padding:"10px 12px"}}>
@@ -915,8 +919,8 @@ function ModuloRevision({cots,cambiarEstado,onDetalle}) {
             <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"space-between"}}>
               <Btn onClick={()=>onDetalle(c)} variant="ghost" size="sm">Ver detalle</Btn>
               <div style={{display:"flex",gap:7}}>
-                <Btn onClick={()=>{const m=prompt("Motivo (opcional):");cambiarEstado(c.id,"Rechazada",{nota:m||"Rechazada en revisión"});}} variant="danger" size="sm">✗ Rechazar</Btn>
-                <Btn onClick={()=>cambiarEstado(c.id,"Enviada",{nota:"Aprobada en revisión — lista para postular"})} size="sm">✓ Aprobar</Btn>
+                <Btn onClick={()=>{const m=prompt("Motivo (opcional):");cambiarEstado(c.id,"Rechazada",{nota:m||"Rechazada en revisión"});}} variant="danger" size="sm">Rechazar</Btn>
+                <Btn onClick={()=>cambiarEstado(c.id,"Enviada",{nota:"Aprobada en revisión — lista para postular"})} size="sm">Aprobar</Btn>
               </div>
             </div>
           </div>
@@ -1457,8 +1461,8 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
                 <div style={{fontSize:12,color:"#475569",marginTop:4,fontStyle:"italic"}}>"{s.motivo}"</div>
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
-                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x));toast("Solicitud aprobada — el usuario puede editar");}} size="sm">✓ Aprobar</Btn>
-                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x));toast("Solicitud rechazada");}} variant="ghost" size="sm">✗ Rechazar</Btn>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x));toast("Solicitud aprobada — el usuario puede editar");}} size="sm">Aprobar</Btn>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x));toast("Solicitud rechazada");}} variant="ghost" size="sm">Rechazar</Btn>
               </div>
             </div>
           ))}
@@ -1904,17 +1908,20 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               {/* Buscador */}
               <div style={{background:"#fff",borderRadius:12,padding:"12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",position:"relative"}}>
-                <input value={prodSearch} onChange={e=>setProdSearch(e.target.value)}
-                  placeholder="Buscar producto por nombre o SKU…"
-                  style={{...inp,paddingLeft:36}}/>
-                <span style={{position:"absolute",left:22,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:16}}>🔍</span>
+                <div style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"0 12px"}}>
+                  <span style={{color:"#94a3b8",flexShrink:0,display:"flex"}}>{Ic.search}</span>
+                  <input value={prodSearch} onChange={e=>setProdSearch(e.target.value)}
+                    placeholder="Buscar producto por nombre o SKU…"
+                    style={{flex:1,border:"none",outline:"none",fontSize:15,padding:"10px 0",background:"transparent",fontFamily:"'DM Sans',sans-serif"}}/>
+                  {prodSearch&&<button onClick={()=>setProdSearch("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:18,padding:0,display:"flex"}}>×</button>}
+                </div>
                 {prodSearch&&(
                   <div style={{marginTop:8,maxHeight:220,overflowY:"auto",borderRadius:10,border:"1px solid #e2e8f0"}}>
                     {filtProd.slice(0,6).map(p=>(
                       <div key={p.id} onMouseDown={e=>{e.preventDefault();selectProductInRow("new",p);}}
                         style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:"1px solid #f8fafc",background:"#fff",cursor:"pointer",active:{background:"#f0f9ff"}}}>
                         {p.foto_url?<img src={p.foto_url} alt="" style={{width:32,height:32,objectFit:"contain",borderRadius:6,background:"#f8fafc"}}/>
-                          :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📦</div>}
+                          :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}></div>}
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:500}}>{p.nombre}</div>
                           <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · Stock: {fmtN(getStockTotal(p))}</div>
@@ -1930,7 +1937,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
               {/* Lista de items agregados */}
               {form.items.length===0&&(
                 <div style={{textAlign:"center",padding:"32px 20px",background:"#fff",borderRadius:14,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-                  <div style={{fontSize:32,marginBottom:8}}>📋</div>
+                  <div style={{width:40,height:40,background:"#f1f5f9",borderRadius:10,margin:"0 auto 12px",display:"flex",alignItems:"center",justifyContent:"center"}}>{Ic.file}</div>
                   <div style={{fontSize:14,color:"#64748b"}}>Busca productos arriba para agregarlos</div>
                 </div>
               )}
@@ -1940,7 +1947,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                   <div key={i} style={{background:"#fff",borderRadius:14,padding:"14px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
                     <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
                       {item.foto_url?<img src={item.foto_url} alt="" style={{width:40,height:40,objectFit:"contain",borderRadius:8,background:"#f8fafc",flexShrink:0}}/>
-                        :<div style={{width:40,height:40,background:"#f1f5f9",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📦</div>}
+                        :<div style={{width:40,height:40,background:"#f1f5f9",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}></div>}
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.nombre}</div>
                         <div style={{fontSize:11,color:"#94a3b8"}}>{item.sku}</div>
@@ -2057,7 +2064,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
           )}
           {wizStep===3&&(
             <Btn onClick={handleSave} style={{flex:2,minHeight:48,fontSize:16,fontWeight:700}}>
-              💾 Guardar cotización
+              Guardar cotización
             </Btn>
           )}
         </div>
@@ -2084,7 +2091,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
               <Btn onClick={()=>{
                 if(!isSaved){toast("Guarda la cotización antes de generar el PDF","warning");return;}
                 generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64);
-              }} variant={isSaved?"dark":"ghost"} size="sm" style={{opacity:isSaved?1:.5}}>📄 PDF</Btn>
+              }} variant={isSaved?"dark":"ghost"} size="sm" style={{opacity:isSaved?1:.5}}>PDF</Btn>
               {!isSaved&&<div style={{position:"absolute",top:"calc(100% + 4px)",right:0,background:"#0f172a",color:"#fff",borderRadius:7,padding:"4px 10px",fontSize:11,whiteSpace:"nowrap",zIndex:10,pointerEvents:"none"}}>Guarda primero</div>}
             </div>
             <Btn onClick={handleSave}>Guardar</Btn>
@@ -2107,18 +2114,22 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                 }} options={empresas} placeholder="Buscar o crear organismo…"/>
                 {form.organismo&&(()=>{
                   const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===form.organismo);
-                  if(!org||typeof org==="string"||(!org.rut&&!org.email)) return null;
-                  return <div style={{marginTop:6,fontSize:12,color:"#64748b",background:"#f8fafc",borderRadius:8,padding:"6px 10px"}}>
-                    {org.rut&&<div>RUT: <strong>{org.rut}</strong></div>}
-                    {org.email&&<div>{org.email}</div>}
-                    {org.telefono&&<div>{org.telefono}</div>}
-                  </div>;
+                  if(!org||typeof org==="string") return null;
+                  const hasData=org.rut||org.email||org.telefono;
+                  if(!hasData) return null;
+                  return (
+                    <div style={{marginTop:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                      {org.rut&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>RUT: <strong>{org.rut}</strong></span>}
+                      {org.email&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>{org.email}</span>}
+                      {org.telefono&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>{org.telefono}</span>}
+                      <button type="button" onClick={()=>{onClose();setTimeout(()=>document.dispatchEvent(new CustomEvent("ir-maestros")),100);}}
+                        style={{fontSize:11,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+                        Editar organismo →
+                      </button>
+                    </div>
+                  );
                 })()}
               </div>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>RUT CLIENTE</label>
-              <input value={form.rut_cliente||""} onChange={e=>set("rut_cliente",formatRut(e.target.value))} placeholder="76.xxx.xxx-x" style={inp}/>
             </div>
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>EJECUTIVO</label>
@@ -2178,7 +2189,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                         <td style={{padding:"8px 10px",width:44}}>
                           {item.foto_url
                             ?<img src={item.foto_url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,display:"block"}}/>
-                            :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}>📦</div>
+                            :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}></div>
                           }
                         </td>
                         {/* Nombre del producto — clic abre buscador para reemplazar */}
@@ -2202,14 +2213,12 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                         </td>
                         {/* Cantidad */}
                         <td style={{padding:"6px 10px",width:80}}>
-                          <input type="number" value={item.cantidad} min={1}
-                            onChange={e=>updateItem(i,"cantidad",Number(e.target.value))}
+                          <MilesInput value={item.cantidad} onChange={v=>updateItem(i,"cantidad",Number(v)||1)}
                             style={{width:60,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center",outline:"none"}}/>
                         </td>
                         {/* Precio */}
                         <td style={{padding:"6px 10px",width:130}}>
-                          <input type="number" value={item.precioVenta}
-                            onChange={e=>updateItem(i,"precioVenta",Number(e.target.value))}
+                          <MilesInput value={Math.round(item.precioVenta||0)} onChange={v=>updateItem(i,"precioVenta",Number(v)||0)}
                             style={{width:110,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
                         </td>
                         {/* Subtotal */}
@@ -2326,7 +2335,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
                 onMouseDown={e=>{e.preventDefault();onSelect(p);}}
                 style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}>
                 <div style={{width:36,height:36,borderRadius:6,background:"#f8fafc",flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {p.foto_url?<img src={p.foto_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:18}}>📦</span>}
+                  {p.foto_url?<img src={p.foto_url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:18}}></span>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
@@ -2425,7 +2434,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
             <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>{["","Producto","Cant.","P. Unit.","Subtotal"].map(h=><th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,color:"#64748b",fontWeight:600}}>{h}</th>)}</tr></thead>
             <tbody>{(c.items||[]).map((item,i)=>(
               <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
-                <td style={{padding:"5px 9px",width:30}}>{item.foto_url?<img src={item.foto_url} alt="" style={{width:22,height:22,objectFit:"cover",borderRadius:4}}/>:<span style={{fontSize:12}}>📦</span>}</td>
+                <td style={{padding:"5px 9px",width:30}}>{item.foto_url?<img src={item.foto_url} alt="" style={{width:22,height:22,objectFit:"cover",borderRadius:4}}/>:<span style={{fontSize:12}}></span>}</td>
                 <td style={{padding:"5px 9px",fontWeight:500}}>{item.nombre}</td>
                 <td style={{padding:"5px 9px"}}>{fmtN(item.cantidad)}</td>
                 <td style={{padding:"5px 9px"}}>{fmt(Math.round(item.precioVenta/1.19))}</td>
@@ -2471,7 +2480,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
           <Btn onClick={onEditar} size="sm">Editar</Btn>
         )}
         <div style={{display:"flex",gap:7}}>
-          <Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">📄 PDF</Btn>
+          <Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">PDF</Btn>
           <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>
         </div>
       </div>
@@ -2871,7 +2880,7 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   {p.foto_url
                     ?<img src={p.foto_url} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,background:"#f8fafc",flexShrink:0}}/>
-                    :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📦</div>
+                    :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}></div>
                   }
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontWeight:600,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
@@ -2901,7 +2910,7 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
                 <div style={{padding:"10px 10px"}}>
                   {p.foto_url
                     ?<img src={p.foto_url} alt="" style={{width:30,height:30,objectFit:"contain",borderRadius:5,display:"block",background:"#f8fafc"}}/>
-                    :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
+                    :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}></div>
                   }
                 </div>
                 <div style={{padding:"10px 12px"}}>
@@ -2955,7 +2964,7 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
                             />
                             <span style={{fontSize:11,color:"#64748b"}}>uds</span>
                             <button onClick={()=>guardarCantidad(p,bi,editando[key])} style={{background:"#1d4ed8",border:"none",borderRadius:6,color:"#fff",padding:"4px 10px",cursor:"pointer",fontSize:12,fontWeight:600}}>✓</button>
-                            <button onClick={()=>setEditando(ed=>{const n={...ed};delete n[key];return n;})} style={{background:"#f1f5f9",border:"none",borderRadius:6,color:"#64748b",padding:"4px 8px",cursor:"pointer",fontSize:12}}>✗</button>
+                            <button onClick={()=>setEditando(ed=>{const n={...ed};delete n[key];return n;})} style={{background:"#f1f5f9",border:"none",borderRadius:6,color:"#64748b",padding:"4px 8px",cursor:"pointer",fontSize:12}}>×</button>
                           </>
                         ) : (
                           <>
@@ -3404,7 +3413,7 @@ function ModalRecepcion({productos,setProductos,setMovimientos,bodegas,perfil,on
         {selProd ? (
           <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9}}>
             {selProd.foto_url?<img src={selProd.foto_url} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,background:"#fff"}}/>
-              :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📦</div>}
+              :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}></div>}
             <div style={{flex:1}}>
               <div style={{fontWeight:600,fontSize:14}}>{selProd.nombre}</div>
               <div style={{fontSize:11,color:"#64748b"}}>{selProd.sku} · Stock actual: {fmtN(getStockTotal(selProd))} uds</div>
@@ -3468,14 +3477,14 @@ function ModalRecepcion({productos,setProductos,setMovimientos,bodegas,perfil,on
 
       {/* Nota futura: código de barras */}
       <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 13px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:16}}>📱</span>
-        <span style={{fontSize:11,color:"#94a3b8"}}>Próximamente: escaneo de código de barras para recepción rápida</span>
+        <span style={{fontSize:16}}></span>
+        <span style={{fontSize:11,color:"#94a3b8"}}>Próximamente: escaneo de código de barras</span>
       </div>
 
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>
         <Btn onClick={confirmar} disabled={!selProd||!cantidad||Number(cantidad)<=0||!selBodega}>
-          ✓ Confirmar recepción
+          Confirmar recepción
         </Btn>
       </div>
     </Modal>
@@ -3604,8 +3613,8 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                   }}>{s.estado}</span>
                   {s.estado==="pendiente"&&(
                     <>
-                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x))} size="xs">✓ Aprobar</Btn>
-                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x))} variant="danger" size="xs">✗ Rechazar</Btn>
+                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x))} size="xs">Aprobar</Btn>
+                      <Btn onClick={()=>setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x))} variant="danger" size="xs">Rechazar</Btn>
                     </>
                   )}
                 </div>
@@ -3687,7 +3696,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
       {confirmDelUser&&(
         <Modal onClose={()=>setConfirmDelUser(null)} maxWidth={360}>
           <div style={{textAlign:"center",padding:"8px 0"}}>
-            <div style={{width:48,height:48,background:"#fee2e2",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:22,color:"#b91c1c",fontWeight:700}}>!</div>
+            <div style={{width:48,height:48,background:"#fee2e2",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",color:"#b91c1c"}}>{Ic.x}</div>
             <h3 style={{fontWeight:700,fontSize:15,marginBottom:8}}>¿Eliminar a "{confirmDelUser.nombre}"?</h3>
             <p style={{color:"#64748b",fontSize:13,marginBottom:20}}>Esta acción no se puede deshacer.</p>
             <div style={{display:"flex",gap:8,justifyContent:"center"}}>
@@ -3904,7 +3913,7 @@ Analiza la licitación y responde SOLO en JSON con esta estructura exacta:
         <div style={{display:"flex",gap:8}}>
           <input type="file" ref={fileRef} accept=".xlsx,.xls" style={{display:"none"}}
             onChange={e=>{if(e.target.files[0])importarExcel(e.target.files[0]);e.target.value="";}}/>
-          <Btn onClick={()=>fileRef.current?.click()} variant="dark">↑ Importar Excel</Btn>
+          <Btn onClick={()=>fileRef.current?.click()} variant="dark">Importar Excel</Btn>
         </div>
       </div>
 
@@ -3928,12 +3937,12 @@ Analiza la licitación y responde SOLO en JSON con esta estructura exacta:
       {/* Empty state */}
       {!oportunidades.length&&(
         <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-          <div style={{fontSize:40,marginBottom:12}}>📋</div>
+          <div style={{width:56,height:56,background:"#f1f5f9",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",color:"#94a3b8"}}>{Ic.file}</div>
           <h3 style={{fontSize:16,fontWeight:700,marginBottom:8}}>Sin oportunidades cargadas</h3>
           <p style={{color:"#64748b",fontSize:13,marginBottom:20,maxWidth:380,margin:"0 auto 20px"}}>
             Descarga el Excel de Compras Ágiles desde Mercado Público y súbelo aquí. El sistema filtrará automáticamente las licitaciones relevantes para tu catálogo.
           </p>
-          <Btn onClick={()=>fileRef.current?.click()}>↑ Importar Excel de Mercado Público</Btn>
+          <Btn onClick={()=>fileRef.current?.click()}>Importar Excel de Mercado Público</Btn>
         </div>
       )}
 
@@ -4069,16 +4078,16 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
                   <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
                     disabled={analizando===op.id}
                     style={{opacity:analizando===op.id?.6:1}}>
-                    {analizando===op.id?"⏳ Analizando…":"🤖 Analizar con IA"}
+                    {analizando===op.id?"Analizando…":"Analizar con IA"}
                   </Btn>
                 )}
                 {ia&&ia.recomendacion!=="descartar"&&ia.productosEncontrados?.length>0&&(
-                  <Btn onClick={()=>onCotizar(op)} size="sm">📋 Generar cotización</Btn>
+                  <Btn onClick={()=>onCotizar(op)} size="sm">Generar cotización</Btn>
                 )}
                 {ia&&(
                   <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
                     disabled={analizando===op.id}>
-                    🔄 Re-analizar
+                    Re-analizar
                   </Btn>
                 )}
                 <Btn onClick={onDescartar} variant="ghost" size="sm">Descartar</Btn>
@@ -4092,7 +4101,7 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
             <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${op.id}`}
               target="_blank" rel="noreferrer"
               style={{fontSize:12,color:"#1d4ed8",padding:"5px 0",textDecoration:"none"}}>
-              Ver en Mercado Público ↗
+              Ver en Mercado Público →
             </a>
           </div>
         </div>

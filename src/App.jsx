@@ -333,6 +333,7 @@ export default function App() {
   const goTab=t=>{setTab(t);setSideOpen(false);};
   const [winW,setWinW]=useState(window.innerWidth);
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
+  useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
   const isMob=winW<768;
 
   // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
@@ -599,7 +600,7 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
     </div>
   );
@@ -1742,13 +1743,19 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
 }
 
 // ── MODAL COTIZACION (Odoo-style) ────────────────────────────
-function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,logoB64,perfil,isSaved=false}) {
+function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,onSave,onClose,logoB64,perfil,isSaved=false}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const {subtotalNeto,iva,total,costoTotal,margenProm}=calcTotalesCot(form.items);
   const [wizStep,setWizStep]=useState(1); // 1=datos, 2=productos, 3=totales
+  // ESC to close
+  useEffect(()=>{
+    const h=e=>{if(e.key==="Escape"){if(form.items.length>0||form.organismo){if(window.confirm("¿Cerrar sin guardar los cambios?"))onClose();}else onClose();}};
+    document.addEventListener("keydown",h);
+    return()=>document.removeEventListener("keydown",h);
+  },[form.items.length,form.organismo,onClose]);
   const [prodSearch,setProdSearch]=useState("");
 
   const addEmptyRow=()=>{ setSearchIdx("new"); };
@@ -1836,7 +1843,29 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
               <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
                 <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>ORGANISMO COMPRADOR</div>
-                <Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…"/>
+                <div style={{position:"relative"}}>
+                <Combobox value={form.organismo||""} onChange={v=>{
+                  set("organismo",v);
+                  // Auto-fill RUT from empresasData
+                  const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===v);
+                  if(org?.rut) set("rut_cliente",org.rut);
+                }} options={empresas} placeholder="Buscar o crear organismo…"/>
+                {form.organismo&&(()=>{
+                  const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===form.organismo);
+                  if(!org||typeof org==="string") return null;
+                  return (
+                    <div style={{marginTop:4,display:"flex",alignItems:"center",gap:8,fontSize:11,color:"#64748b"}}>
+                      {org.rut&&<span>RUT: <strong>{org.rut}</strong></span>}
+                      {org.email&&<span>· {org.email}</span>}
+                      {org.telefono&&<span>· {org.telefono}</span>}
+                      <button type="button" onClick={()=>{window._maestrosReturn=true;onClose();setTimeout(()=>{document.dispatchEvent(new CustomEvent("ir-maestros"))},100);}}
+                        style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:11,padding:0,textDecoration:"underline"}}>
+                        Ver datos completos
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
               </div>
               <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
                 <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12,letterSpacing:".05em"}}>INFORMACIÓN</div>
@@ -2070,7 +2099,22 @@ function ModalCotizacion({cotizacion,productos,empresas,config,onSave,onClose,lo
           <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"1fr 1fr",gap:"10px 16px",marginBottom:16}}>
             <div style={{gridColumn:"1/-1"}}>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORGANISMO COMPRADOR *</label>
-              <Combobox value={form.organismo||""} onChange={v=>set("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…"/>
+              <div>
+                <Combobox value={form.organismo||""} onChange={v=>{
+                  set("organismo",v);
+                  const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===v);
+                  if(org?.rut) set("rut_cliente",org.rut);
+                }} options={empresas} placeholder="Buscar o crear organismo…"/>
+                {form.organismo&&(()=>{
+                  const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===form.organismo);
+                  if(!org||typeof org==="string"||(!org.rut&&!org.email)) return null;
+                  return <div style={{marginTop:6,fontSize:12,color:"#64748b",background:"#f8fafc",borderRadius:8,padding:"6px 10px"}}>
+                    {org.rut&&<div>RUT: <strong>{org.rut}</strong></div>}
+                    {org.email&&<div>{org.email}</div>}
+                    {org.telefono&&<div>{org.telefono}</div>}
+                  </div>;
+                })()}
+              </div>
             </div>
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>RUT CLIENTE</label>

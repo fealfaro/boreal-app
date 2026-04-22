@@ -3763,25 +3763,39 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 
 // ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
 function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot}) {
-  const [subTab,setSubTab]=useState("lista");
   const [filtro,setFiltro]=useState("nueva");
   const [busqueda,setBusqueda]=useState("");
-  const [analizando,setAnalizando]=useState(null); // id de oportunidad siendo analizada
+  const [analizando,setAnalizando]=useState(null);
   const [expandida,setExpandida]=useState(null);
+  const [pagina,setPagina]=useState(1);
+  const POR_PAGINA=25;
   const fileRef=useRef();
+  const isMob=window.innerWidth<768;
 
-  // ── PALABRAS CLAVE ────────────────────────────────────────
-  // Combina productos del catálogo + palabras definidas en config
+  // ── Auto-archivar cerradas ────────────────────────────────
+  useEffect(()=>{
+    const hoy=new Date(); hoy.setHours(0,0,0,0);
+    const toArchivar=oportunidades.filter(o=>{
+      if(o.estado==="descartada") return false;
+      if(!o.fechaCierre) return false;
+      const parts=o.fechaCierre.split(" ")[0]; // "21/04/2026 10:00" → "21/04/2026"
+      const [d,m,y]=parts.split("/");
+      if(!d||!m||!y) return false;
+      const fecha=new Date(y,m-1,d);
+      return fecha<hoy;
+    });
+    if(toArchivar.length>0){
+      setOportunidades(prev=>prev.map(o=>toArchivar.find(a=>a.id===o.id)?{...o,estado:"descartada"}:o));
+    }
+  },[]);
+
+  // ── Palabras clave ─────────────────────────────────────────
   const kwConfig=(config.palabrasClave||"").split("\n").map(s=>s.trim().toLowerCase()).filter(Boolean);
-  const kwProductos=productos.map(p=>p.nombre.toLowerCase().split(" ")).flat().filter(w=>w.length>4);
+  const kwProductos=productos.map(p=>p.nombre.toLowerCase().split(" ")).flat().filter(w=>w.length>3);
   const todasKW=[...new Set([...kwConfig,...kwProductos])];
+  const matchKW=(nombre)=>{const n=nombre.toLowerCase();return todasKW.filter(kw=>n.includes(kw));};
 
-  const matchKW=(nombre)=>{
-    const n=nombre.toLowerCase();
-    return todasKW.filter(kw=>n.includes(kw));
-  };
-
-  // ── IMPORTAR EXCEL ────────────────────────────────────────
+  // ── Importar Excel ─────────────────────────────────────────
   const importarExcel=async(file)=>{
     try {
       const XLSX=window.XLSX;
@@ -3790,192 +3804,201 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       const wb=XLSX.read(buf,{type:"array"});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{raw:false});
+      const hoy=new Date(); hoy.setHours(0,0,0,0);
 
-      const nuevas=rows.map(r=>({
-        id: r["ID"]||uid(),
-        nombre: r["Nombre"]||"",
-        institucion: r["Institución"]||"",
-        unidadCompra: r["Unidad de compra"]||"",
-        fechaPublicacion: r["Fecha de publicación"]||"",
-        fechaCierre: r["Fecha de cierre"]||"",
-        presupuesto: parseFloat(String(r["Presupuesto estimado"]||"0").replace(/[^0-9.]/g,""))||0,
-        estadoConvocatoria: r["Estado de Convocatoria"]||"",
-        cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
-        estado: "nueva",       // nueva | descartada | analizada | cotizada
-        matches: [],           // palabras clave encontradas
-        analisisIA: null,      // resultado del análisis IA
-        cotizacionId: null,    // si se generó cotización
-        importadaEn: nowISO(),
-      })).filter(o=>o.nombre);
+      const nuevas=rows.map(r=>{
+        const fechaCierre=r["Fecha de cierre"]||"";
+        // Auto-archivar si ya cerró
+        let estado="nueva";
+        if(fechaCierre){
+          const parts=fechaCierre.split(" ")[0];
+          const [d,m,y]=parts.split("/");
+          if(d&&m&&y&&new Date(y,m-1,d)<hoy) estado="descartada";
+        }
+        return {
+          id: r["ID"]||uid(),
+          nombre: r["Nombre"]||"",
+          institucion: r["Institución"]||"",
+          unidadCompra: r["Unidad de compra"]||"",
+          fechaPublicacion: r["Fecha de publicación"]||"",
+          fechaCierre,
+          presupuesto: parseFloat(String(r["Presupuesto estimado"]||"0").replace(/[^0-9.]/g,""))||0,
+          estadoConvocatoria: r["Estado de Convocatoria"]||"",
+          cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
+          estado,
+          matches:[],analisisIA:null,cotizacionId:null,
+          importadaEn:nowISO(),
+        };
+      }).filter(o=>o.nombre);
 
-      // Marcar matches de palabras clave
-      const conMatches=nuevas.map(o=>({...o, matches:matchKW(o.nombre)}));
-
-      // Deduplicar por ID
+      const conMatches=nuevas.map(o=>({...o,matches:matchKW(o.nombre)}));
       setOportunidades(prev=>{
         const existingIds=new Set(prev.map(o=>o.id));
         const novas=conMatches.filter(o=>!existingIds.has(o.id));
-        toast(`${novas.length} nuevas oportunidades importadas (${conMatches.length-novas.length} ya existían)`);
+        const activas=novas.filter(o=>o.estado!=="descartada");
+        const archivadas=novas.filter(o=>o.estado==="descartada");
+        toast(`${activas.length} nuevas · ${archivadas.length} archivadas automáticamente · ${conMatches.length-novas.length} ya existían`);
+        // Save to DB
+        if(novas.length>0) {
+          import("./supabase.js").then(({supabase})=>{
+            if(supabase) supabase.from("oportunidades").upsert(novas.map(o=>({
+              id:o.id,nombre:o.nombre,institucion:o.institucion,
+              unidad_compra:o.unidadCompra,fecha_publicacion:o.fechaPublicacion,
+              fecha_cierre:o.fechaCierre,presupuesto:o.presupuesto,
+              estado_convocatoria:o.estadoConvocatoria,
+              cotizaciones_enviadas:o.cotizacionesEnviadas,
+              estado:o.estado,matches:o.matches||[],
+            }))).then(({error})=>{if(error)console.error("Error guardando oportunidades:",error);});
+          });
+        }
         return [...novas,...prev];
       });
-    } catch(e) {
-      console.error(e);
-      toast("Error al leer el Excel. Verifica el formato.","danger");
-    }
+      setPagina(1);
+      setFiltro("nueva");
+    } catch(e){console.error(e);toast("Error al leer el Excel","danger");}
   };
 
-  // ── ANÁLISIS IA ────────────────────────────────────────────
+  // ── Limpiar archivadas ──────────────────────────────────────
+  const limpiarArchivadas=()=>{
+    const n=oportunidades.filter(o=>o.estado==="descartada").length;
+    setOportunidades(prev=>prev.filter(o=>o.estado!=="descartada"));
+    toast(`${n} oportunidades archivadas eliminadas`);
+  };
+
+  // ── Análisis IA vía Worker (scraping MP + Claude) ───────────
+  const WORKER_URL="https://boreal-api-proxy.borealgroupsolutions.workers.dev";
   const analizarConIA=async(op)=>{
     setAnalizando(op.id);
+    toast(`Analizando ${op.id}… esto puede tomar unos segundos`);
     try {
       const catalogoResumen=productos.map(p=>
         `- ${p.nombre} (SKU:${p.sku}, precio:${fmt(calcPrecioVenta(p.costo,p.margen))}, stock:${getStockTotal(p)} uds)`
       ).join("\n");
 
-      const prompt=`Eres un asistente de ventas para una empresa de suministros de limpieza en Chile.
-
-LICITACIÓN DE MERCADO PÚBLICO:
-- ID: ${op.id}
-- Nombre: "${op.nombre}"
-- Institución: ${op.institucion}
-- Presupuesto estimado: ${fmt(op.presupuesto)} CLP
-- Cierre: ${op.fechaCierre}
-
-CATÁLOGO DISPONIBLE:
-${catalogoResumen}
-
-INSTRUCCIONES:
-Analiza la licitación y responde SOLO en JSON con esta estructura exacta:
-{
-  "relevante": true/false,
-  "razon": "explicación breve de por qué es o no relevante",
-  "productosEncontrados": [
-    {"sku": "ASE-001", "nombre": "...", "cantidadEstimada": 10, "confianza": "alta/media/baja"}
-  ],
-  "productosNuevos": [
-    {"nombre": "...", "descripcion": "...", "cantidadEstimada": 5}
-  ],
-  "resumen": "qué piden en 1-2 oraciones",
-  "recomendacion": "cotizar/descartar/revisar"
-}`;
-
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:1000,
-          messages:[{role:"user",content:prompt}]
-        })
-      });
+      const params=new URLSearchParams({id:op.id,catalogo:catalogoResumen});
+      const resp=await fetch(`${WORKER_URL}/mp?${params}`);
       const data=await resp.json();
-      const txt=data.content?.[0]?.text||"{}";
-      const clean=txt.replace(/```json|```/g,"").trim();
-      const analisis=JSON.parse(clean);
 
-      setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
-      toast("Análisis completado");
-    } catch(e) {
-      console.error(e);
-      toast("Error en análisis IA","danger");
-    }
+      if(!data.ok){
+        // Fallback: analizar solo con nombre si MP falla
+        console.warn("MP scraping failed, using name only:",data.error);
+        const fallbackResp=await fetch(`${WORKER_URL}/anthropic`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            model:"claude-sonnet-4-20250514",max_tokens:1000,
+            messages:[{role:"user",content:`Eres asistente de ventas de limpieza en Chile.
+LICITACIÓN: ID:${op.id} Nombre:"${op.nombre}" Institución:${op.institucion} Presupuesto:${fmt(op.presupuesto)} Cierre:${op.fechaCierre}
+CATÁLOGO:\n${catalogoResumen}
+Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sku":"...","nombre":"...","cantidadEstimada":1,"confianza":"alta/media/baja"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":1}],"resumen":"...","recomendacion":"cotizar/descartar/revisar"}`}]
+          })
+        });
+        const fd=await fallbackResp.json();
+        const ftxt=fd.content?.[0]?.text||"{}";
+        const analisis=JSON.parse(ftxt.replace(/```json|```/g,"").trim());
+        analisis._source="nombre";
+        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
+        toast("Análisis completado (sin detalle de MP)","warning");
+      } else {
+        const analisis=data.analisis;
+        analisis._source="web";
+        // Map productosEnCatalogo → productosEncontrados for compatibility
+        if(analisis.productosEnCatalogo&&!analisis.productosEncontrados)
+          analisis.productosEncontrados=analisis.productosEnCatalogo;
+        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
+        toast("Análisis completado con detalle de Mercado Público");
+      }
+    } catch(e){console.error(e);toast("Error en análisis IA","danger");}
     setAnalizando(null);
   };
 
-  // ── GENERAR COTIZACIÓN ─────────────────────────────────────
+  // ── Generar cotización ──────────────────────────────────────
   const generarCotizacion=async(op)=>{
     const {analisisIA}=op;
-    if(!analisisIA?.productosEncontrados?.length){
-      toast("No hay productos identificados para cotizar","warning");
-      return;
-    }
-    // Armar items con productos del catálogo
+    if(!analisisIA?.productosEncontrados?.length){toast("No hay productos identificados","warning");return;}
     const items=analisisIA.productosEncontrados.map(pi=>{
       const prod=productos.find(p=>p.sku===pi.sku||p.nombre.toLowerCase()===pi.nombre.toLowerCase());
       if(!prod) return null;
       const pv=calcPrecioVenta(prod.costo,prod.margen);
-      return {
-        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
-        costo:prod.costo,precioVenta:pv,
-        cantidad:pi.cantidadEstimada||1,
-        foto_url:prod.foto_url||"",proveedor:prod.proveedor||""
-      };
+      return{productoId:prod.id,nombre:prod.nombre,sku:prod.sku,costo:prod.costo,precioVenta:pv,cantidad:pi.cantidadEstimada||1,foto_url:prod.foto_url||"",proveedor:prod.proveedor||""};
     }).filter(Boolean);
-
-    // Registrar organismo si no existe
     const instNorm=op.institucion.trim();
-    if(instNorm&&!empresas.includes(instNorm)){
-      setEmpresas(prev=>[...prev,instNorm]);
-    }
-
-    // Crear cotización en estado Para revisar
-    const cot={
-      id:uid(),numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
+    if(instNorm&&!empresas.includes(instNorm)) setEmpresas(prev=>[...prev,instNorm]);
+    const cot={id:uid(),numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
       organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
       ejecutivo:perfil?.nombre||"",estado:"Para revisar",
-      fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]||"",
-      items,notas:`Generada automáticamente desde licitación Mercado Público.\nID: ${op.id}\nPresupuesto estimado: ${fmt(op.presupuesto)}`,
-      creadaEn:nowISO(),origenMP:true,
-    };
-    const {total,costoTotal,margenProm}=calcTotalesCot(items);
-    cot.total=total; cot.costoTotal=costoTotal; cot.margenProm=margenProm;
-
+      fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]?.split("/").reverse().join("-")||"",
+      items,notas:`Generada desde licitación MP\nID: ${op.id}\nPresupuesto: ${fmt(op.presupuesto)}`,
+      creadaEn:nowISO(),origenMP:true};
+    const{total,costoTotal,margenProm}=calcTotalesCot(items);
+    cot.total=total;cot.costoTotal=costoTotal;cot.margenProm=margenProm;
     setCots(prev=>[cot,...prev]);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
-    toast(`Cotización ${cot.numero} creada → Para revisar`);
-
-    // Sugerir productos nuevos si hay
-    if(analisisIA.productosNuevos?.length){
-      toast(`${analisisIA.productosNuevos.length} producto(s) nuevo(s) sugerido(s) para revisar`,"warning");
-    }
+    toast(`Cotización ${cot.numero} creada`);
   };
 
-  // ── FILTROS ────────────────────────────────────────────────
+  // ── Filtros y paginación ───────────────────────────────────
   const filtradas=oportunidades.filter(o=>{
-    if(filtro!=="todas"&&o.estado!==filtro) return false;
+    if(filtro!=="todas"&&filtro!=="archivadas"&&o.estado!==filtro) return false;
+    if(filtro==="archivadas"&&o.estado!=="descartada") return false;
     if(busqueda&&!o.nombre.toLowerCase().includes(busqueda.toLowerCase())&&
-       !o.institucion.toLowerCase().includes(busqueda.toLowerCase())) return false;
+       !o.institucion.toLowerCase().includes(busqueda.toLowerCase())&&
+       !o.id.toLowerCase().includes(busqueda.toLowerCase())) return false;
     return true;
   });
 
   const conMatches=filtradas.filter(o=>o.matches?.length>0);
   const sinMatches=filtradas.filter(o=>!o.matches?.length);
+  const todasOrdenadas=[...conMatches,...sinMatches];
+  const totalPags=Math.ceil(todasOrdenadas.length/POR_PAGINA);
+  const paginadas=todasOrdenadas.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
+
+  const STATS=[
+    {label:"Importadas",val:oportunidades.filter(o=>o.estado!=="descartada").length,color:"#e2e8f0",text:"#475569",filtro:"todas"},
+    {label:"Con coincidencias",val:oportunidades.filter(o=>o.matches?.length&&o.estado!=="descartada").length,color:"#dbeafe",text:"#1d4ed8",filtro:"nueva"},
+    {label:"Analizadas",val:oportunidades.filter(o=>o.analisisIA&&o.estado!=="descartada").length,color:"#fef9c3",text:"#854d0e",filtro:"analizada"},
+    {label:"Cotizadas",val:oportunidades.filter(o=>o.estado==="cotizada").length,color:"#dcfce7",text:"#15803d",filtro:"cotizada"},
+    {label:"Archivadas",val:oportunidades.filter(o=>o.estado==="descartada").length,color:"#f1f5f9",text:"#94a3b8",filtro:"archivadas"},
+  ];
 
   const ESTADOS_OP_COLORS={
     nueva:{bg:"#eff6ff",text:"#1d4ed8",label:"Nueva"},
     analizada:{bg:"#fef9c3",text:"#854d0e",label:"Analizada"},
     cotizada:{bg:"#dcfce7",text:"#15803d",label:"Cotizada"},
-    descartada:{bg:"#f1f5f9",text:"#94a3b8",label:"Descartada"},
+    descartada:{bg:"#f1f5f9",text:"#94a3b8",label:"Archivada"},
   };
 
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,flexWrap:"wrap",gap:10}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:10}}>
         <div>
           <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Oportunidades</h1>
           <p style={{color:"#64748b",fontSize:13,margin:0}}>
-            Licitaciones de Mercado Público · {oportunidades.filter(o=>o.matches?.length).length} con coincidencias · {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar
+            {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar · {oportunidades.filter(o=>o.estado==="descartada").length} archivadas
           </p>
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {oportunidades.filter(o=>o.estado==="descartada").length>0&&(
+            <Btn onClick={limpiarArchivadas} variant="ghost" size="sm">Limpiar archivadas ({oportunidades.filter(o=>o.estado==="descartada").length})</Btn>
+          )}
           <input type="file" ref={fileRef} accept=".xlsx,.xls" style={{display:"none"}}
             onChange={e=>{if(e.target.files[0])importarExcel(e.target.files[0]);e.target.value="";}}/>
-          <Btn onClick={()=>fileRef.current?.click()} variant="dark">Importar Excel</Btn>
+          <Btn onClick={()=>fileRef.current?.click()} variant="dark" size="sm">Importar Excel</Btn>
         </div>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats clickeables */}
       {oportunidades.length>0&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginBottom:16}}>
-          {[
-            {label:"Importadas",val:oportunidades.length,color:"#e2e8f0",text:"#475569"},
-            {label:"Con coincidencias",val:oportunidades.filter(o=>o.matches?.length).length,color:"#dbeafe",text:"#1d4ed8"},
-            {label:"Analizadas con IA",val:oportunidades.filter(o=>o.analisisIA).length,color:"#fef9c3",text:"#854d0e"},
-            {label:"Cotizadas",val:oportunidades.filter(o=>o.estado==="cotizada").length,color:"#dcfce7",text:"#15803d"},
-          ].map(s=>(
-            <div key={s.label} style={{background:"#fff",borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderTop:`3px solid ${s.color}`}}>
-              <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>{s.label}</div>
-              <div style={{fontSize:20,fontWeight:800,color:s.text}}>{s.val}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:8,marginBottom:14}}>
+          {STATS.map(s=>(
+            <div key={s.label} onClick={()=>{setFiltro(s.filtro);setPagina(1);}} style={{
+              background:"#fff",borderRadius:10,padding:"10px 12px",
+              boxShadow:filtro===s.filtro?"0 0 0 2px #1d4ed8":"0 1px 3px rgba(0,0,0,.06)",
+              borderTop:`3px solid ${s.color}`,cursor:"pointer",transition:"all .15s"
+            }}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>{s.label}</div>
+              <div style={{fontSize:18,fontWeight:800,color:s.text}}>{s.val}</div>
             </div>
           ))}
         </div>
@@ -3986,94 +4009,123 @@ Analiza la licitación y responde SOLO en JSON con esta estructura exacta:
         <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
           <div style={{width:56,height:56,background:"#f1f5f9",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",color:"#94a3b8"}}>{Ic.file}</div>
           <h3 style={{fontSize:16,fontWeight:700,marginBottom:8}}>Sin oportunidades cargadas</h3>
-          <p style={{color:"#64748b",fontSize:13,marginBottom:20,maxWidth:380,margin:"0 auto 20px"}}>
-            Descarga el Excel de Compras Ágiles desde Mercado Público y súbelo aquí. El sistema filtrará automáticamente las licitaciones relevantes para tu catálogo.
+          <p style={{color:"#64748b",fontSize:13,marginBottom:20,maxWidth:360,margin:"0 auto 20px"}}>
+            Descarga el Excel de Compras Ágiles desde mercadopublico.cl y súbelo aquí.
           </p>
           <Btn onClick={()=>fileRef.current?.click()}>Importar Excel de Mercado Público</Btn>
         </div>
       )}
 
-      {/* Filters */}
+      {/* Palabras clave visibles */}
+      {oportunidades.length>0&&todasKW.length>0&&(
+        <div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"#94a3b8",fontWeight:600}}>FILTROS ACTIVOS:</span>
+          {todasKW.slice(0,10).map(kw=>(
+            <span key={kw} style={{fontSize:11,background:"#eff6ff",color:"#1d4ed8",padding:"2px 8px",borderRadius:20,border:"1px solid #bfdbfe"}}>{kw}</span>
+          ))}
+          {todasKW.length>10&&<span style={{fontSize:11,color:"#94a3b8"}}>+{todasKW.length-10} más en Configuración</span>}
+        </div>
+      )}
+
+      {/* Búsqueda */}
       {oportunidades.length>0&&(
-        <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
-          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o institución…"
-            style={{flex:1,minWidth:200,padding:"8px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
-          <div style={{display:"flex",gap:4}}>
-            {[["todas","Todas"],["nueva","Nuevas"],["analizada","Analizadas"],["cotizada","Cotizadas"],["descartada","Descartadas"]].map(([v,l])=>(
-              <button key={v} onClick={()=>setFiltro(v)} style={{
-                padding:"7px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:filtro===v?600:400,
-                background:filtro===v?"#1d4ed8":"#f1f5f9",color:filtro===v?"#fff":"#475569",whiteSpace:"nowrap"
-              }}>{l} {v!=="todas"&&`(${oportunidades.filter(o=>o.estado===v).length})`}</button>
+        <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:200,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 12px"}}>
+            <span style={{color:"#94a3b8",flexShrink:0,display:"flex"}}>{Ic.search}</span>
+            <input value={busqueda} onChange={e=>{setBusqueda(e.target.value);setPagina(1);}}
+              placeholder="Buscar por nombre, ID o institución…"
+              style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"8px 0",background:"transparent"}}/>
+          </div>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+            {[["nueva","Nuevas"],["analizada","Analizadas"],["cotizada","Cotizadas"],["todas","Todas"],["archivadas","Archivadas"]].map(([v,l])=>(
+              <button key={v} onClick={()=>{setFiltro(v);setPagina(1);}} style={{
+                padding:"6px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,
+                fontWeight:filtro===v?600:400,background:filtro===v?"#1d4ed8":"#f1f5f9",
+                color:filtro===v?"#fff":"#475569",whiteSpace:"nowrap"
+              }}>{l}</button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Oportunidades con coincidencias primero */}
-      {filtradas.length>0&&(
-        <div>
-          {conMatches.length>0&&(
-            <div style={{marginBottom:12}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#1d4ed8",marginBottom:8,letterSpacing:".05em"}}>
-                ✓ COINCIDENCIAS CON TU CATÁLOGO ({conMatches.length})
-              </div>
-              {conMatches.map(op=><OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
-                analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
-                onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
-                ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>)}
-            </div>
-          )}
-          {sinMatches.length>0&&(
-            <div>
-              <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:8,letterSpacing:".05em"}}>
-                SIN COINCIDENCIAS DIRECTAS ({sinMatches.length})
-              </div>
-              {sinMatches.map(op=><OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
-                analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
-                onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
-                ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>)}
-            </div>
-          )}
+      {/* Lista */}
+      {paginadas.map(op=>(
+        <OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
+          analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
+          onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
+          ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>
+      ))}
+
+      {/* Paginación */}
+      {totalPags>1&&(
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginTop:16,paddingTop:16,borderTop:"1px solid #f1f5f9"}}>
+          <Btn onClick={()=>setPagina(p=>Math.max(1,p-1))} disabled={pagina===1} variant="ghost" size="sm">← Anterior</Btn>
+          <span style={{fontSize:13,color:"#64748b"}}>
+            Pág. {pagina} de {totalPags} · {todasOrdenadas.length} resultados
+          </span>
+          <Btn onClick={()=>setPagina(p=>Math.min(totalPags,p+1))} disabled={pagina===totalPags} variant="ghost" size="sm">Siguiente →</Btn>
         </div>
-      )}
-      {oportunidades.length>0&&filtradas.length===0&&(
-        <div style={{background:"#fff",borderRadius:12,padding:28,textAlign:"center",color:"#94a3b8"}}>Sin resultados para este filtro</div>
       )}
     </div>
   );
 }
 
-// ── TARJETA DE OPORTUNIDAD ────────────────────────────────────
 function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDescartar,ESTADOS_OP_COLORS,productos}) {
   const isExp=expandida===op.id;
   const ec=ESTADOS_OP_COLORS[op.estado]||ESTADOS_OP_COLORS.nueva;
   const ia=op.analisisIA;
-  const diasCierre=op.fechaCierre?Math.ceil((new Date(op.fechaCierre.split(" ")[0].split("/").reverse().join("-"))-new Date())/(1000*60*60*24)):null;
+  const [copied,setCopied]=useState(false);
+
+  // Parse fecha cierre - format: "21/04/2026 10:00"
+  const parseFechaCierre=(str)=>{
+    if(!str) return null;
+    const [fecha,hora]=str.split(" ");
+    if(!fecha) return null;
+    const [d,m,y]=fecha.split("/");
+    if(!d||!m||!y) return null;
+    return {date:new Date(y,m-1,d),hora:hora||"",label:fecha,full:str};
+  };
+  const cierre=parseFechaCierre(op.fechaCierre);
+  const diasCierre=cierre?Math.ceil((cierre.date-new Date())/(1000*60*60*24)):null;
+
+  const copyId=e=>{
+    e.stopPropagation();
+    navigator.clipboard.writeText(op.id).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500);});
+  };
 
   return (
-    <div style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.06)",border:op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",overflow:"hidden"}}>
+    <div style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.06)",border:op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",overflow:"hidden",opacity:op.estado==="descartada"?.6:1}}>
       {/* Header */}
       <div style={{padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}
         onClick={()=>setExpandida(isExp?null:op.id)}>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-            <span style={{fontSize:10,fontFamily:"'DM Mono',monospace",color:"#94a3b8"}}>{op.id}</span>
-            <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:ec.bg,color:ec.text}}>{ec.label}</span>
+          {/* ID + estado + keywords */}
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
+            <button onClick={copyId} style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:copied?"#15803d":"#94a3b8",background:copied?"#dcfce7":"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"1px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+              {op.id} {copied?"✓":Ic.copy}
+            </button>
+            <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ec.bg,color:ec.text}}>{ec.label}</span>
+            {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20}}>{op.cotizacionesEnviadas} cot. enviadas</span>}
             {op.matches?.length>0&&op.matches.slice(0,3).map(kw=>(
-              <span key={kw} style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8",fontWeight:500}}>"{kw}"</span>
+              <span key={kw} style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8",fontWeight:500}}>{kw}</span>
             ))}
           </div>
-          <div style={{fontSize:14,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
-          <div style={{fontSize:11,color:"#64748b"}}>{op.institucion}</div>
+          {/* Nombre */}
+          <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
+          {/* Institución + cierre */}
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:"#64748b"}}>{op.institucion}</span>
+            {cierre&&(
+              <span style={{fontSize:10,color:diasCierre!==null&&diasCierre<=1?"#b91c1c":diasCierre!==null&&diasCierre<=3?"#854d0e":"#94a3b8",fontWeight:diasCierre!==null&&diasCierre<=3?700:400}}>
+                · Cierra {cierre.label}{cierre.hora?` ${cierre.hora}`:""}
+                {diasCierre!==null&&` (${diasCierre<=0?"hoy":diasCierre===1?"mañana":`${diasCierre}d`})`}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{textAlign:"right",flexShrink:0}}>
           <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(op.presupuesto)}</div>
-          {diasCierre!==null&&(
-            <div style={{fontSize:10,color:diasCierre<=1?"#b91c1c":diasCierre<=3?"#854d0e":"#64748b",fontWeight:diasCierre<=3?700:400,marginTop:2}}>
-              {diasCierre<=0?"Vence hoy":diasCierre===1?"Cierra mañana":`${diasCierre}d para cierre`}
-            </div>
-          )}
+          <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{op.estadoConvocatoria}</div>
         </div>
       </div>
 
@@ -4145,7 +4197,7 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
                 ✓ Cotización generada → Para revisar
               </span>
             )}
-            <a href={`https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=${op.id}`}
+            <a href={`https://compra-agil.mercadopublico.cl/resumen-cotizacion/${op.id}`}
               target="_blank" rel="noreferrer"
               style={{fontSize:12,color:"#1d4ed8",padding:"5px 0",textDecoration:"none"}}>
               Ver en Mercado Público →

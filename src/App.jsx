@@ -607,7 +607,7 @@ export default function App() {
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos} dbOrg={dbOrganismos} dbProv={dbProveedores}/>}
-        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres}/>}
+        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres} setDetalleCot={setDetalleCot} setTab={setTab}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -3768,7 +3768,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 }
 
 // ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
-function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot,guardarProductoDB,guardarCotDB,empresasNombres=[]}){
+function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot,guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab}){
   const [filtro,setFiltro]=useState("nueva");
   const [busqueda,setBusqueda]=useState("");
   const [analizando,setAnalizando]=useState(null); // id siendo analizado ahora
@@ -3781,6 +3781,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const fileRef=useRef();
   const isMob=window.innerWidth<768;
   const colaRef=useRef([]);
+  const detenerColaRef=useRef(false);
 
   // ── Auto-archivar cerradas ────────────────────────────────
   useEffect(()=>{
@@ -3871,9 +3872,11 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   // ── Procesador de cola ────────────────────────────────────
   const procesarCola=useCallback(async(ids,todosOps)=>{
     if(!ids||ids.length===0) return;
+    detenerColaRef.current=false;
     const total=ids.length;
     let completados=0;
     for(const id of ids){
+      if(detenerColaRef.current){toast("Cola detenida — "+completados+" analizadas","warning");break;}
       const op=todosOps.find(o=>o.id===id);
       if(!op||op.analisisIA) { completados++; continue; }
       setAnalizando(id);
@@ -4004,11 +4007,8 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       );
       if(yaExiste){productosCreados.push(yaExiste);continue;}
 
-      // Estimar costo por item si tenemos presupuesto
-      const totalItems=(enCatalogo.length+nuevosIA.length)||1;
-      const costoEstimado=op.presupuesto>0
-        ? Math.round((op.presupuesto/1.19)/totalItems*0.65) // descontar IVA y margen ~35%
-        : 0;
+      // Costo 0 — el usuario debe completarlo en Productos
+      const costoEstimado=0;
 
       const det=detectados.find(d=>d.nombre.toLowerCase().includes(pNuevo.nombre.toLowerCase().split(" ")[0]));
       const nuevo={
@@ -4130,8 +4130,9 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
     guardarCotDB(cotClean);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cotClean.id}:o));
 
-    // Abrir la cotización recién creada
-    setDetalleCot(cotClean);
+    // Navegar a cotizaciones y abrir el detalle
+    if(setDetalleCot) setDetalleCot(cotClean);
+    if(setTab) setTab("cotizaciones");
 
     const msg=productosCreados.length>0
       ? "Cotización "+numCot+" creada con "+productosCreados.length+" producto(s) nuevo(s) — abierta para revisar"
@@ -4259,6 +4260,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
             </span>}
           </div>
           <span style={{fontSize:11,color:"#64748b"}}>{cola.filter((id,i)=>i<cola.indexOf(analizando)).length} completadas</span>
+          <button onClick={()=>{detenerColaRef.current=true;}} style={{marginLeft:8,fontSize:11,color:"#b91c1c",background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:6,padding:"2px 10px",cursor:"pointer",fontWeight:600}}>Detener</button>
         </div>
       )}
 

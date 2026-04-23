@@ -101,7 +101,7 @@ export const toDbProducto = (p) => ({
   stock:            p.stock,
   stock_por_bodega: p.stockPorBodega||[],
   historial_costos: p.historialCostos||[],
-  activo:           p.activo!==false,
+  activo:           p.activo===true||p.activo===undefined?true:false,
   updated_at:       new Date().toISOString(),
 });
 

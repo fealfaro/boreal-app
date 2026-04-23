@@ -4023,9 +4023,10 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         _nota:"Creado desde oportunidad MP "+op.id+" — completar precio y proveedor",
       };
       productosActuales.push(nuevo);
-      setProductos(prev=>[...prev,nuevo]);
-      guardarProductoDB(nuevo);
-      productosCreados.push(nuevo);
+      const {_nota,...nuevoClean}=nuevo;
+      setProductos(prev=>[...prev,nuevoClean]);
+      guardarProductoDB(nuevoClean);
+      productosCreados.push(nuevoClean);
     }
 
     // 2. Construir items de cotización
@@ -4092,9 +4093,11 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
     const tots=calcTotalesCot(items);
     cot.total=tots.total;cot.costoTotal=tots.costoTotal;cot.margenProm=tots.margenProm;
 
-    setCots(prev=>[cot,...prev]);
-    guardarCotDB(cot);
-    setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
+    // Clean internal fields before saving
+    const cotClean={...cot,items:items.map(({_pendiente,_nota,...rest})=>rest)};
+    setCots(prev=>[cotClean,...prev]);
+    guardarCotDB(cotClean);
+    setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cotClean.id}:o));
 
     const msg=productosCreados.length>0
       ? `Cotización ${numCot} creada. ${productosCreados.length} producto(s) nuevo(s) como inactivos — completa precio en Productos.`
@@ -4367,8 +4370,9 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
   const [copied, setCopied] = useState(false);
   // overrides[i] = productoId seleccionado por el usuario para la fila i (null = crear nuevo)
   const [overrides, setOverrides] = useState({});
-  const [buscandoFila, setBuscandoFila] = useState(null); // índice de fila con buscador abierto
+  const [buscandoFila, setBuscandoFila] = useState(null);
   const [busqFila, setBusqFila] = useState("");
+  const [dropdownPos, setDropdownPos] = useState({top:0,left:0,width:0});
 
   const parseFechaCierre = (str) => {
     if (!str) return null;
@@ -4556,7 +4560,7 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                                     placeholder="Buscar producto…"
                                     onBlur={()=>setTimeout(()=>{setBuscandoFila(null);setBusqFila("");},250)}
                                     style={{width:"100%",fontSize:13,padding:"6px 10px",borderRadius:6,border:"1px solid #1d4ed8",outline:"none",boxSizing:"border-box"}}/>
-                                  <div style={{position:"fixed",left:"auto",width:320,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:280,overflowY:"auto",marginTop:2}}>
+                                  <div style={{position:"fixed",top:dropdownPos.top,left:dropdownPos.left,width:Math.max(dropdownPos.width,320),background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:280,overflowY:"auto"}}>
                                     <div onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
                                       style={{padding:"9px 12px",fontSize:12,color:"#d97706",cursor:"pointer",borderBottom:"1px solid #f1f5f9",background:"#fffbeb",fontWeight:600}}
                                       onMouseEnter={e=>e.currentTarget.style.background="#fef3c7"}
@@ -4584,7 +4588,11 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                                   </div>
                                 </div>
                               ):(
-                                <button onClick={()=>{setBuscandoFila(i);setBusqFila("");}}
+                                <button onClick={e=>{
+                                    const rect=e.currentTarget.getBoundingClientRect();
+                                    setDropdownPos({top:rect.bottom+4,left:rect.left,width:Math.max(rect.width,320)});
+                                    setBuscandoFila(i);setBusqFila("");
+                                  }}
                                   style={{width:"100%",textAlign:"left",background:"none",border:"1px solid #e2e8f0",borderRadius:6,
                                     padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
                                   {prod?(

@@ -213,6 +213,7 @@ export const toDbOp = (o) => ({
   estado:               o.estado,
   matches:              o.matches||[],
   analisis_ia:          o.analisisIA,
+  analisis_ts:          o.analisisTs||null,
   cotizacion_id:        o.cotizacionId,
 });
 
@@ -229,6 +230,7 @@ export const fromDbOp = (o) => ({
   estado:               o.estado,
   matches:              o.matches||[],
   analisisIA:           o.analisis_ia,
+  analisisTs:           o.analisis_ts,
   cotizacionId:         o.cotizacion_id,
   importadaEn:          o.importada_en,
 });

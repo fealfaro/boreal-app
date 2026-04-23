@@ -345,6 +345,8 @@ export default function App() {
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
   useEffect(()=>{setSeenNotifs(false);},[notifList.length]);
+  // Navigate to productos when pending products exist
+  const irACompletarProductos=()=>{setTab("productos");};
 
   const isMob=winW<768;
 
@@ -602,7 +604,7 @@ export default function App() {
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
-        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
+        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
@@ -730,7 +732,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 }
 
 // ── PRODUCTOS ─────────────────────────────────────────────────
-function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5}) {
+function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,prodsPendientes=[],setProdsPendientes}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
   const fileRef=useRef();
@@ -3888,21 +3890,28 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const [expandida,  setExpandida]  = useState(null);
   const [pagina,     setPagina]     = useState(1);
   const [showConfig, setShowConfig] = useState(false);
+  const [prodsPendientes, setProdsPendientes] = useState([]); // queue to edit after creation
   const POR_PAGINA = 25;
   const fileRef = useRef();
   const colaRef = useRef([]);
   const detenerRef = useRef(false);
   const isMob = window.innerWidth < 768;
 
-  // ── Limpieza y auto-archivo al cargar ──────────────────────
-  useEffect(()=>{
+  // ── Limpieza y auto-archivo ────────────────────────────────
+  const isCerrada=(fechaCierre)=>{
+    if(!fechaCierre) return false;
+    const parts=fechaCierre.split(" ")[0]; const [d,m,y]=parts.split("/");
+    if(!d||!m||!y||isNaN(Number(y))) return false;
     const hoy=new Date(); hoy.setHours(0,0,0,0);
+    return new Date(Number(y),Number(m)-1,Number(d))<hoy;
+  };
+
+  useEffect(()=>{
     const hace30=new Date(); hace30.setDate(hace30.getDate()-30);
     setOportunidades(prev=>prev.map(o=>{
-      // Auto-archivar cerradas que aún estén como "nueva"
-      if(o.estado==="nueva"&&o.fechaCierre){
-        const parts=o.fechaCierre.split(" ")[0]; const [d,m,y]=parts.split("/");
-        if(d&&m&&y&&new Date(y,m-1,d)<hoy) return {...o,estado:"perdida"};
+      // Auto-pasar a "perdida" las cerradas que aún sean "nueva" o "analizada"
+      if(["nueva","analizada"].includes(o.estado)&&isCerrada(o.fechaCierre)){
+        return {...o,estado:"perdida"};
       }
       return o;
     }).filter(o=>{
@@ -3910,7 +3919,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       if(["archivada","perdida"].includes(o.estado)&&o.importadaEn&&new Date(o.importadaEn)<hace30) return false;
       return true;
     }));
-  },[]);
+  },[oportunidades.length]); // re-run when new ops loaded
 
   // ── Palabras clave ─────────────────────────────────────────
   const kwConfig  = (config.palabrasClave||"").split("\n").map(s=>s.trim().toLowerCase()).filter(Boolean);
@@ -4065,6 +4074,10 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       guardarProductoDB(nuevo);
       productosCreados.push(nuevo);
     }
+    // Queue new products for price entry
+    if(productosCreados.length>0){
+      setProdsPendientes(productosCreados.map(p=>p.id));
+    }
 
     const todosItemsOrden=detectados.length>0?detectados:
       [...enCatalogo.map(p=>({nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"})),
@@ -4109,7 +4122,11 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
     if(setDetalleCot) setDetalleCot(cot);
     if(setTab) setTab("cotizaciones");
-    toast("Cotización "+numCot+" creada"+(productosCreados.length>0?" — "+productosCreados.length+" productos pendientes de precio":""),"success",4000);
+    if(productosCreados.length>0){
+      toast("Cotización "+numCot+" creada — completa el costo de "+productosCreados.length+" producto(s) nuevo(s) en Productos","warning",6000);
+    } else {
+      toast("Cotización "+numCot+" creada","success",3000);
+    }
   };
 
   // ── Datos filtrados ────────────────────────────────────────
@@ -4288,7 +4305,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           </div>
           {/* Sort */}
           <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:8,padding:3,flexShrink:0}}>
-            {[["potencial","Potencial"],["monto_desc","$↓"],["monto_asc","$↑"],["cierre_asc","Cierre"]].map(([v,l])=>(
+            {[["potencial","Potencial"],["monto_desc","Mayor $"],["monto_asc","Menor $"],["cierre_asc","Cierre próximo"]].map(([v,l])=>(
               <button key={v} onClick={()=>setSortBy(v)} style={{padding:"4px 9px",borderRadius:5,border:"none",cursor:"pointer",fontSize:11,
                 fontWeight:sortBy===v?700:400,background:sortBy===v?"#fff":"transparent",
                 color:sortBy===v?"#0f172a":"#64748b",boxShadow:sortBy===v?"0 1px 2px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap"}}>{l}</button>

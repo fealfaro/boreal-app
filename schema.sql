@@ -129,6 +129,7 @@ create table if not exists oportunidades (
   estado                text default 'nueva', -- nueva | analizada | cotizada | descartada
   matches               jsonb default '[]',
   analisis_ia           jsonb,
+  analisis_ts           timestamptz,
   cotizacion_id         uuid references cotizaciones(id),
   importada_en          timestamptz default now()
 );

@@ -4080,18 +4080,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       ? op.fechaCierre.split(" ")[0].split("/").reverse().join("-")
       : "";
 
-    const notas="Generada desde Compra Ágil MP
-ID: "+op.id
-      +"
-Presupuesto estimado: "+fmt(op.presupuesto)
-      +(productosCreados.length>0
-        ? "
-
-Productos pendientes de completar precio/proveedor:
-"
-          +productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("
-")
-        : "");
+    const notas="Generada desde Compra Ágil MP\nID: "+op.id+"\nPresupuesto estimado: "+fmt(op.presupuesto)+(productosCreados.length>0?"\n\nProductos pendientes de completar precio/proveedor:\n"+productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("\n"):"");
 
     const cot={
       id:uid(),numero:numCot,

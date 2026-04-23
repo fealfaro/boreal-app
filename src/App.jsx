@@ -340,7 +340,7 @@ export default function App() {
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
   useEffect(()=>{setSeenNotifs(false);},[notifList.length]);
-  useEffect(()=>{const h=e=>{setSeenNotifs(false);};document.addEventListener("boreal-analisis-completo",h);return()=>document.removeEventListener("boreal-analisis-completo",h);},[]);
+
   const isMob=winW<768;
 
   // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
@@ -540,7 +540,7 @@ export default function App() {
               if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
               if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
               if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
-              if(item.id==="oportunidades") return oportunidades.filter(o=>o.estado==="nueva").length;
+              if(item.id==="oportunidades") return 0; // no badge - use status bar instead
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
               if(item.id==="cotizaciones")return cots.filter(c=>
                 c.estado==="Modificada"||
@@ -4165,20 +4165,12 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         <div>
           <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Oportunidades</h1>
           <p style={{color:"#64748b",fontSize:13,margin:0}}>
-            {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar
+            {oportunidades.filter(o=>o.estado==="nueva"&&!o.analisisIA).length} sin analizar · {oportunidades.filter(o=>o.analisisIA).length} analizadas
             {cola.length>0&&<span style={{marginLeft:8,color:"#1d4ed8",fontWeight:600}}>· Analizando {cola.indexOf(analizando)+1}/{cola.length}…</span>}
           </p>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          {/* Cola progress */}
-          {cola.length>0&&(
-            <div style={{display:"flex",alignItems:"center",gap:6,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"4px 10px"}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:"#1d4ed8",animation:"pulse 1s infinite"}}/>
-              <span style={{fontSize:12,color:"#1d4ed8",fontWeight:500}}>
-                {cola.indexOf(analizando)+1}/{cola.length} en cola
-              </span>
-            </div>
-          )}
+
           {/* Modo selección */}
           {oportunidades.filter(o=>o.estado!=="descartada"&&!o.analisisIA).length>0&&cola.length===0&&(
             <>
@@ -4210,6 +4202,28 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
           <Btn onClick={()=>fileRef.current?.click()} variant="dark" size="sm">Importar Excel</Btn>
         </div>
       </div>
+
+      {/* Barra de estado persistente */}
+      {cola.length>0&&(
+        <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",gap:4}}>
+            {cola.map((id,i)=>(
+              <div key={id} style={{width:6,height:6,borderRadius:"50%",
+                background:id===analizando?"#1d4ed8":i<cola.indexOf(analizando)?"#22c55e":"#cbd5e1",
+                transition:"background .3s"}}/>
+            ))}
+          </div>
+          <div style={{flex:1}}>
+            <span style={{fontSize:13,fontWeight:600,color:"#1d4ed8"}}>
+              Analizando {cola.indexOf(analizando)+1} de {cola.length}
+            </span>
+            {analizando&&<span style={{fontSize:12,color:"#475569",marginLeft:8}}>
+              — {oportunidades.find(o=>o.id===analizando)?.nombre?.slice(0,50)||analizando}
+            </span>}
+          </div>
+          <span style={{fontSize:11,color:"#64748b"}}>{cola.filter((id,i)=>i<cola.indexOf(analizando)).length} completadas</span>
+        </div>
+      )}
 
       {/* Stats clickeables */}
       {oportunidades.length>0&&(
@@ -4460,75 +4474,83 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                 )}
               </div>
 
-              {/* Tabla única de productos */}
-              {(detectados.length>0||enCatalogo.length>0||nuevos.length>0)&&(
-                <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:14,overflow:"hidden"}}>
-                  {/* Header */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                    <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>PRODUCTO</span>
-                    <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>CANTIDAD</span>
-                    <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>DISPONIBILIDAD</span>
+              {/* Tabla de productos con selector por fila */}
+              {(()=>{
+                // Combinar detectados con matcheo a catálogo
+                const todosItems=detectados.length>0?detectados.map(det=>{
+                  const match=enCatalogo.find(p=>
+                    det.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0])||
+                    (p.nombre||"").toLowerCase().includes(det.nombre.toLowerCase().split(" ")[0])
+                  );
+                  const prod=match?productos.find(pr=>pr.sku===match.sku||(pr.nombre||"").toLowerCase()===(match.nombre||"").toLowerCase()):null;
+                  const esNuevo=!match;
+                  return {det,match,prod,esNuevo};
+                }):[...enCatalogo.map(p=>{
+                  const prod=productos.find(pr=>pr.sku===p.sku||(pr.nombre||"").toLowerCase()===(p.nombre||"").toLowerCase());
+                  return {det:{nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"},match:p,prod,esNuevo:!prod};
+                }),...nuevos.map(p=>({det:{nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"},match:null,prod:null,esNuevo:true}))];
+
+                if(!todosItems.length) return null;
+                const UNITS={"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un"};
+                return (
+                  <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:14,overflow:"hidden"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 90px 140px",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>SOLICITAN</span>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>CANTIDAD</span>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>EN TU CATÁLOGO</span>
+                    </div>
+                    {todosItems.map(({det,match,prod,esNuevo},i)=>{
+                      const cant=det.cantidad||1;
+                      const unidad=UNITS[det.unidad?.toUpperCase()]||det.unidad||"un";
+                      const stock=prod?getStockTotal(prod):0;
+                      const stockOk=prod&&stock>=cant;
+                      return (
+                        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 140px",padding:"9px 12px",
+                          borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",alignItems:"center",
+                          background:esNuevo?"#fffbeb":"#fff"}}>
+                          {/* Columna 1: nombre solicitado */}
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{det.nombre}</div>
+                            {esNuevo&&<div style={{fontSize:10,color:"#d97706"}}>No en catálogo</div>}
+                          </div>
+                          {/* Columna 2: cantidad */}
+                          <div style={{fontSize:12,color:"#0f172a",textAlign:"right",fontWeight:500}}>{cant} {unidad}</div>
+                          {/* Columna 3: match en catálogo */}
+                          <div style={{textAlign:"right"}}>
+                            {prod?(
+                              <div>
+                                <div style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c"}}>
+                                  {stockOk?"✓":"⚠"} {prod.nombre.slice(0,20)}{prod.nombre.length>20?"…":""}
+                                </div>
+                                <div style={{fontSize:10,color:stockOk?"#86efac":"#fca5a5"}}>
+                                  {stock} disp. {!stockOk&&"(insuficiente)"}
+                                </div>
+                              </div>
+                            ):esNuevo?(
+                              <span style={{fontSize:11,color:"#d97706",fontWeight:600}}>Se creará inactivo</span>
+                            ):(
+                              <span style={{fontSize:11,color:"#94a3b8"}}>Sin coincidencia</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {/* Productos del catálogo */}
-                  {enCatalogo.map((p,i)=>{
-                    const prod=productos.find(pr=>pr.sku===p.sku||(pr.nombre||"").toLowerCase()===(p.nombre||"").toLowerCase());
-                    const det=detectados.find(d=>d.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0]));
-                    const cant=det?.cantidad||p.cantidadEstimada||1;
-                    const unidadLabel=({"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un"})[det?.unidad?.toUpperCase()]||det?.unidad||"un";
-                    const stock=prod?getStockTotal(prod):0;
-                    const stockOk=stock>=cant;
-                    return (
-                      <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"8px 12px",
-                        borderBottom:"1px solid #f8fafc",alignItems:"center"}}>
-                        <div>
-                          <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                          {prod&&<div style={{fontSize:10,color:"#94a3b8"}}>{prod.sku}</div>}
-                        </div>
-                        <div style={{fontSize:12,color:"#475569",textAlign:"right"}}>{cant} {unidadLabel}</div>
-                        <div style={{textAlign:"right"}}>
-                          {prod ? (
-                            <span style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c"}}>
-                              {stockOk?"✓ Stock ok":"⚠ Stock bajo"}
-                              <span style={{fontSize:10,fontWeight:400,color:"#94a3b8",display:"block"}}>{stock} disponibles</span>
-                            </span>
-                          ) : (
-                            <span style={{fontSize:11,color:"#94a3b8"}}>No encontrado</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* Productos nuevos */}
-                  {nuevos.map((p,i)=>{
-                    const det=detectados.find(d=>d.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0]));
-                    const cant=det?.cantidad||p.cantidadEstimada||1;
-                    const unidadLabel=({"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un"})[det?.unidad?.toUpperCase()]||det?.unidad||"un";
-                    return (
-                      <div key={"n"+i} style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"8px 12px",
-                        borderBottom:i<nuevos.length-1?"1px solid #f8fafc":"none",alignItems:"center",background:"#fffbeb"}}>
-                        <div>
-                          <div style={{fontSize:12,fontWeight:500,color:"#475569"}}>{p.nombre}</div>
-                          <div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>
-                        </div>
-                        <div style={{fontSize:12,color:"#475569",textAlign:"right"}}>{cant} {unidadLabel}</div>
-                        <div style={{textAlign:"right"}}>
-                          <span style={{fontSize:11,color:"#d97706",fontWeight:600}}>Pendiente precio</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {enCatalogo.length===0&&nuevos.length===0&&(
-                    <div style={{padding:"16px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>Sin productos identificados en catálogo</div>
-                  )}
-                </div>
-              )}
+                );
+              })()}
 
               {/* Acciones */}
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                 {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
                   <>
                     {puedeGenerar&&(
-                      <Btn onClick={()=>onCrearYCotizar(op)} size="sm">
+                      <Btn onClick={async()=>{
+                        const btn=document.activeElement;
+                        if(btn) btn.disabled=true;
+                        toast("Procesando…");
+                        await onCrearYCotizar(op);
+                        if(btn) btn.disabled=false;
+                      }} size="sm">
                         {nuevos.length>0?"Crear productos y cotizar":"Generar cotización"}
                       </Btn>
                     )}

@@ -3768,6 +3768,24 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 }
 
 // ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
+// Helper: tiempo restante hasta cierre
+function tiempoRestante(fechaCierre) {
+  if(!fechaCierre) return null;
+  const [fecha,hora]=fechaCierre.split(" ");
+  const [d,m,y]=fecha.split("/");
+  if(!d||!m||!y) return null;
+  const [hh,mm]=(hora||"23:59").split(":");
+  const cierre=new Date(y,m-1,d,hh||23,mm||59,0);
+  const diff=cierre-new Date();
+  if(diff<0) return {pasado:true,label:"Cerrada"};
+  const dias=Math.floor(diff/86400000);
+  const horas=Math.floor((diff%86400000)/3600000);
+  const mins=Math.floor((diff%3600000)/60000);
+  if(dias>3)  return {pasado:false,urgente:false,label:`${dias}d ${horas}h`,color:"#94a3b8"};
+  if(dias>0)  return {pasado:false,urgente:false,label:`${dias}d ${horas}h`,color:"#854d0e"};
+  if(horas>0) return {pasado:false,urgente:true, label:`${horas}h ${mins}m`,color:"#b91c1c"};
+  return       {pasado:false,urgente:true, label:`${mins} min`,color:"#b91c1c"};
+}
 function calcPotencial(ia, productos) {
   if (!ia) return null;
   const enCatalogo = ia.productosEnCatalogo || ia.productosEncontrados || [];
@@ -3807,7 +3825,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab}) {
 
   const [filtro,     setFiltro]     = useState("nuevas");
-  const [sortBy,     setSortBy]     = useState("monto_desc");
+  const [sortBy,     setSortBy]     = useState("potencial");
   const [busqueda,   setBusqueda]   = useState("");
   const [analizando, setAnalizando] = useState(null);
   const [cola,       setCola]       = useState([]);
@@ -4121,6 +4139,15 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
               Detener
             </button>
           )}
+          {/* Archivar todas las visibles */}
+          {filtro==="nuevas"&&sorted.length>0&&cola.length===0&&!modoSel&&(
+            <Btn onClick={()=>{
+              if(!window.confirm(`¿Archivar las ${sorted.length} oportunidades visibles?`)) return;
+              const ids=new Set(sorted.map(o=>o.id));
+              setOportunidades(prev=>prev.map(o=>ids.has(o.id)?{...o,estado:"archivada"}:o));
+              toast(`${sorted.length} oportunidades archivadas`);
+            }} variant="ghost" size="sm">Archivar todas ({sorted.length})</Btn>
+          )}
           {/* Reprocesar archivadas */}
           {filtro==="archivadas"&&counts.archivadas>0&&(
             <Btn onClick={()=>{
@@ -4294,37 +4321,53 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
         <div style={{flex:1,minWidth:0}}>
           {/* Row 1: badges */}
           <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3,flexWrap:"wrap"}}>
-            <button onClick={copyUrl} title="Copiar URL de Mercado Público"
-              style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:copied?"#15803d":"#94a3b8",
-                background:copied?"#dcfce7":"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,
-                padding:"1px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
-              {op.id}{copied?" ✓":` `}{Ic.copy}
-            </button>
+            {/* Estado pill */}
             <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ec.bg,color:ec.text,flexShrink:0}}>{ec.label}</span>
-            {op.analisisTs&&<span style={{fontSize:9,color:"#94a3b8",flexShrink:0}}>analizado {op.analisisTs.slice(0,10)}</span>}
-            {potencial&&<span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:potencial.bg,color:potencial.color,flexShrink:0}}>Potencial {potencial.nivel}</span>}
-            {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20,flexShrink:0}}>{op.cotizacionesEnviadas} cot.</span>}
-            {op.matches?.slice(0,2).map(kw=><span key={kw} style={{fontSize:10,padding:"1px 5px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8",flexShrink:0}}>{kw}</span>)}
+            {/* Potencial dot + label */}
+            {potencial&&(
+              <span style={{display:"flex",alignItems:"center",gap:3,fontSize:10,fontWeight:600,color:potencial.color,flexShrink:0}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:potencial.color,display:"inline-block"}}/>
+                {potencial.nivel.charAt(0).toUpperCase()+potencial.nivel.slice(1)}
+              </span>
+            )}
+            {/* ID small + copy URL */}
+            <button onClick={copyUrl} title="Copiar URL de Mercado Público"
+              style={{fontFamily:"'DM Mono',monospace",fontSize:9,color:copied?"#15803d":"#cbd5e1",
+                background:"none",border:"none",padding:"0 2px",cursor:"pointer",display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
+              {op.id}{copied?" ✓":" "}{Ic.copy}
+            </button>
+            {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20,flexShrink:0}}>{op.cotizacionesEnviadas} cot. enviadas</span>}
           </div>
           {/* Row 2: nombre */}
           <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
           {/* Row 3: institución + cierre + link */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:300}}>{op.institucion}</span>
-            {cierre&&<span style={{fontSize:10,fontWeight:esCerrada||diasCierre<=3?700:400,flexShrink:0,
-              color:esCerrada?"#b91c1c":diasCierre<=1?"#b91c1c":diasCierre<=3?"#854d0e":"#94a3b8"}}>
-              · {esCerrada?"Cerrada":"Cierra"} {cierre.label}{cierre.hora?" "+cierre.hora:""}{diasCierre!==null&&!esCerrada?` (${diasCierre===0?"hoy":diasCierre===1?"mañana":diasCierre+"d"})`:esCerrada?" (vencida)":""}
-            </span>}
+            {(()=>{
+              const tr=tiempoRestante(op.fechaCierre);
+              if(!tr) return null;
+              return <span style={{fontSize:11,fontWeight:tr.urgente?700:400,color:tr.color||"#94a3b8",flexShrink:0,
+                background:tr.urgente?"#fee2e2":"transparent",borderRadius:tr.urgente?20:0,padding:tr.urgente?"1px 6px":"0"}}>
+                {tr.pasado?"Cerrada":"·  Cierra en "}{!tr.pasado&&tr.label}
+              </span>;
+            })()}
             <a href={mpUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
               style={{fontSize:10,color:"#1d4ed8",textDecoration:"none",flexShrink:0}}>Ver en MP →</a>
           </div>
         </div>
 
-        {/* Derecha: monto + prod count + chevron */}
-        <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+        {/* Derecha: monto + acción rápida + chevron */}
+        <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
           <div style={{fontSize:14,fontWeight:700}}>{fmt(op.presupuesto)}</div>
+          {!ia&&op.estado==="nueva"&&analizando!==op.id&&(
+            <button onClick={e=>{e.stopPropagation();onAnalizar(op);}}
+              style={{fontSize:10,fontWeight:600,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"2px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
+              Analizar IA
+            </button>
+          )}
+          {analizando===op.id&&<span style={{fontSize:10,color:"#1d4ed8"}}>Analizando…</span>}
           {ia&&enCatalogo.length>0&&<div style={{fontSize:10,color:"#64748b"}}>{enCatalogo.length}/{detectados.length||enCatalogo.length+nuevos.length} prod.</div>}
-          <div style={{color:"#94a3b8",fontSize:11,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
+          <div style={{color:"#94a3b8",fontSize:10,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
         </div>
       </div>
 

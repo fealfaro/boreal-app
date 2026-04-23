@@ -63,7 +63,9 @@ export default {
       try {
         // 1. Llamar a la API interna del buscador de Compra Ágil
         const MP_API = 'https://api.buscador.mercadopublico.cl/compra-agil';
-        const MP_KEY = 'e93089e4-437c-4723-b343-4fa20045e3bc';
+        // MP_API_KEY se configura como secret en Cloudflare Workers
+        // Si no está configurado, usa el valor por defecto conocido
+        const MP_KEY = env.MP_API_KEY || 'e93089e4-437c-4723-b343-4fa20045e3bc';
 
         const [fichaResp, historialResp] = await Promise.all([
           fetch(`${MP_API}?action=ficha&code=${id}`, {

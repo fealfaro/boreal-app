@@ -3912,6 +3912,87 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
     setAnalizando(null);
   };
 
+  // ── Crear productos nuevos y generar cotización ───────────────
+  const crearYCotizar=async(op)=>{
+    const {analisisIA}=op;
+    if(!analisisIA) return;
+
+    const enCatalogo=analisisIA.productosEnCatalogo||analisisIA.productosEncontrados||[];
+    const nuevosIA=analisisIA.productosNuevos||[];
+
+    // 1. Crear productos nuevos en catálogo con datos mínimos
+    const productosCreados=[];
+    for(const pNuevo of nuevosIA){
+      const costoEstimado=op.presupuesto>0&&(enCatalogo.length+nuevosIA.length)>0
+        ? Math.round(op.presupuesto/(enCatalogo.length+nuevosIA.length)*0.6)
+        : 0;
+      const nuevo={
+        id:uid(),
+        sku:`MP-${op.id.split("-")[0]}-${uid().slice(0,4).toUpperCase()}`,
+        nombre:pNuevo.nombre,
+        proveedor:"",
+        costo:costoEstimado,
+        margen:30,
+        foto_url:"",
+        categoria:"Sin categoría",
+        stock:0,
+        stockPorBodega:[],
+        historialCostos:[],
+        activo:true,
+        updatedAt:nowISO(),
+      };
+      setProductos(prev=>[...prev,nuevo]);
+      guardarProductoDB(nuevo);
+      productosCreados.push(nuevo);
+      toast(`Producto creado: ${nuevo.nombre}`,"success",2000);
+    }
+
+    // 2. Esperar un tick para que el estado se actualice
+    await new Promise(r=>setTimeout(r,100));
+
+    // 3. Generar cotización con todos los productos (catálogo + nuevos)
+    const todosProductos=[...productos,...productosCreados];
+    const items=[
+      ...enCatalogo.map(pi=>{
+        const prod=todosProductos.find(p=>p.sku===pi.sku||(p.nombre||"").toLowerCase()===(pi.nombre||"").toLowerCase());
+        if(!prod) return null;
+        const pv=calcPrecioVenta(prod.costo,prod.margen);
+        return{productoId:prod.id,nombre:prod.nombre,sku:prod.sku,costo:prod.costo,
+          precioVenta:pv,cantidad:pi.cantidadEstimada||1,foto_url:prod.foto_url||"",proveedor:prod.proveedor||""};
+      }).filter(Boolean),
+      ...productosCreados.map(prod=>{
+        const pi=nuevosIA.find(p=>p.nombre===prod.nombre)||{};
+        const pv=calcPrecioVenta(prod.costo,prod.margen);
+        return{productoId:prod.id,nombre:prod.nombre,sku:prod.sku,costo:prod.costo,
+          precioVenta:pv||1,cantidad:pi.cantidadEstimada||1,foto_url:"",proveedor:""};
+      }),
+    ];
+
+    if(!items.length){toast("No hay productos para cotizar","warning");return;}
+
+    const instNorm=op.institucion.trim();
+    if(instNorm&&!empresas.includes(instNorm)) setEmpresas(prev=>[...prev,instNorm]);
+    const cot={id:uid(),
+      numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
+      organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
+      ejecutivo:perfil?.nombre||"",estado:"Para revisar",
+      fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]?.split("/").reverse().join("-")||"",
+      items,notas:`Generada desde licitación MP
+ID: ${op.id}
+Presupuesto: ${fmt(op.presupuesto)}${productosCreados.length>0?`
+
+Productos creados automáticamente:
+${productosCreados.map(p=>`- ${p.nombre} (${p.sku})`).join("
+")}`:""}`,
+      creadaEn:nowISO(),origenMP:true};
+    const{total,costoTotal,margenProm}=calcTotalesCot(items);
+    cot.total=total;cot.costoTotal=costoTotal;cot.margenProm=margenProm;
+    setCots(prev=>[cot,...prev]);
+    guardarCotDB(cot);
+    setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
+    toast(`Cotización ${cot.numero} creada${productosCreados.length>0?` con ${productosCreados.length} producto(s) nuevo(s)`:""}`,  "success",4000);
+  };
+
   // ── Generar cotización ──────────────────────────────────────
   const generarCotizacion=async(op)=>{
     const {analisisIA}=op;
@@ -4052,6 +4133,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       {paginadas.map(op=>(
         <OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
           analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
+          onCrearYCotizar={crearYCotizar}
           onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
           ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>
       ))}
@@ -4070,179 +4152,258 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
   );
 }
 
-function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDescartar,ESTADOS_OP_COLORS,productos}) {
-  const isExp=expandida===op.id;
-  const ec=ESTADOS_OP_COLORS[op.estado]||ESTADOS_OP_COLORS.nueva;
-  const ia=op.analisisIA;
-  const [copied,setCopied]=useState(false);
+// ── HELPER: calcular potencial de una oportunidad ────────────
+function calcPotencial(ia, productos) {
+  if (!ia) return null;
+  const enCatalogo = ia.productosEnCatalogo || ia.productosEncontrados || [];
+  const detectados = ia.productosDetectados || [];
+  const nuevos = ia.productosNuevos || [];
+  const totalDetectados = detectados.length || (enCatalogo.length + nuevos.length) || 1;
+  const nEnCatalogo = enCatalogo.length;
 
-  // Parse fecha cierre - format: "21/04/2026 10:00"
-  const parseFechaCierre=(str)=>{
-    if(!str) return null;
-    const [fecha,hora]=str.split(" ");
-    if(!fecha) return null;
-    const [d,m,y]=fecha.split("/");
-    if(!d||!m||!y) return null;
-    return {date:new Date(y,m-1,d),hora:hora||"",label:fecha,full:str};
+  // Factor 1: coincidencia de productos (0-1)
+  const coincidencia = nEnCatalogo / totalDetectados;
+
+  // Factor 2: stock disponible (0-1)
+  const stockScore = enCatalogo.length > 0 ? enCatalogo.reduce((acc, p) => {
+    const prod = productos.find(pr => pr.sku === p.sku || pr.nombre?.toLowerCase() === p.nombre?.toLowerCase());
+    if (!prod) return acc;
+    const stockOk = getStockTotal(prod) >= (p.cantidadEstimada || 1);
+    return acc + (stockOk ? 1 : 0.5);
+  }, 0) / enCatalogo.length : 0;
+
+  // Factor 3: confianza promedio (0-1)
+  const confMap = { alta: 1, media: 0.6, baja: 0.3 };
+  const confScore = enCatalogo.length > 0
+    ? enCatalogo.reduce((a, p) => a + (confMap[p.confianza] || 0.5), 0) / enCatalogo.length
+    : 0;
+
+  const score = (coincidencia * 0.5) + (stockScore * 0.3) + (confScore * 0.2);
+
+  if (score >= 0.65) return { nivel: "alto", color: "#15803d", bg: "#dcfce7", score };
+  if (score >= 0.35) return { nivel: "medio", color: "#854d0e", bg: "#fef9c3", score };
+  return { nivel: "bajo", color: "#b91c1c", bg: "#fee2e2", score };
+}
+
+function OpCard({op, expandida, setExpandida, analizando, onAnalizar, onCotizar, onDescartar, onCrearYCotizar, ESTADOS_OP_COLORS, productos}) {
+  const isExp = expandida === op.id;
+  const ec = ESTADOS_OP_COLORS[op.estado] || ESTADOS_OP_COLORS.nueva;
+  const ia = op.analisisIA;
+  const [copied, setCopied] = useState(false);
+
+  const parseFechaCierre = (str) => {
+    if (!str) return null;
+    const [fecha, hora] = str.split(" ");
+    if (!fecha) return null;
+    const [d, m, y] = fecha.split("/");
+    if (!d || !m || !y) return null;
+    return { date: new Date(y, m - 1, d), hora: hora || "", label: fecha };
   };
-  const cierre=parseFechaCierre(op.fechaCierre);
-  const diasCierre=cierre?Math.ceil((cierre.date-new Date())/(1000*60*60*24)):null;
+  const cierre = parseFechaCierre(op.fechaCierre);
+  const diasCierre = cierre ? Math.ceil((cierre.date - new Date()) / (1000 * 60 * 60 * 24)) : null;
+  const potencial = ia ? calcPotencial(ia, productos) : null;
 
-  const copyId=e=>{
+  const copyId = e => {
     e.stopPropagation();
-    navigator.clipboard.writeText(op.id).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500);});
+    navigator.clipboard.writeText(op.id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
   };
+
+  const enCatalogo = ia ? (ia.productosEnCatalogo || ia.productosEncontrados || []) : [];
+  const detectados = ia ? (ia.productosDetectados || []) : [];
+  const nuevos = ia ? (ia.productosNuevos || []) : [];
+  const puedeGenerar = ia && (enCatalogo.length > 0 || nuevos.length > 0);
 
   return (
-    <div style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.06)",border:op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",overflow:"hidden",opacity:op.estado==="descartada"?.6:1}}>
-      {/* Header */}
+    <div style={{background:"#fff",borderRadius:12,marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.06)",
+      border:potencial?.nivel==="alto"?"1px solid #86efac":op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",
+      overflow:"hidden",opacity:op.estado==="descartada"?.55:1}}>
+
+      {/* ── HEADER ─────────────────────────────────────────── */}
       <div style={{padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}
-        onClick={()=>setExpandida(isExp?null:op.id)}>
+        onClick={() => setExpandida(isExp ? null : op.id)}>
+
+        {/* Potencial badge (izquierda vertical) */}
+        {potencial && (
+          <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:2}}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:potencial.color}}/>
+            <div style={{fontSize:8,fontWeight:700,color:potencial.color,textTransform:"uppercase",writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:1}}>
+              {potencial.nivel}
+            </div>
+          </div>
+        )}
+
         <div style={{flex:1,minWidth:0}}>
-          {/* ID + estado + keywords */}
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
-            <button onClick={copyId} style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:copied?"#15803d":"#94a3b8",background:copied?"#dcfce7":"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"1px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}>
+          {/* Row 1: ID + estado + keywords */}
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+            <button onClick={copyId} style={{fontFamily:"'DM Mono',monospace",fontSize:10,
+              color:copied?"#15803d":"#94a3b8",background:copied?"#dcfce7":"#f8fafc",
+              border:"1px solid #e2e8f0",borderRadius:5,padding:"1px 6px",cursor:"pointer",
+              display:"flex",alignItems:"center",gap:3}}>
               {op.id} {copied?"✓":Ic.copy}
             </button>
             <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ec.bg,color:ec.text}}>{ec.label}</span>
-            {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20}}>{op.cotizacionesEnviadas} cot. enviadas</span>}
-            {op.matches?.length>0&&op.matches.slice(0,3).map(kw=>(
-              <span key={kw} style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8",fontWeight:500}}>{kw}</span>
+            {potencial&&<span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:potencial.bg,color:potencial.color}}>
+              Potencial {potencial.nivel}
+            </span>}
+            {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20}}>{op.cotizacionesEnviadas} cot.</span>}
+          </div>
+          {/* Row 2: Nombre */}
+          <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
+          {/* Row 3: Institución + cierre + keywords */}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:"#64748b"}}>{op.institucion}</span>
+            {cierre&&<span style={{fontSize:10,fontWeight:diasCierre!==null&&diasCierre<=3?700:400,
+              color:diasCierre!==null&&diasCierre<=0?"#b91c1c":diasCierre!==null&&diasCierre<=3?"#854d0e":"#94a3b8"}}>
+              · {cierre.label}{cierre.hora?` ${cierre.hora}`:""}{diasCierre!==null&&` (${diasCierre<=0?"hoy":diasCierre===1?"mañana":`${diasCierre}d`})`}
+            </span>}
+            {op.matches?.length>0&&op.matches.slice(0,2).map(kw=>(
+              <span key={kw} style={{fontSize:10,padding:"1px 5px",borderRadius:20,background:"#dbeafe",color:"#1d4ed8"}}>{kw}</span>
             ))}
           </div>
-          {/* Nombre */}
-          <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
-          {/* Institución + cierre */}
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:"#64748b"}}>{op.institucion}</span>
-            {cierre&&(
-              <span style={{fontSize:10,color:diasCierre!==null&&diasCierre<=1?"#b91c1c":diasCierre!==null&&diasCierre<=3?"#854d0e":"#94a3b8",fontWeight:diasCierre!==null&&diasCierre<=3?700:400}}>
-                · Cierra {cierre.label}{cierre.hora?` ${cierre.hora}`:""}
-                {diasCierre!==null&&` (${diasCierre<=0?"hoy":diasCierre===1?"mañana":`${diasCierre}d`})`}
-              </span>
-            )}
-          </div>
         </div>
-        <div style={{textAlign:"right",flexShrink:0}}>
-          <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(op.presupuesto)}</div>
-          <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{op.estadoConvocatoria}</div>
+
+        {/* Derecha: presupuesto + chevron */}
+        <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+          <div style={{fontSize:14,fontWeight:700}}>{fmt(op.presupuesto)}</div>
+          {ia&&enCatalogo.length>0&&(
+            <div style={{fontSize:10,color:"#64748b"}}>{enCatalogo.length}/{detectados.length||enCatalogo.length+nuevos.length} prod.</div>
+          )}
+          <div style={{color:"#94a3b8",fontSize:12,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
         </div>
       </div>
 
-      {/* Expandido */}
+      {/* ── EXPANDIDO ──────────────────────────────────────── */}
       {isExp&&(
-        <div style={{borderTop:"1px solid #f1f5f9",padding:"12px 16px",background:"#fafafa"}}>
+        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafafa"}}>
 
-          {/* Análisis IA result */}
+          {/* Sin análisis */}
+          {!ia&&(
+            <div style={{padding:"16px",textAlign:"center"}}>
+              <p style={{fontSize:13,color:"#64748b",marginBottom:12}}>
+                La IA leerá el detalle real de esta licitación en Mercado Público y analizará qué productos tienes disponibles.
+              </p>
+              <Btn onClick={()=>onAnalizar(op)} disabled={analizando===op.id}
+                style={{opacity:analizando===op.id?.6:1}}>
+                {analizando===op.id?"Analizando…":"Analizar con IA"}
+              </Btn>
+            </div>
+          )}
+
+          {/* Con análisis */}
           {ia&&(
-            <div style={{background:"#fff",borderRadius:10,padding:"14px",marginBottom:12,border:"1px solid #e2e8f0"}}>
-              {/* Header con fuente y recomendación */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>ANÁLISIS IA</span>
-                  {ia._source==="web"&&<span style={{fontSize:10,background:"#dcfce7",color:"#15803d",padding:"1px 7px",borderRadius:20}}>con detalle MP</span>}
-                  {ia._source==="nombre"&&<span style={{fontSize:10,background:"#fef9c3",color:"#854d0e",padding:"1px 7px",borderRadius:20}}>solo nombre</span>}
+            <div style={{padding:"14px 16px"}}>
+
+              {/* Resumen + recomendación */}
+              <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:14}}>
+                <div style={{flex:1}}>
+                  <p style={{fontSize:13,color:"#475569",lineHeight:1.5,margin:0}}>{ia.resumen}</p>
                 </div>
                 {ia.recomendacion&&(
-                  <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,
+                  <span style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:20,
                     background:ia.recomendacion==="cotizar"?"#dcfce7":ia.recomendacion==="descartar"?"#fee2e2":"#fef9c3",
                     color:ia.recomendacion==="cotizar"?"#15803d":ia.recomendacion==="descartar"?"#b91c1c":"#854d0e"}}>
-                    {ia.recomendacion==="cotizar"?"Cotizar":ia.recomendacion==="descartar"?"Descartar":"Revisar"}
+                    {ia.recomendacion.includes("cotizar")&&!ia.recomendacion.includes("no")?"Cotizar":
+                     ia.recomendacion.includes("descartar")?"Descartar":"Revisar"}
                   </span>
                 )}
               </div>
 
-              {/* Resumen */}
-              {ia.resumen&&<p style={{fontSize:13,color:"#475569",marginBottom:10,lineHeight:1.5}}>{ia.resumen}</p>}
+              {/* Productos en dos columnas */}
+              <div style={{display:"grid",gridTemplateColumns:window.innerWidth<600?"1fr":"1fr 1fr",gap:10,marginBottom:14}}>
 
-              {/* Productos detectados (del scraping) */}
-              {ia.productosDetectados?.length>0&&(
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#64748b",marginBottom:5}}>PIDEN EN LA LICITACIÓN</div>
-                  {ia.productosDetectados.map((p,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
-                      <span style={{color:"#0f172a"}}>{p.nombre}</span>
-                      <span style={{color:"#64748b"}}>{p.cantidad} {p.unidad||"uds"}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Productos en catálogo */}
-              {ia.productosEncontrados?.length>0&&(
-                <div style={{marginBottom:8}}>
-                  <div style={{fontSize:11,fontWeight:600,color:"#15803d",marginBottom:5}}>EN TU CATÁLOGO</div>
-                  {ia.productosEncontrados.map((p,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12}}>
-                      <div>
-                        <span style={{fontWeight:500}}>{p.nombre}</span>
-                        <span style={{color:"#94a3b8"}}> × {p.cantidadEstimada}</span>
-                        {p.nota&&<div style={{fontSize:10,color:"#94a3b8"}}>{p.nota}</div>}
+                {/* Columna izquierda: lo que piden */}
+                {detectados.length>0&&(
+                  <div style={{background:"#fff",borderRadius:10,padding:"12px",border:"1px solid #e2e8f0"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>SOLICITAN</div>
+                    {detectados.map((p,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",
+                        borderBottom:i<detectados.length-1?"1px solid #f8fafc":"none",fontSize:12}}>
+                        <span style={{color:"#0f172a",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8}}>{p.nombre}</span>
+                        <span style={{color:"#64748b",flexShrink:0}}>{p.cantidad} {p.unidad||"uds"}</span>
                       </div>
-                      <span style={{fontSize:10,padding:"2px 7px",borderRadius:20,fontWeight:600,
-                        background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",
-                        color:p.confianza==="alta"?"#15803d":p.confianza==="media"?"#854d0e":"#b91c1c"}}>
-                        {p.confianza}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {/* Productos nuevos */}
-              {ia.productosNuevos?.length>0&&(
-                <div>
-                  <div style={{fontSize:11,fontWeight:600,color:"#92400e",marginBottom:5}}>NO EN CATÁLOGO</div>
-                  {ia.productosNuevos.map((p,i)=>(
-                    <div key={i} style={{padding:"5px 0",borderBottom:"1px solid #f8fafc",fontSize:12,color:"#64748b"}}>
-                      <span style={{fontWeight:500,color:"#475569"}}>{p.nombre}</span>
-                      {p.descripcion&&` — ${p.descripcion}`}
+                {/* Columna derecha: disponibilidad */}
+                <div style={{background:"#fff",borderRadius:10,padding:"12px",border:"1px solid #e2e8f0"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>TU DISPONIBILIDAD</div>
+
+                  {enCatalogo.map((p,i)=>{
+                    const prod=productos.find(pr=>pr.sku===p.sku||(pr.nombre||"").toLowerCase()===(p.nombre||"").toLowerCase());
+                    const stock=prod?getStockTotal(prod):0;
+                    const stockOk=stock>=(p.cantidadEstimada||1);
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",
+                        borderBottom:i<enCatalogo.length+nuevos.length-1?"1px solid #f8fafc":"none"}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,
+                          background:p.confianza==="alta"?"#22c55e":p.confianza==="media"?"#f59e0b":"#ef4444"}}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                          {prod&&<div style={{fontSize:10,color:stockOk?"#15803d":"#b91c1c"}}>
+                            Stock: {stock} uds {stockOk?"✓":"(insuficiente)"}
+                          </div>}
+                        </div>
+                        <span style={{fontSize:10,padding:"1px 6px",borderRadius:20,flexShrink:0,
+                          background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",
+                          color:p.confianza==="alta"?"#15803d":p.confianza==="media"?"#854d0e":"#b91c1c",fontWeight:600}}>
+                          {p.confianza}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {nuevos.map((p,i)=>(
+                    <div key={"n"+i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",
+                      borderBottom:i<nuevos.length-1?"1px solid #f8fafc":"none"}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:"#94a3b8"}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:500,color:"#475569",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                        <div style={{fontSize:10,color:"#94a3b8"}}>No en catálogo — se creará</div>
+                      </div>
+                      <span style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#f1f5f9",color:"#64748b",flexShrink:0}}>nuevo</span>
                     </div>
                   ))}
+
+                  {enCatalogo.length===0&&nuevos.length===0&&(
+                    <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:"8px 0"}}>Sin coincidencias</div>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* Acciones */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
+                  <>
+                    {puedeGenerar&&(
+                      <Btn onClick={()=>onCrearYCotizar(op)} size="sm">
+                        {nuevos.length>0?"Crear productos y cotizar":"Generar cotización"}
+                      </Btn>
+                    )}
+                    <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm" disabled={analizando===op.id}
+                      style={{opacity:analizando===op.id?.6:1}}>
+                      {analizando===op.id?"Analizando…":"Re-analizar"}
+                    </Btn>
+                    <Btn onClick={onDescartar} variant="ghost" size="sm">Descartar</Btn>
+                  </>
+                )}
+                {op.estado==="cotizada"&&(
+                  <span style={{fontSize:12,color:"#15803d",fontWeight:600}}>Cotización generada</span>
+                )}
+                <a href={`https://buscador.mercadopublico.cl/ficha?code=${op.id}`}
+                  target="_blank" rel="noreferrer"
+                  style={{fontSize:12,color:"#1d4ed8",textDecoration:"none",marginLeft:"auto"}}>
+                  Ver en MP →
+                </a>
+              </div>
             </div>
           )}
-
-          {/* Actions */}
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
-              <>
-                {!ia&&(
-                  <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
-                    disabled={analizando===op.id}
-                    style={{opacity:analizando===op.id?.6:1}}>
-                    {analizando===op.id?"Analizando…":"Analizar con IA"}
-                  </Btn>
-                )}
-                {ia&&ia.recomendacion!=="descartar"&&ia.productosEncontrados?.length>0&&(
-                  <Btn onClick={()=>onCotizar(op)} size="sm">Generar cotización</Btn>
-                )}
-                {ia&&(
-                  <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm"
-                    disabled={analizando===op.id}>
-                    Re-analizar
-                  </Btn>
-                )}
-                <Btn onClick={onDescartar} variant="ghost" size="sm">Descartar</Btn>
-              </>
-            )}
-            {op.estado==="cotizada"&&(
-              <span style={{fontSize:12,color:"#15803d",fontWeight:600,padding:"5px 0"}}>
-                ✓ Cotización generada → Para revisar
-              </span>
-            )}
-            <a href={`https://buscador.mercadopublico.cl/ficha?code=${op.id}`}
-              target="_blank" rel="noreferrer"
-              style={{fontSize:12,color:"#1d4ed8",padding:"5px 0",textDecoration:"none"}}>
-              Ver en Mercado Público →
-            </a>
-          </div>
         </div>
       )}
     </div>
   );
 }
+
 
 // ── MÓDULO NOTIFICACIONES ─────────────────────────────────────
 function ModuloNotificaciones({notifList,goTab,cots,config,onSeen}) {

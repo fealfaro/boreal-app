@@ -2052,10 +2052,14 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
               </div>
               {/* Notas */}
               <div style={{background:"#fff",borderRadius:14,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>NOTAS / CONDICIONES</div>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>NOTAS / CONDICIONES <span style={{fontSize:10,fontWeight:400,color:"#94a3b8"}}>(visibles para el cliente en PDF)</span></div>
                 <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={3}
                   placeholder="Condiciones de pago, plazos de entrega…"
                   style={{...inp,resize:"vertical",minHeight:80,lineHeight:1.5}}/>
+                <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:6,marginTop:10,letterSpacing:".05em"}}>NOTAS INTERNAS <span style={{fontSize:10,fontWeight:400,color:"#94a3b8"}}>(no se incluyen en el PDF)</span></div>
+                <textarea value={form.notasInternas||""} onChange={e=>set("notasInternas",e.target.value)} rows={2}
+                  placeholder="Contexto interno, origen, seguimiento…"
+                  style={{...inp,resize:"vertical",minHeight:56,lineHeight:1.5,background:"#fefce8",border:"1px solid #fde68a"}}/>
               </div>
               {/* Items resumen */}
               {form.items.filter(i=>i.nombre).length>0&&(
@@ -2484,7 +2488,8 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
           </div>
         </div>
       </div>
-      {c.notas&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 10px",marginBottom:8,fontSize:12,color:"#475569"}}>📝 {c.notas}</div>}
+      {c.notas&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 10px",marginBottom:8,fontSize:12,color:"#475569"}}>{c.notas}</div>}
+      {c.notasInternas&&<div style={{background:"#fefce8",border:"1px solid #fde68a",borderRadius:7,padding:"6px 10px",marginBottom:8,fontSize:11,color:"#854d0e",display:"flex",gap:6,alignItems:"flex-start"}}><span style={{flexShrink:0,fontWeight:700}}>Interno:</span><span>{c.notasInternas}</span></div>}
       {/* Log en tiempo real */}
       {(c.log||[]).length>0&&(
         <div style={{marginBottom:10}}>
@@ -4029,41 +4034,67 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       productosCreados.push(nuevoClean);
     }
 
-    // 2. Construir items de cotización
+    // 2. Construir items respetando overrides del usuario
     const items=[];
+    // todosItems es el mismo orden que la tabla mostrada al usuario
+    const todosItemsOrden=detectados.length>0?detectados:
+      [...enCatalogo.map(p=>({nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"})),
+       ...nuevosIA.map(p=>({nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"}))];
 
-    // Productos del catálogo existente
-    for(const pi of enCatalogo){
-      const prod=productosActuales.find(p=>
-        (pi.sku&&p.sku===pi.sku)||
-        (p.nombre||"").toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0])||
-        (pi.nombre||"").toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0])
-      );
-      if(!prod) continue;
-      const det=detectados.find(d=>d.nombre.toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0]));
-      const cantidad=det?.cantidad||pi.cantidadEstimada||1;
-      const pv=calcPrecioVenta(prod.costo,prod.margen);
-      items.push({
-        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
-        costo:prod.costo,precioVenta:pv,cantidad,
-        foto_url:prod.foto_url||"",proveedor:prod.proveedor||"",
-      });
-    }
+    todosItemsOrden.forEach((det,i)=>{
+      const cant=det.cantidad||1;
+      // Respetar override del usuario para esta fila
+      const overrideId=overrides[i];
+      let prod=null;
+      let esNuevo=false;
 
-    // Productos nuevos creados
-    for(const prod of productosCreados){
-      if(enCatalogo.find(pi=>prod.nombre.toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0]))) continue;
-      const det=detectados.find(d=>d.nombre.toLowerCase().includes(prod.nombre.toLowerCase().split(" ")[0]));
-      const pNuevo=nuevosIA.find(p=>p.nombre===prod.nombre)||{};
-      const cantidad=det?.cantidad||pNuevo.cantidadEstimada||1;
-      const pv=prod.costo>0?calcPrecioVenta(prod.costo,prod.margen):0;
-      items.push({
-        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
-        costo:prod.costo,precioVenta:pv,cantidad,
-        foto_url:"",proveedor:"",
-        _pendiente:true, // marcar como pendiente de precio
-      });
-    }
+      if(overrideId==="nuevo"){
+        esNuevo=true;
+      } else if(overrideId){
+        // Usuario eligió un producto específico
+        prod=productosActuales.find(p=>p.id===overrideId);
+      } else {
+        // Match automático de la IA
+        const matchIA=enCatalogo.find(p=>
+          det.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0])||
+          (p.nombre||"").toLowerCase().includes(det.nombre.toLowerCase().split(" ")[0])
+        );
+        if(matchIA){
+          prod=productosActuales.find(p=>
+            (matchIA.sku&&p.sku===matchIA.sku)||
+            (p.nombre||"").toLowerCase()===(matchIA.nombre||"").toLowerCase()
+          );
+        }
+        if(!prod){
+          // Ver si hay un producto creado con ese nombre
+          prod=productosCreados.find(p=>p.nombre.toLowerCase().includes(det.nombre.toLowerCase().split(" ")[0]));
+          if(prod) esNuevo=false; // ya existe como creado
+          else esNuevo=true;
+        }
+      }
+
+      if(prod){
+        const pv=calcPrecioVenta(prod.costo,prod.margen);
+        items.push({
+          productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
+          costo:prod.costo,precioVenta:pv,cantidad:cant,
+          foto_url:prod.foto_url||"",proveedor:prod.proveedor||"",
+        });
+      } else if(esNuevo){
+        // Buscar en productosCreados
+        const prodCreado=productosCreados.find(p=>
+          p.nombre.toLowerCase().includes(det.nombre.toLowerCase().split(" ")[0])
+        );
+        if(prodCreado){
+          const pv=prodCreado.costo>0?calcPrecioVenta(prodCreado.costo,prodCreado.margen):0;
+          items.push({
+            productoId:prodCreado.id,nombre:prodCreado.nombre,sku:prodCreado.sku,
+            costo:prodCreado.costo,precioVenta:pv,cantidad:cant,
+            foto_url:"",proveedor:"",_pendiente:true,
+          });
+        }
+      }
+    });
 
     if(!items.length){
       toast("No se pudieron armar los ítems de cotización","warning");
@@ -4081,14 +4112,14 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       ? op.fechaCierre.split(" ")[0].split("/").reverse().join("-")
       : "";
 
-    const notas="Generada desde Compra Ágil MP\nID: "+op.id+"\nPresupuesto estimado: "+fmt(op.presupuesto)+(productosCreados.length>0?"\n\nProductos pendientes de completar precio/proveedor:\n"+productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("\n"):"");
+    const notasInternas="Generada desde Compra Ágil MP\nID: "+op.id+"\nPresupuesto estimado: "+fmt(op.presupuesto)+(productosCreados.length>0?"\n\nProductos pendientes de precio/proveedor:\n"+productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("\n"):"");
 
     const cot={
       id:uid(),numero:numCot,
       organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
       ejecutivo:perfil?.nombre||"",estado:"Para revisar",
       fecha:today(),fechaVencimiento:fechaVenc,
-      items,notas,creadaEn:nowISO(),origenMP:true,
+      items,notas:"",notasInternas,creadaEn:nowISO(),origenMP:true,
     };
     const tots=calcTotalesCot(items);
     cot.total=tots.total;cot.costoTotal=tots.costoTotal;cot.margenProm=tots.margenProm;
@@ -4099,10 +4130,13 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
     guardarCotDB(cotClean);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cotClean.id}:o));
 
+    // Abrir la cotización recién creada
+    setDetalleCot(cotClean);
+
     const msg=productosCreados.length>0
-      ? `Cotización ${numCot} creada. ${productosCreados.length} producto(s) nuevo(s) como inactivos — completa precio en Productos.`
-      : `Cotización ${numCot} creada y lista para revisar.`;
-    toast(msg,"success",5000);
+      ? "Cotización "+numCot+" creada con "+productosCreados.length+" producto(s) nuevo(s) — abierta para revisar"
+      : "Cotización "+numCot+" creada — abierta para revisar";
+    toast(msg,"success",4000);
   };
 
   // ── Generar cotización ──────────────────────────────────────

@@ -75,6 +75,7 @@ create table if not exists cotizaciones (
   fecha_vencimiento date,
   items             jsonb default '[]',
   notas             text,
+  notas_internas    text,
   total             numeric default 0,
   costo_total       numeric default 0,
   margen_prom       numeric default 0,

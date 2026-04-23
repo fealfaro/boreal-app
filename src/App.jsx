@@ -4189,50 +4189,20 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   return (
     <div>
       {/* ── HEADER ──────────────────────────────────────────── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
-          <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Oportunidades</h1>
-          <p style={{fontSize:13,color:"#64748b",margin:0}}>
-            {counts.nuevas} con coincidencias · {counts.analizadas} analizadas · {counts.perdidas} perdidas
-            {cola.length>0&&<span style={{marginLeft:8,color:"#1d4ed8",fontWeight:600}}>· Analizando {cola.indexOf(analizando)+1}/{cola.length}</span>}
+          <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Oportunidades</h1>
+          <p style={{fontSize:12,color:"#94a3b8",margin:"3px 0 0"}}>
+            {counts.nuevas} por analizar · {counts.analizadas} analizadas
+            {cola.length>0&&<span style={{color:"#1d4ed8",fontWeight:600}}> · Analizando {cola.indexOf(analizando)+1}/{cola.length}</span>}
           </p>
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          {/* Filtros palabras clave */}
-          <Btn onClick={()=>setShowConfig(v=>!v)} variant="ghost" size="sm">
-            Filtros activos ({todasKW.length})
-          </Btn>
-          {/* Selección */}
-          {seleccion.size>0&&(
-            <>
-              <span style={{fontSize:12,color:"#64748b",fontWeight:500}}>{seleccion.size} seleccionadas</span>
-              <Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size}</Btn>
-              <Btn onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());toast("Archivadas");}} variant="ghost" size="sm">Archivar sel.</Btn>
-              <Btn onClick={()=>setSeleccion(new Set())} variant="ghost" size="sm">Deseleccionar</Btn>
-            </>
-          )}
-          {/* Detener cola */}
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {cola.length>0&&(
             <button onClick={()=>{detenerRef.current=true;}}
-              style={{fontSize:12,color:"#b91c1c",background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:7,padding:"4px 12px",cursor:"pointer",fontWeight:600}}>
+              style={{fontSize:12,fontWeight:600,color:"#b91c1c",background:"none",border:"1px solid #fca5a5",borderRadius:7,padding:"5px 12px",cursor:"pointer"}}>
               Detener
             </button>
-          )}
-          {/* Archivar todas las visibles */}
-          {filtro==="nuevas"&&sorted.length>0&&cola.length===0&&(
-            <Btn onClick={()=>{
-              if(!window.confirm(`¿Archivar las ${sorted.length} oportunidades visibles?`)) return;
-              const ids=new Set(sorted.map(o=>o.id));
-              setOportunidades(prev=>prev.map(o=>ids.has(o.id)?{...o,estado:"archivada"}:o));
-              toast(`${sorted.length} oportunidades archivadas`);
-            }} variant="ghost" size="sm">Archivar todas ({sorted.length})</Btn>
-          )}
-          {/* Reprocesar archivadas */}
-          {filtro==="archivadas"&&counts.archivadas>0&&(
-            <Btn onClick={()=>{
-              setOportunidades(prev=>prev.map(o=>o.estado==="archivada"?{...o,matches:matchKW(o.nombre),estado:matchKW(o.nombre).length>0?"nueva":"archivada"}:o));
-              toast("Reprocesando con filtros actualizados");
-            }} variant="ghost" size="sm">Reprocesar con filtros actuales</Btn>
           )}
           <input type="file" ref={fileRef} accept=".xlsx,.xls" style={{display:"none"}}
             onChange={e=>{if(e.target.files[0])importarExcel(e.target.files[0]);e.target.value="";}}/>
@@ -4280,36 +4250,75 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         </div>
       )}
 
-      {/* ── TABS + BÚSQUEDA + SORT ───────────────────────────── */}
+      {/* ── TOOLBAR ─────────────────────────────────────────── */}
       {oportunidades.length>0&&(
-        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
-          {/* Tabs */}
-          <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:8,padding:3}}>
-            {FILTROS.map(f=>(
-              <button key={f.id} onClick={()=>{setFiltro(f.id);setPagina(1);}}
-                style={{padding:"5px 10px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,
-                  fontWeight:filtro===f.id?600:400,
-                  background:filtro===f.id?"#fff":"transparent",
-                  color:filtro===f.id?"#0f172a":"#64748b",
-                  boxShadow:filtro===f.id?"0 1px 3px rgba(0,0,0,.1)":"none",whiteSpace:"nowrap"}}>
-                {f.label}{counts[f.id]>0?` (${counts[f.id]})`:""}</button>
-            ))}
+        <div style={{marginBottom:12}}>
+          {/* Fila 1: tabs + búsqueda */}
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:8,padding:3}}>
+              {FILTROS.map(f=>(
+                <button key={f.id} onClick={()=>{setFiltro(f.id);setPagina(1);}}
+                  style={{padding:"5px 11px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,
+                    fontWeight:filtro===f.id?600:400,whiteSpace:"nowrap",
+                    background:filtro===f.id?"#fff":"transparent",
+                    color:filtro===f.id?"#0f172a":"#64748b",
+                    boxShadow:filtro===f.id?"0 1px 3px rgba(0,0,0,.08)":"none"}}>
+                  {f.label}{counts[f.id]>0?` (${counts[f.id]})`:""}</button>
+              ))}
+            </div>
+            <div style={{flex:1,minWidth:180,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
+              <span style={{color:"#94a3b8",display:"flex",flexShrink:0}}>{Ic.search}</span>
+              <input value={busqueda} onChange={e=>{setBusqueda(e.target.value);setPagina(1);}}
+                placeholder="Buscar…"
+                style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
+              {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
+            </div>
           </div>
-          {/* Búsqueda */}
-          <div style={{flex:1,minWidth:160,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
-            <span style={{color:"#94a3b8",display:"flex",flexShrink:0}}>{Ic.search}</span>
-            <input value={busqueda} onChange={e=>{setBusqueda(e.target.value);setPagina(1);}}
-              placeholder="Buscar nombre, ID o institución…"
-              style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
-            {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16}}>×</button>}
-          </div>
-          {/* Sort */}
-          <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:8,padding:3,flexShrink:0}}>
-            {[["potencial","Potencial"],["monto_desc","Mayor $"],["monto_asc","Menor $"],["cierre_asc","Cierre próximo"]].map(([v,l])=>(
-              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"4px 9px",borderRadius:5,border:"none",cursor:"pointer",fontSize:11,
-                fontWeight:sortBy===v?700:400,background:sortBy===v?"#fff":"transparent",
-                color:sortBy===v?"#0f172a":"#64748b",boxShadow:sortBy===v?"0 1px 2px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap"}}>{l}</button>
-            ))}
+          {/* Fila 2: acciones selección + sort + keywords */}
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            {seleccion.size>0?(
+              <>
+                <span style={{fontSize:12,color:"#1d4ed8",fontWeight:600}}>{seleccion.size} seleccionadas</span>
+                <span style={{color:"#e2e8f0"}}>·</span>
+                <button onClick={()=>encolarAnalisis([...seleccion])}
+                  style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:7,padding:"5px 12px",cursor:"pointer"}}>
+                  Analizar {seleccion.size}
+                </button>
+                <button onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());toast("Archivadas");}}
+                  style={{fontSize:12,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer"}}>
+                  Archivar sel.
+                </button>
+                <button onClick={()=>setSeleccion(new Set())}
+                  style={{fontSize:12,color:"#94a3b8",background:"none",border:"none",cursor:"pointer",padding:"4px 6px"}}>
+                  × Limpiar
+                </button>
+              </>
+            ):(
+              <>
+                {/* Sort — solo 2 opciones útiles */}
+                <span style={{fontSize:11,color:"#94a3b8"}}>Ordenar:</span>
+                {[["cierre_asc","Cierre próximo"],["monto_desc","Mayor valor"],["potencial","Potencial"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>setSortBy(v)}
+                    style={{fontSize:11,padding:"3px 9px",borderRadius:6,border:"1px solid "+(sortBy===v?"#1d4ed8":"#e2e8f0"),
+                      background:sortBy===v?"#eff6ff":"transparent",
+                      color:sortBy===v?"#1d4ed8":"#64748b",cursor:"pointer",fontWeight:sortBy===v?600:400}}>
+                    {l}
+                  </button>
+                ))}
+                {/* Keywords */}
+                <button onClick={()=>setShowConfig(v=>!v)}
+                  style={{marginLeft:"auto",fontSize:11,color:"#94a3b8",background:"none",border:"none",cursor:"pointer",padding:"3px 6px"}}>
+                  {todasKW.length} palabras clave {showConfig?"▴":"▾"}
+                </button>
+                {/* Reprocesar / archivar contextuales */}
+                {filtro==="archivadas"&&counts.archivadas>0&&(
+                  <button onClick={()=>{setOportunidades(prev=>prev.map(o=>o.estado==="archivada"?{...o,matches:matchKW(o.nombre),estado:matchKW(o.nombre).length>0?"nueva":"archivada"}:o));toast("Reprocesado");}}
+                    style={{fontSize:11,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 9px",cursor:"pointer"}}>
+                    Reprocesar con filtros actuales
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

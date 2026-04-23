@@ -3980,7 +3980,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
   };
 
   // ── Crear productos nuevos y generar cotización ───────────────
-  const crearYCotizar=async(op)=>{
+  const crearYCotizar=async(op, overrides={})=>{
     const {analisisIA}=op;
     if(!analisisIA){toast("Primero analiza esta oportunidad con IA","warning");return;}
 
@@ -4350,6 +4350,10 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
   const ec = ESTADOS_OP_COLORS[op.estado] || ESTADOS_OP_COLORS.nueva;
   const ia = op.analisisIA;
   const [copied, setCopied] = useState(false);
+  // overrides[i] = productoId seleccionado por el usuario para la fila i (null = crear nuevo)
+  const [overrides, setOverrides] = useState({});
+  const [buscandoFila, setBuscandoFila] = useState(null); // índice de fila con buscador abierto
+  const [busqFila, setBusqFila] = useState("");
 
   const parseFechaCierre = (str) => {
     if (!str) return null;
@@ -4499,38 +4503,92 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                       <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>CANTIDAD</span>
                       <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>EN TU CATÁLOGO</span>
                     </div>
-                    {todosItems.map(({det,match,prod,esNuevo},i)=>{
+                    {todosItems.map(({det,match,prod:prodIA,esNuevo},i)=>{
+                      // Si el usuario eligió un override, usarlo
+                      const overrideId=overrides[i];
+                      const prod=overrideId==="nuevo"?null:overrideId?productos.find(p=>p.id===overrideId):prodIA;
                       const cant=det.cantidad||1;
                       const unidad=UNITS[det.unidad?.toUpperCase()]||det.unidad||"un";
                       const stock=prod?getStockTotal(prod):0;
                       const stockOk=prod&&stock>=cant;
+                      const crearNuevo=overrideId==="nuevo"||(esNuevo&&overrideId===undefined);
+
+                      // Productos filtrados para buscador
+                      const prodsFiltrados=busqFila?productos.filter(p=>
+                        p.activo!==false&&(
+                          p.nombre.toLowerCase().includes(busqFila.toLowerCase())||
+                          p.sku.toLowerCase().includes(busqFila.toLowerCase())
+                        )
+                      ).slice(0,6):[];
+
                       return (
-                        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 90px 140px",padding:"9px 12px",
-                          borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",alignItems:"center",
-                          background:esNuevo?"#fffbeb":"#fff"}}>
-                          {/* Columna 1: nombre solicitado */}
-                          <div style={{minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{det.nombre}</div>
-                            {esNuevo&&<div style={{fontSize:10,color:"#d97706"}}>No en catálogo</div>}
-                          </div>
-                          {/* Columna 2: cantidad */}
-                          <div style={{fontSize:12,color:"#0f172a",textAlign:"right",fontWeight:500}}>{cant} {unidad}</div>
-                          {/* Columna 3: match en catálogo */}
-                          <div style={{textAlign:"right"}}>
-                            {prod?(
-                              <div>
-                                <div style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c"}}>
-                                  {stockOk?"✓":"⚠"} {prod.nombre.slice(0,20)}{prod.nombre.length>20?"…":""}
+                        <div key={i} style={{borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",
+                          background:crearNuevo?"#fffbeb":"#fff"}}>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr",padding:"8px 12px",alignItems:"center",gap:8}}>
+                            {/* Col 1: solicitan */}
+                            <div style={{minWidth:0}}>
+                              <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{det.nombre}</div>
+                              <div style={{fontSize:10,color:"#94a3b8"}}>{cant} {unidad}</div>
+                            </div>
+                            {/* Col 2: flecha */}
+                            <div style={{textAlign:"center",color:"#cbd5e1",fontSize:16}}>→</div>
+                            {/* Col 3: producto del catálogo */}
+                            <div style={{minWidth:0}}>
+                              {buscandoFila===i?(
+                                <div style={{position:"relative"}}>
+                                  <input autoFocus value={busqFila} onChange={e=>setBusqFila(e.target.value)}
+                                    placeholder="Buscar producto…"
+                                    onBlur={()=>setTimeout(()=>{setBuscandoFila(null);setBusqFila("");},200)}
+                                    style={{width:"100%",fontSize:11,padding:"4px 8px",borderRadius:6,border:"1px solid #1d4ed8",outline:"none",boxSizing:"border-box"}}/>
+                                  {prodsFiltrados.length>0&&(
+                                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.1)",zIndex:50,maxHeight:160,overflowY:"auto"}}>
+                                      <div onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
+                                        style={{padding:"6px 10px",fontSize:11,color:"#d97706",cursor:"pointer",borderBottom:"1px solid #f1f5f9"}}
+                                        onMouseEnter={e=>e.currentTarget.style.background="#fffbeb"}
+                                        onMouseLeave={e=>e.currentTarget.style.background=""}>
+                                        + Crear como producto nuevo
+                                      </div>
+                                      {prodsFiltrados.map(p=>(
+                                        <div key={p.id} onClick={()=>{setOverrides(prev=>({...prev,[i]:p.id}));setBuscandoFila(null);setBusqFila("");}}
+                                          style={{padding:"6px 10px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
+                                          onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                                          onMouseLeave={e=>e.currentTarget.style.background=""}>
+                                          <div style={{fontSize:11,fontWeight:500}}>{p.nombre}</div>
+                                          <div style={{fontSize:10,color:"#94a3b8"}}>{p.sku} · stock {getStockTotal(p)}</div>
+                                        </div>
+                                      ))}
+                                      {!busqFila&&<div style={{padding:"6px 10px",fontSize:11,color:"#94a3b8"}}>Escribe para buscar…</div>}
+                                    </div>
+                                  )}
+                                  {busqFila&&prodsFiltrados.length===0&&(
+                                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,zIndex:50}}>
+                                      <div onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
+                                        style={{padding:"8px 10px",fontSize:11,color:"#d97706",cursor:"pointer"}}>
+                                        + Crear "{busqFila}" como producto nuevo
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                                <div style={{fontSize:10,color:stockOk?"#86efac":"#fca5a5"}}>
-                                  {stock} disp. {!stockOk&&"(insuficiente)"}
-                                </div>
-                              </div>
-                            ):esNuevo?(
-                              <span style={{fontSize:11,color:"#d97706",fontWeight:600}}>Se creará inactivo</span>
-                            ):(
-                              <span style={{fontSize:11,color:"#94a3b8"}}>Sin coincidencia</span>
-                            )}
+                              ):(
+                                <button onClick={()=>{setBuscandoFila(i);setBusqFila("");}}
+                                  style={{width:"100%",textAlign:"left",background:"none",border:"1px solid #e2e8f0",borderRadius:6,
+                                    padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
+                                  {prod?(
+                                    <div style={{minWidth:0,flex:1}}>
+                                      <div style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                        {stockOk?"✓":"⚠"} {prod.nombre}
+                                      </div>
+                                      <div style={{fontSize:10,color:"#94a3b8"}}>{stock} disp.</div>
+                                    </div>
+                                  ):crearNuevo?(
+                                    <span style={{fontSize:11,color:"#d97706",fontWeight:500}}>Crear nuevo</span>
+                                  ):(
+                                    <span style={{fontSize:11,color:"#94a3b8"}}>Sin match — elegir</span>
+                                  )}
+                                  <span style={{color:"#94a3b8",fontSize:10,flexShrink:0}}>✎</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -4544,12 +4602,12 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                 {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
                   <>
                     {puedeGenerar&&(
-                      <Btn onClick={async()=>{
-                        const btn=document.activeElement;
-                        if(btn) btn.disabled=true;
-                        toast("Procesando…");
-                        await onCrearYCotizar(op);
-                        if(btn) btn.disabled=false;
+                      <Btn onClick={async(e)=>{
+                        e.currentTarget.disabled=true;
+                        e.currentTarget.textContent="Procesando…";
+                        await onCrearYCotizar(op,overrides);
+                        e.currentTarget.disabled=false;
+                        e.currentTarget.textContent=nuevos.length>0?"Crear productos y cotizar":"Generar cotización";
                       }} size="sm">
                         {nuevos.length>0?"Crear productos y cotizar":"Generar cotización"}
                       </Btn>

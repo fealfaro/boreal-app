@@ -124,26 +124,30 @@ Formato exacto requerido:
         const claudeData = await claudeResp.json();
         const txt = claudeData.content?.[0]?.text || '';
         
-        // Log para debug
-        console.log('Claude raw response:', txt.slice(0, 500));
+        // Debug info included in response
+        const debugInfo = {
+          claudeStatus: claudeResp.status,
+          hasContent: !!claudeData.content,
+          contentLength: txt.length,
+          txtPreview: txt.slice(0, 200),
+          claudeError: claudeData.error || null,
+        };
         
         let analisis = {};
         try {
-          // Intentar extraer JSON del texto
           const jsonMatch = txt.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             analisis = JSON.parse(jsonMatch[0]);
           }
         } catch(parseErr) {
-          console.error('JSON parse error:', parseErr.message, 'Text:', txt.slice(0, 200));
-          // Si no parsea, crear estructura básica con el texto raw
           analisis = {
-            resumen: txt.slice(0, 300),
+            resumen: txt.slice(0, 300) || 'Error al parsear respuesta',
             relevante: true,
             recomendacion: 'revisar',
             productosDetectados: [],
             productosEnCatalogo: [],
             productosNuevos: [],
+            _parseError: parseErr.message,
           };
         }
 
@@ -151,6 +155,7 @@ Formato exacto requerido:
           ok: true,
           url: mpUrl,
           analisis,
+          _debug: debugInfo,
         }), {
           headers: { ...CORS, 'Content-Type': 'application/json' },
         });

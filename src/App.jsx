@@ -142,8 +142,12 @@ function EstadoBadge({estado}) {
   return <span style={{background:col.bg,color:col.text,padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:500,whiteSpace:"nowrap"}}>{estado}</span>;
 }
 
-function MargenBadge({pct,monto,umbrales={},size="sm"}) {
-  const u=colorMargen(pct,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});
+function MargenBadge({pct,monto,umbrales={},size="sm",sinCosto=false}) {
+  if(sinCosto&&(pct===null||pct===undefined)) return (
+    <span style={{background:"#fef9c3",color:"#d97706",padding:size==="md"?"3px 9px":"2px 8px",borderRadius:20,fontSize:size==="md"?12:10,fontWeight:600,whiteSpace:"nowrap"}}>sin costo</span>
+  );
+  if(pct===null||pct===undefined) return null;
+  const u=colorMargen(pct||0,{verde:umbrales.verde||30,amarillo:umbrales.amarillo||15});
   const pad=size==="md"?"3px 9px":"2px 8px";
   const fs=size==="md"?12:10;
   const fw=size==="md"?700:600;
@@ -873,7 +877,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
                     </td>
                     <td style={{padding:"8px 11px",fontWeight:500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.organismo}</td>
                     <td style={{padding:"8px 11px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
-                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}><MargenBadge pct={mg2} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales}/></td>
+                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}><MargenBadge pct={mg2} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales} sinCosto={mg2===null}/></td>
                     <td style={{padding:"8px 11px"}}><EstadoBadge estado={c.estado}/></td>
                     <td style={{padding:"8px 11px"}} onClick={e=>e.stopPropagation()}>
                       <button onClick={e=>{e.stopPropagation();onEditar(c);}} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#64748b",transition:"all .12s"}}>Editar</button>
@@ -1349,7 +1353,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
             <div style={{flex:1,minWidth:90}}><div style={{fontWeight:500,fontSize:13}}>{c.organismo}</div><div style={{color:"#94a3b8",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{c.numero}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Venta</div><div style={{fontWeight:700,fontSize:13}}>{fmt(c.total||0)}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Util. bruta</div><div style={{fontWeight:700,fontSize:13,color:"#10b981"}}>{fmt(util)}</div></div>
-            <MargenBadge pct={mg3} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales} size="md"/>
+            <MargenBadge pct={mg3} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales} size="md" sinCosto={mg3===null}/>
           </div>);
         })}
       </div>

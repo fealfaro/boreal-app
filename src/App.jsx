@@ -755,43 +755,33 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 
   return (
     <div>
-      {/* Volver a cotización banner */}
-      {volverACot&&cots&&(()=>{
-        const cot=cots.find(c=>c.id===volverACot);
+      {/* Volver a cotización */}
+      {volverACot&&(()=>{
+        const cot=(cots||[]).find(c=>c.id===volverACot);
         if(!cot) return null;
-        return (
-          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
-            <div style={{flex:1,fontSize:13,color:"#1d4ed8"}}>← Estabas editando cotización <strong>{cot.numero}</strong> — completa el costo y vuelve</div>
-            <button onClick={()=>{if(setDetalleCot)setDetalleCot(cot);if(setVolverACot)setVolverACot(null);if(setTab)setTab("cotizaciones");}}
-              style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:7,padding:"5px 14px",cursor:"pointer"}}>
-              Volver a la cotización
-            </button>
-            <button onClick={()=>setVolverACot&&setVolverACot(null)} style={{fontSize:12,color:"#94a3b8",background:"none",border:"none",cursor:"pointer"}}>×</button>
-          </div>
-        );
+        return <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
+          <span style={{flex:1,fontSize:13,color:"#1d4ed8"}}>← Cotización <strong>{cot.numero}</strong> — completa el costo y vuelve</span>
+          <button onClick={()=>{setDetalleCot&&setDetalleCot(cot);setVolverACot&&setVolverACot(null);setTab&&setTab("cotizaciones");}}
+            style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:7,padding:"5px 14px",cursor:"pointer"}}>
+            Volver
+          </button>
+          <button onClick={()=>setVolverACot&&setVolverACot(null)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16}}>×</button>
+        </div>;
       })()}
-      {/* Productos pendientes de costo */}
-      {prodsPendientes.length>0&&(()=>{
-        const pend=productos.filter(p=>prodsPendientes.includes(p.id));
-        if(!pend.length) return null;
-        return (
-          <div style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",gap:10,alignItems:"flex-start"}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#92400e",marginBottom:4}}>
-                {pend.length} producto{pend.length>1?"s":""} sin costo — completa para calcular margen
-              </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {pend.map(p=>(
-                  <button key={p.id} onClick={()=>{onEdit(p);setProdsPendientes&&setProdsPendientes(prev=>prev.filter(id=>id!==p.id));}}
-                    style={{fontSize:11,fontWeight:600,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>
-                    {p.nombre} →
-                  </button>
-                ))}
-              </div>
-            </div>
+      {/* Productos sin costo */}
+      {prodsPendientes.length>0&&productos.filter(p=>prodsPendientes.includes(p.id)).length>0&&(
+        <div style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#92400e",marginBottom:6}}>Productos sin costo — completa para calcular margen</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {productos.filter(p=>prodsPendientes.includes(p.id)).map(p=>(
+              <button key={p.id} onClick={()=>{onEdit(p);setProdsPendientes&&setProdsPendientes(prev=>prev.filter(id=>id!==p.id));}}
+                style={{fontSize:11,fontWeight:600,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>
+                {p.nombre} →
+              </button>
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Productos</h1><p style={{color:"#64748b",fontSize:13,margin:0}}>{sorted.length} de {productos.length}</p></div>
         <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>

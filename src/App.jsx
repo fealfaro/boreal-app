@@ -3899,36 +3899,37 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 
   // ── Limpieza y auto-archivo ────────────────────────────────
   const isCerrada=(fechaCierre)=>{
-    if(!fechaCierre) return false;
-    const parts=fechaCierre.split(" ")[0]; const [d,m,y]=parts.split("/");
-    if(!d||!m||!y||isNaN(Number(y))) return false;
-    const hoy=new Date(); hoy.setHours(0,0,0,0);
-    return new Date(Number(y),Number(m)-1,Number(d))<hoy;
+    // Use same logic as tiempoRestante to be consistent with what UI shows
+    const tr=tiempoRestante(fechaCierre);
+    return tr?.pasado===true;
   };
 
   useEffect(()=>{
+    if(!oportunidades.length) return;
     const hace30=new Date(); hace30.setDate(hace30.getDate()-30);
     const toUpdate=[];
-    setOportunidades(prev=>prev.map(o=>{
-      // Auto-pasar a "perdida" las cerradas que aún sean "nueva" o "analizada"
-      if(["nueva","analizada"].includes(o.estado)&&isCerrada(o.fechaCierre)){
-        toUpdate.push(o.id);
-        return {...o,estado:"perdida"};
-      }
-      return o;
-    }).filter(o=>{
-      // Eliminar archivadas/perdidas > 30 días
-      if(["archivada","perdida"].includes(o.estado)&&o.importadaEn&&new Date(o.importadaEn)<hace30) return false;
-      return true;
-    }));
-    // Persist estado "perdida" to DB
+    setOportunidades(prev=>{
+      const updated=prev.map(o=>{
+        if(["nueva","analizada"].includes(o.estado)&&isCerrada(o.fechaCierre)){
+          toUpdate.push(o.id);
+          return {...o,estado:"perdida"};
+        }
+        return o;
+      }).filter(o=>{
+        if(["archivada","perdida"].includes(o.estado)&&o.importadaEn&&new Date(o.importadaEn)<hace30) return false;
+        return true;
+      });
+      // Only update if something changed
+      const changed=updated.length!==prev.length||toUpdate.length>0;
+      return changed?updated:prev;
+    });
     if(toUpdate.length>0&&supabase){
       toUpdate.forEach(id=>{
         supabase.from("oportunidades").update({estado:"perdida"}).eq("id",id)
           .then(({error})=>{if(error) console.error("Error archivando cerrada:",error);});
       });
     }
-  },[oportunidades.length]); // re-run when new ops loaded
+  }); // run every render - cheap since setOportunidades only triggers when changed
 
   // ── Palabras clave ─────────────────────────────────────────
   const kwConfig  = (config.palabrasClave||"").split("\n").map(s=>s.trim().toLowerCase()).filter(Boolean);

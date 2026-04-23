@@ -757,7 +757,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
         <div><h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Productos</h1><p style={{color:"#64748b",fontSize:13,margin:0}}>{sorted.length} de {productos.length}</p></div>
-</div>
+      </div>
       {/* Volver a cotización banner */}
       {volverACot&&cots&&(()=>{
         const cot=cots.find(c=>c.id===volverACot);

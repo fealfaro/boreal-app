@@ -105,7 +105,7 @@ export const copiarAlPortapapeles = async texto => {
   catch { return false; }
 };
 
-export const BUILD_VERSION = "v1.17.5";
+export const BUILD_VERSION = "v1.17.6";
 export const USUARIO_DEFAULT = {nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",telefono:"+56 9 3200 0969",email:"fealfaro@gmail.com",foto:""};
 
 // Format ISO date to dd/mm/yyyy

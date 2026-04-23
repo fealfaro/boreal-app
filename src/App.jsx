@@ -3977,13 +3977,7 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
       ejecutivo:perfil?.nombre||"",estado:"Para revisar",
       fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]?.split("/").reverse().join("-")||"",
-      items,notas:`Generada desde licitación MP
-ID: ${op.id}
-Presupuesto: ${fmt(op.presupuesto)}${productosCreados.length>0?`
-
-Productos creados automáticamente:
-${productosCreados.map(p=>`- ${p.nombre} (${p.sku})`).join("
-")}`:""}`,
+      items,notas:"Generada desde licitación MP\nID: "+op.id+"\nPresupuesto: "+fmt(op.presupuesto)+(productosCreados.length>0?"\n\nProductos creados automáticamente:\n"+productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("\n"):""),
       creadaEn:nowISO(),origenMP:true};
     const{total,costoTotal,margenProm}=calcTotalesCot(items);
     cot.total=total;cot.costoTotal=costoTotal;cot.margenProm=margenProm;

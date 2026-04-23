@@ -3982,76 +3982,135 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
   // ── Crear productos nuevos y generar cotización ───────────────
   const crearYCotizar=async(op)=>{
     const {analisisIA}=op;
-    if(!analisisIA) return;
+    if(!analisisIA){toast("Primero analiza esta oportunidad con IA","warning");return;}
 
     const enCatalogo=analisisIA.productosEnCatalogo||analisisIA.productosEncontrados||[];
+    const detectados=analisisIA.productosDetectados||[];
     const nuevosIA=analisisIA.productosNuevos||[];
 
-    // 1. Crear productos nuevos en catálogo con datos mínimos
+    // 1. Crear productos nuevos como INACTIVOS (pendiente de precio/proveedor)
     const productosCreados=[];
+    const productosActuales=[...productos]; // snapshot actual antes de setState
+
     for(const pNuevo of nuevosIA){
-      const costoEstimado=op.presupuesto>0&&(enCatalogo.length+nuevosIA.length)>0
-        ? Math.round(op.presupuesto/(enCatalogo.length+nuevosIA.length)*0.6)
+      // Verificar si ya existe
+      const yaExiste=productosActuales.find(p=>
+        p.nombre.toLowerCase()===pNuevo.nombre.toLowerCase()
+      );
+      if(yaExiste){productosCreados.push(yaExiste);continue;}
+
+      // Estimar costo por item si tenemos presupuesto
+      const totalItems=(enCatalogo.length+nuevosIA.length)||1;
+      const costoEstimado=op.presupuesto>0
+        ? Math.round((op.presupuesto/1.19)/totalItems*0.65) // descontar IVA y margen ~35%
         : 0;
+
+      const det=detectados.find(d=>d.nombre.toLowerCase().includes(pNuevo.nombre.toLowerCase().split(" ")[0]));
       const nuevo={
         id:uid(),
-        sku:`MP-${op.id.split("-")[0]}-${uid().slice(0,4).toUpperCase()}`,
+        sku:"MP-"+op.id.replace(/-/g,"").slice(0,6)+"-"+String(productosCreados.length+1).padStart(2,"0"),
         nombre:pNuevo.nombre,
         proveedor:"",
         costo:costoEstimado,
         margen:30,
         foto_url:"",
-        categoria:"Sin categoría",
+        categoria:"Pendiente",
         stock:0,
         stockPorBodega:[],
         historialCostos:[],
-        activo:true,
+        activo:false, // INACTIVO hasta completar datos
         updatedAt:nowISO(),
+        _nota:"Creado desde oportunidad MP "+op.id+" — completar precio y proveedor",
       };
+      productosActuales.push(nuevo);
       setProductos(prev=>[...prev,nuevo]);
       guardarProductoDB(nuevo);
       productosCreados.push(nuevo);
-      toast(`Producto creado: ${nuevo.nombre}`,"success",2000);
     }
 
-    // 2. Esperar un tick para que el estado se actualice
-    await new Promise(r=>setTimeout(r,100));
+    // 2. Construir items de cotización
+    const items=[];
 
-    // 3. Generar cotización con todos los productos (catálogo + nuevos)
-    const todosProductos=[...productos,...productosCreados];
-    const items=[
-      ...enCatalogo.map(pi=>{
-        const prod=todosProductos.find(p=>p.sku===pi.sku||(p.nombre||"").toLowerCase()===(pi.nombre||"").toLowerCase());
-        if(!prod) return null;
-        const pv=calcPrecioVenta(prod.costo,prod.margen);
-        return{productoId:prod.id,nombre:prod.nombre,sku:prod.sku,costo:prod.costo,
-          precioVenta:pv,cantidad:pi.cantidadEstimada||1,foto_url:prod.foto_url||"",proveedor:prod.proveedor||""};
-      }).filter(Boolean),
-      ...productosCreados.map(prod=>{
-        const pi=nuevosIA.find(p=>p.nombre===prod.nombre)||{};
-        const pv=calcPrecioVenta(prod.costo,prod.margen);
-        return{productoId:prod.id,nombre:prod.nombre,sku:prod.sku,costo:prod.costo,
-          precioVenta:pv||1,cantidad:pi.cantidadEstimada||1,foto_url:"",proveedor:""};
-      }),
-    ];
+    // Productos del catálogo existente
+    for(const pi of enCatalogo){
+      const prod=productosActuales.find(p=>
+        (pi.sku&&p.sku===pi.sku)||
+        (p.nombre||"").toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0])||
+        (pi.nombre||"").toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0])
+      );
+      if(!prod) continue;
+      const det=detectados.find(d=>d.nombre.toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0]));
+      const cantidad=det?.cantidad||pi.cantidadEstimada||1;
+      const pv=calcPrecioVenta(prod.costo,prod.margen);
+      items.push({
+        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
+        costo:prod.costo,precioVenta:pv,cantidad,
+        foto_url:prod.foto_url||"",proveedor:prod.proveedor||"",
+      });
+    }
 
-    if(!items.length){toast("No hay productos para cotizar","warning");return;}
+    // Productos nuevos creados
+    for(const prod of productosCreados){
+      if(enCatalogo.find(pi=>prod.nombre.toLowerCase().includes((pi.nombre||"").toLowerCase().split(" ")[0]))) continue;
+      const det=detectados.find(d=>d.nombre.toLowerCase().includes(prod.nombre.toLowerCase().split(" ")[0]));
+      const pNuevo=nuevosIA.find(p=>p.nombre===prod.nombre)||{};
+      const cantidad=det?.cantidad||pNuevo.cantidadEstimada||1;
+      const pv=prod.costo>0?calcPrecioVenta(prod.costo,prod.margen):0;
+      items.push({
+        productoId:prod.id,nombre:prod.nombre,sku:prod.sku,
+        costo:prod.costo,precioVenta:pv,cantidad,
+        foto_url:"",proveedor:"",
+        _pendiente:true, // marcar como pendiente de precio
+      });
+    }
 
-    const instNorm=op.institucion.trim();
-    if(instNorm&&!empresas.includes(instNorm)) setEmpresas(prev=>[...prev,instNorm]);
-    const cot={id:uid(),
-      numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
+    if(!items.length){
+      toast("No se pudieron armar los ítems de cotización","warning");
+      return;
+    }
+
+    // 3. Crear cotización
+    const instNorm=(op.institucion||"").trim();
+    if(instNorm&&!empresasNombres.includes(instNorm)){
+      setEmpresas(prev=>[...prev,{nombre:instNorm,rut:"",email:"",telefono:"",direccion:""}]);
+    }
+
+    const numCot="BOT-"+new Date().getFullYear()+"-"+String(cots.length+1).padStart(3,"0");
+    const fechaVenc=op.fechaCierre
+      ? op.fechaCierre.split(" ")[0].split("/").reverse().join("-")
+      : "";
+
+    const notas="Generada desde Compra Ágil MP
+ID: "+op.id
+      +"
+Presupuesto estimado: "+fmt(op.presupuesto)
+      +(productosCreados.length>0
+        ? "
+
+Productos pendientes de completar precio/proveedor:
+"
+          +productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("
+")
+        : "");
+
+    const cot={
+      id:uid(),numero:numCot,
       organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
       ejecutivo:perfil?.nombre||"",estado:"Para revisar",
-      fecha:today(),fechaVencimiento:op.fechaCierre?.split(" ")[0]?.split("/").reverse().join("-")||"",
-      items,notas:"Generada desde licitación MP\nID: "+op.id+"\nPresupuesto: "+fmt(op.presupuesto)+(productosCreados.length>0?"\n\nProductos creados automáticamente:\n"+productosCreados.map(p=>"- "+p.nombre+" ("+p.sku+")").join("\n"):""),
-      creadaEn:nowISO(),origenMP:true};
-    const{total,costoTotal,margenProm}=calcTotalesCot(items);
-    cot.total=total;cot.costoTotal=costoTotal;cot.margenProm=margenProm;
+      fecha:today(),fechaVencimiento:fechaVenc,
+      items,notas,creadaEn:nowISO(),origenMP:true,
+    };
+    const tots=calcTotalesCot(items);
+    cot.total=tots.total;cot.costoTotal=tots.costoTotal;cot.margenProm=tots.margenProm;
+
     setCots(prev=>[cot,...prev]);
     guardarCotDB(cot);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
-    toast(`Cotización ${cot.numero} creada${productosCreados.length>0?` con ${productosCreados.length} producto(s) nuevo(s)`:""}`,  "success",4000);
+
+    const msg=productosCreados.length>0
+      ? `Cotización ${numCot} creada. ${productosCreados.length} producto(s) nuevo(s) como inactivos — completa precio en Productos.`
+      : `Cotización ${numCot} creada y lista para revisar.`;
+    toast(msg,"success",5000);
   };
 
   // ── Generar cotización ──────────────────────────────────────
@@ -4333,15 +4392,7 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
           <div style={{width:6,height:6,borderRadius:"50%",background:"#1d4ed8",flexShrink:0,marginTop:6,animation:"pulse 1s infinite"}}/>
         )}
 
-        {/* Potencial badge (izquierda vertical) */}
-        {potencial && (
-          <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:2}}>
-            <div style={{width:8,height:8,borderRadius:"50%",background:potencial.color}}/>
-            <div style={{fontSize:8,fontWeight:700,color:potencial.color,textTransform:"uppercase",writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:1}}>
-              {potencial.nivel}
-            </div>
-          </div>
-        )}
+
 
         <div style={{flex:1,minWidth:0}}>
           {/* Row 1: ID + estado + keywords */}
@@ -4420,68 +4471,68 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                 )}
               </div>
 
-              {/* Productos en dos columnas */}
-              <div style={{display:"grid",gridTemplateColumns:window.innerWidth<600?"1fr":"1fr 1fr",gap:10,marginBottom:14}}>
-
-                {/* Columna izquierda: lo que piden */}
-                {detectados.length>0&&(
-                  <div style={{background:"#fff",borderRadius:10,padding:"12px",border:"1px solid #e2e8f0"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>SOLICITAN</div>
-                    {detectados.map((p,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",
-                        borderBottom:i<detectados.length-1?"1px solid #f8fafc":"none",fontSize:12}}>
-                        <span style={{color:"#0f172a",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:8}}>{p.nombre}</span>
-                        <span style={{color:"#64748b",flexShrink:0}}>{p.cantidad} {p.unidad||"uds"}</span>
-                      </div>
-                    ))}
+              {/* Tabla única de productos */}
+              {(detectados.length>0||enCatalogo.length>0||nuevos.length>0)&&(
+                <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:14,overflow:"hidden"}}>
+                  {/* Header */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                    <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>PRODUCTO</span>
+                    <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>CANTIDAD</span>
+                    <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>DISPONIBILIDAD</span>
                   </div>
-                )}
-
-                {/* Columna derecha: disponibilidad */}
-                <div style={{background:"#fff",borderRadius:10,padding:"12px",border:"1px solid #e2e8f0"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:8,letterSpacing:".05em"}}>TU DISPONIBILIDAD</div>
-
+                  {/* Productos del catálogo */}
                   {enCatalogo.map((p,i)=>{
                     const prod=productos.find(pr=>pr.sku===p.sku||(pr.nombre||"").toLowerCase()===(p.nombre||"").toLowerCase());
+                    const det=detectados.find(d=>d.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0]));
+                    const cant=det?.cantidad||p.cantidadEstimada||1;
+                    const unidadLabel=({"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un"})[det?.unidad?.toUpperCase()]||det?.unidad||"un";
                     const stock=prod?getStockTotal(prod):0;
-                    const stockOk=stock>=(p.cantidadEstimada||1);
+                    const stockOk=stock>=cant;
                     return (
-                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",
-                        borderBottom:i<enCatalogo.length+nuevos.length-1?"1px solid #f8fafc":"none"}}>
-                        <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,
-                          background:p.confianza==="alta"?"#22c55e":p.confianza==="media"?"#f59e0b":"#ef4444"}}/>
-                        <div style={{flex:1,minWidth:0}}>
+                      <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"8px 12px",
+                        borderBottom:"1px solid #f8fafc",alignItems:"center"}}>
+                        <div>
                           <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                          {prod&&<div style={{fontSize:10,color:stockOk?"#15803d":"#b91c1c"}}>
-                            Stock: {stock} uds {stockOk?"✓":"(insuficiente)"}
-                          </div>}
+                          {prod&&<div style={{fontSize:10,color:"#94a3b8"}}>{prod.sku}</div>}
                         </div>
-                        <span style={{fontSize:10,padding:"1px 6px",borderRadius:20,flexShrink:0,
-                          background:p.confianza==="alta"?"#dcfce7":p.confianza==="media"?"#fef9c3":"#fee2e2",
-                          color:p.confianza==="alta"?"#15803d":p.confianza==="media"?"#854d0e":"#b91c1c",fontWeight:600}}>
-                          {p.confianza}
-                        </span>
+                        <div style={{fontSize:12,color:"#475569",textAlign:"right"}}>{cant} {unidadLabel}</div>
+                        <div style={{textAlign:"right"}}>
+                          {prod ? (
+                            <span style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c"}}>
+                              {stockOk?"✓ Stock ok":"⚠ Stock bajo"}
+                              <span style={{fontSize:10,fontWeight:400,color:"#94a3b8",display:"block"}}>{stock} disponibles</span>
+                            </span>
+                          ) : (
+                            <span style={{fontSize:11,color:"#94a3b8"}}>No encontrado</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
-
-                  {nuevos.map((p,i)=>(
-                    <div key={"n"+i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",
-                      borderBottom:i<nuevos.length-1?"1px solid #f8fafc":"none"}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:"#94a3b8"}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:12,fontWeight:500,color:"#475569",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                        <div style={{fontSize:10,color:"#94a3b8"}}>No en catálogo — se creará</div>
+                  {/* Productos nuevos */}
+                  {nuevos.map((p,i)=>{
+                    const det=detectados.find(d=>d.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0]));
+                    const cant=det?.cantidad||p.cantidadEstimada||1;
+                    const unidadLabel=({"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un"})[det?.unidad?.toUpperCase()]||det?.unidad||"un";
+                    return (
+                      <div key={"n"+i} style={{display:"grid",gridTemplateColumns:"1fr 80px 120px",padding:"8px 12px",
+                        borderBottom:i<nuevos.length-1?"1px solid #f8fafc":"none",alignItems:"center",background:"#fffbeb"}}>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:500,color:"#475569"}}>{p.nombre}</div>
+                          <div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>
+                        </div>
+                        <div style={{fontSize:12,color:"#475569",textAlign:"right"}}>{cant} {unidadLabel}</div>
+                        <div style={{textAlign:"right"}}>
+                          <span style={{fontSize:11,color:"#d97706",fontWeight:600}}>Pendiente precio</span>
+                        </div>
                       </div>
-                      <span style={{fontSize:10,padding:"1px 6px",borderRadius:20,background:"#f1f5f9",color:"#64748b",flexShrink:0}}>nuevo</span>
-                    </div>
-                  ))}
-
+                    );
+                  })}
                   {enCatalogo.length===0&&nuevos.length===0&&(
-                    <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:"8px 0"}}>Sin coincidencias</div>
+                    <div style={{padding:"16px",textAlign:"center",fontSize:12,color:"#94a3b8"}}>Sin productos identificados en catálogo</div>
                   )}
                 </div>
-              </div>
+              )}
 
               {/* Acciones */}
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>

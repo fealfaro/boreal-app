@@ -3908,9 +3908,11 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 
   useEffect(()=>{
     const hace30=new Date(); hace30.setDate(hace30.getDate()-30);
+    const toUpdate=[];
     setOportunidades(prev=>prev.map(o=>{
       // Auto-pasar a "perdida" las cerradas que aún sean "nueva" o "analizada"
       if(["nueva","analizada"].includes(o.estado)&&isCerrada(o.fechaCierre)){
+        toUpdate.push(o.id);
         return {...o,estado:"perdida"};
       }
       return o;
@@ -3919,6 +3921,13 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       if(["archivada","perdida"].includes(o.estado)&&o.importadaEn&&new Date(o.importadaEn)<hace30) return false;
       return true;
     }));
+    // Persist estado "perdida" to DB
+    if(toUpdate.length>0&&supabase){
+      toUpdate.forEach(id=>{
+        supabase.from("oportunidades").update({estado:"perdida"}).eq("id",id)
+          .then(({error})=>{if(error) console.error("Error archivando cerrada:",error);});
+      });
+    }
   },[oportunidades.length]); // re-run when new ops loaded
 
   // ── Palabras clave ─────────────────────────────────────────
@@ -4131,7 +4140,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 
   // ── Datos filtrados ────────────────────────────────────────
   const FILTROS=[
-    {id:"nuevas",    label:"Con coincidencias", estados:["nueva","analizada","cotizada"]},
+    {id:"nuevas",    label:"Por analizar",       estados:["nueva"]},
     {id:"analizadas",label:"Analizadas",         estados:["analizada","cotizada"]},
     {id:"archivadas",label:"Archivadas",          estados:["archivada"]},
     {id:"perdidas",  label:"Perdidas",            estados:["perdida"]},
@@ -4160,7 +4169,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const paginadas=sorted.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
 
   const counts={
-    nuevas:    oportunidades.filter(o=>["nueva","analizada","cotizada"].includes(o.estado)).length,
+    nuevas:    oportunidades.filter(o=>o.estado==="nueva").length,
     analizadas:oportunidades.filter(o=>["analizada","cotizada"].includes(o.estado)).length,
     archivadas:oportunidades.filter(o=>o.estado==="archivada").length,
     perdidas:  oportunidades.filter(o=>o.estado==="perdida").length,

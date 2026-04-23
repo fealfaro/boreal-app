@@ -340,6 +340,7 @@ export default function App() {
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
   useEffect(()=>{setSeenNotifs(false);},[notifList.length]);
+  useEffect(()=>{const h=e=>{setSeenNotifs(false);};document.addEventListener("boreal-analisis-completo",h);return()=>document.removeEventListener("boreal-analisis-completo",h);},[]);
   const isMob=winW<768;
 
   // ── CARGA INICIAL DESDE SUPABASE ────────────────────────────
@@ -3765,12 +3766,16 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot}) {
   const [filtro,setFiltro]=useState("nueva");
   const [busqueda,setBusqueda]=useState("");
-  const [analizando,setAnalizando]=useState(null);
+  const [analizando,setAnalizando]=useState(null); // id siendo analizado ahora
+  const [cola,setCola]=useState([]);               // ids en cola
+  const [seleccion,setSeleccion]=useState(new Set()); // ids seleccionados
+  const [modoSeleccion,setModoSeleccion]=useState(false);
   const [expandida,setExpandida]=useState(null);
   const [pagina,setPagina]=useState(1);
   const POR_PAGINA=25;
   const fileRef=useRef();
   const isMob=window.innerWidth<768;
+  const colaRef=useRef([]);
 
   // ── Auto-archivar cerradas ────────────────────────────────
   useEffect(()=>{
@@ -3858,6 +3863,45 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     } catch(e){console.error(e);toast("Error al leer el Excel","danger");}
   };
 
+  // ── Procesador de cola ────────────────────────────────────
+  const procesarCola=useCallback(async(ids,todosOps)=>{
+    if(!ids||ids.length===0) return;
+    const total=ids.length;
+    let completados=0;
+    for(const id of ids){
+      const op=todosOps.find(o=>o.id===id);
+      if(!op||op.analisisIA) { completados++; continue; }
+      setAnalizando(id);
+      try {
+        await analizarConIA(op);
+        completados++;
+      } catch(e){ console.error("Error en cola:",e); completados++; }
+      // pequeña pausa entre requests para no saturar la API
+      if(completados<total) await new Promise(r=>setTimeout(r,800));
+    }
+    setAnalizando(null);
+    setCola([]);
+    colaRef.current=[];
+    setSeleccion(new Set());
+    setModoSeleccion(false);
+    toast(`${completados} oportunidades analizadas`,"success",4000);
+    setFiltro("analizada");
+    // Notif en campana vía custom event
+    document.dispatchEvent(new CustomEvent("boreal-analisis-completo",{detail:{completados,total}}));
+  },[]);
+
+  const encolarAnalisis=async(ids)=>{
+    const nuevosIds=ids.filter(id=>{
+      const op=oportunidades.find(o=>o.id===id);
+      return op&&!op.analisisIA&&id!==analizando;
+    });
+    if(!nuevosIds.length){toast("Todas las seleccionadas ya fueron analizadas","warning");return;}
+    toast(`Analizando ${nuevosIds.length} oportunidades en cola…`);
+    setCola(nuevosIds);
+    colaRef.current=nuevosIds;
+    procesarCola(nuevosIds,[...oportunidades]);
+  };
+
   // ── Limpiar archivadas ──────────────────────────────────────
   const limpiarArchivadas=()=>{
     const n=oportunidades.filter(o=>o.estado==="descartada").length;
@@ -3897,7 +3941,16 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         const ftxt=fd.content?.[0]?.text||"{}";
         const analisis=JSON.parse(ftxt.replace(/```json|```/g,"").trim());
         analisis._source="nombre";
-        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
+        const analisisTs2=nowISO();
+        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis,analisisTs:analisisTs2}:o));
+        if(supabase) supabase.from("oportunidades").upsert({
+          id:op.id,estado:"analizada",analisis_ia:analisis,
+          nombre:op.nombre,institucion:op.institucion,
+          unidad_compra:op.unidadCompra,fecha_publicacion:op.fechaPublicacion,
+          fecha_cierre:op.fechaCierre,presupuesto:op.presupuesto,
+          estado_convocatoria:op.estadoConvocatoria,cotizaciones_enviadas:op.cotizacionesEnviadas,
+          matches:op.matches||[],
+        }).then(({error})=>{if(error)console.error("Error guardando analisis fallback:",error);});
         toast("Análisis completado (sin detalle de MP)","warning");
       } else {
         const analisis=data.analisis;
@@ -3905,7 +3958,21 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         // Map productosEnCatalogo → productosEncontrados for compatibility
         if(analisis.productosEnCatalogo&&!analisis.productosEncontrados)
           analisis.productosEncontrados=analisis.productosEnCatalogo;
-        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis}:o));
+        const analisisTs=nowISO();
+        setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis,analisisTs}:o));
+        // Persist to DB
+        if(supabase) supabase.from("oportunidades").upsert({
+          id:op.id,estado:"analizada",
+          analisis_ia:analisis,
+          matches:op.matches||[],
+          nombre:op.nombre,institucion:op.institucion,
+          unidad_compra:op.unidadCompra,
+          fecha_publicacion:op.fechaPublicacion,
+          fecha_cierre:op.fechaCierre,
+          presupuesto:op.presupuesto,
+          estado_convocatoria:op.estadoConvocatoria,
+          cotizaciones_enviadas:op.cotizacionesEnviadas,
+        }).then(({error})=>{if(error)console.error("Error guardando analisis:",error);});
         toast("Análisis completado con detalle de Mercado Público");
       }
     } catch(e){console.error(e);toast("Error en análisis IA","danger");}
@@ -4050,12 +4117,45 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         <div>
           <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Oportunidades</h1>
           <p style={{color:"#64748b",fontSize:13,margin:0}}>
-            {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar · {oportunidades.filter(o=>o.estado==="descartada").length} archivadas
+            {oportunidades.filter(o=>o.estado==="nueva").length} sin revisar
+            {cola.length>0&&<span style={{marginLeft:8,color:"#1d4ed8",fontWeight:600}}>· Analizando {cola.indexOf(analizando)+1}/{cola.length}…</span>}
           </p>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {oportunidades.filter(o=>o.estado==="descartada").length>0&&(
-            <Btn onClick={limpiarArchivadas} variant="ghost" size="sm">Limpiar archivadas ({oportunidades.filter(o=>o.estado==="descartada").length})</Btn>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          {/* Cola progress */}
+          {cola.length>0&&(
+            <div style={{display:"flex",alignItems:"center",gap:6,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"4px 10px"}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:"#1d4ed8",animation:"pulse 1s infinite"}}/>
+              <span style={{fontSize:12,color:"#1d4ed8",fontWeight:500}}>
+                {cola.indexOf(analizando)+1}/{cola.length} en cola
+              </span>
+            </div>
+          )}
+          {/* Modo selección */}
+          {oportunidades.filter(o=>o.estado!=="descartada"&&!o.analisisIA).length>0&&cola.length===0&&(
+            <>
+              {!modoSeleccion?(
+                <Btn onClick={()=>setModoSeleccion(true)} variant="ghost" size="sm">Seleccionar</Btn>
+              ):(
+                <>
+                  <span style={{fontSize:12,color:"#64748b"}}>{seleccion.size} seleccionadas</span>
+                  <Btn onClick={()=>{setModoSeleccion(false);setSeleccion(new Set());}} variant="ghost" size="sm">Cancelar</Btn>
+                  {seleccion.size>0&&<Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size} con IA</Btn>}
+                </>
+              )}
+            </>
+          )}
+          {/* Analizar todas con coincidencias */}
+          {!modoSeleccion&&cola.length===0&&oportunidades.filter(o=>o.matches?.length>0&&!o.analisisIA&&o.estado!=="descartada").length>0&&(
+            <Btn onClick={()=>{
+              const ids=oportunidades.filter(o=>o.matches?.length>0&&!o.analisisIA&&o.estado!=="descartada").map(o=>o.id);
+              encolarAnalisis(ids);
+            }} variant="ghost" size="sm">
+              Analizar {oportunidades.filter(o=>o.matches?.length>0&&!o.analisisIA&&o.estado!=="descartada").length} con coincidencias
+            </Btn>
+          )}
+          {oportunidades.filter(o=>o.estado==="descartada").length>0&&!modoSeleccion&&(
+            <Btn onClick={limpiarArchivadas} variant="ghost" size="sm">Limpiar archivadas</Btn>
           )}
           <input type="file" ref={fileRef} accept=".xlsx,.xls" style={{display:"none"}}
             onChange={e=>{if(e.target.files[0])importarExcel(e.target.files[0]);e.target.value="";}}/>
@@ -4126,10 +4226,14 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
       {/* Lista */}
       {paginadas.map(op=>(
         <OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
-          analizando={analizando} onAnalizar={analizarConIA} onCotizar={generarCotizacion}
+          analizando={analizando} enCola={cola.includes(op.id)}
+          onAnalizar={analizarConIA} onCotizar={generarCotizacion}
           onCrearYCotizar={crearYCotizar}
           onDescartar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"descartada"}:o))}
-          ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}/>
+          ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}
+          modoSeleccion={modoSeleccion}
+          seleccionada={seleccion.has(op.id)}
+          onToggleSeleccion={()=>setSeleccion(prev=>{const s=new Set(prev);s.has(op.id)?s.delete(op.id):s.add(op.id);return s;})}/>
       ))}
 
       {/* Paginación */}
@@ -4179,7 +4283,7 @@ function calcPotencial(ia, productos) {
   return { nivel: "bajo", color: "#b91c1c", bg: "#fee2e2", score };
 }
 
-function OpCard({op, expandida, setExpandida, analizando, onAnalizar, onCotizar, onDescartar, onCrearYCotizar, ESTADOS_OP_COLORS, productos}) {
+function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, onCotizar, onDescartar, onCrearYCotizar, ESTADOS_OP_COLORS, productos, modoSeleccion, seleccionada, onToggleSeleccion}) {
   const isExp = expandida === op.id;
   const ec = ESTADOS_OP_COLORS[op.estado] || ESTADOS_OP_COLORS.nueva;
   const ia = op.analisisIA;
@@ -4214,7 +4318,20 @@ function OpCard({op, expandida, setExpandida, analizando, onAnalizar, onCotizar,
 
       {/* ── HEADER ─────────────────────────────────────────── */}
       <div style={{padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}
-        onClick={() => setExpandida(isExp ? null : op.id)}>
+        onClick={e=>{if(modoSeleccion){e.stopPropagation();onToggleSeleccion();}else setExpandida(isExp?null:op.id);}}>
+        {/* Checkbox en modo selección */}
+        {modoSeleccion&&(
+          <div onClick={e=>{e.stopPropagation();onToggleSeleccion();}}
+            style={{width:18,height:18,borderRadius:5,border:`2px solid ${seleccionada?"#1d4ed8":"#cbd5e1"}`,
+              background:seleccionada?"#1d4ed8":"#fff",flexShrink:0,marginTop:2,cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>
+            {seleccionada&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+          </div>
+        )}
+        {/* Indicador en cola */}
+        {enCola&&!modoSeleccion&&(
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#1d4ed8",flexShrink:0,marginTop:6,animation:"pulse 1s infinite"}}/>
+        )}
 
         {/* Potencial badge (izquierda vertical) */}
         {potencial && (
@@ -4236,6 +4353,7 @@ function OpCard({op, expandida, setExpandida, analizando, onAnalizar, onCotizar,
               {op.id} {copied?"✓":Ic.copy}
             </button>
             <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ec.bg,color:ec.text}}>{ec.label}</span>
+            {op.analisisTs&&<span style={{fontSize:9,color:"#94a3b8"}}>analizado {op.analisisTs.slice(0,10)}</span>}
             {potencial&&<span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:potencial.bg,color:potencial.color}}>
               Potencial {potencial.nivel}
             </span>}

@@ -4219,7 +4219,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
             </button>
           )}
           {/* Archivar todas las visibles */}
-          {filtro==="nuevas"&&sorted.length>0&&cola.length===0&&!modoSel&&(
+          {filtro==="nuevas"&&sorted.length>0&&cola.length===0&&(
             <Btn onClick={()=>{
               if(!window.confirm(`¿Archivar las ${sorted.length} oportunidades visibles?`)) return;
               const ids=new Set(sorted.map(o=>o.id));
@@ -4390,7 +4390,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
       <div style={{flex:1,minWidth:0}}>
         {/* ── ROW 1: header clickable ─────────────────────────── */}
         <div style={{padding:"12px 16px 10px",cursor:ia?"pointer":"default",display:"flex",gap:12,alignItems:"flex-start"}}
-          onClick={()=>{if(!modoSel&&ia)setExpandida(isExp?null:op.id);}}>
+          onClick={()=>{if(ia)setExpandida(isExp?null:op.id);}}>
 
           <div style={{flex:1,minWidth:0}}>
             {/* Meta line: estado, potencial, tiempo */}

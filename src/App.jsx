@@ -3770,21 +3770,42 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 // ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
 // Helper: tiempo restante hasta cierre
 function tiempoRestante(fechaCierre) {
-  if(!fechaCierre) return null;
-  const [fecha,hora]=fechaCierre.split(" ");
-  const [d,m,y]=fecha.split("/");
-  if(!d||!m||!y) return null;
-  const [hh,mm]=(hora||"23:59").split(":");
-  const cierre=new Date(y,m-1,d,hh||23,mm||59,0);
+  if(!fechaCierre||typeof fechaCierre!=="string") return null;
+  // Supports: "22/04/2026 18:00", "22/04/2026", "2026-04-22T18:00"
+  let d,m,y,hh="23",mm="59";
+  const str=fechaCierre.trim();
+  if(str.includes("T")||str.match(/^\d{4}-/)){
+    // ISO format
+    const dt=new Date(str);
+    if(isNaN(dt.getTime())) return null;
+    const diff2=dt-new Date();
+    if(diff2<0) return {pasado:true,label:"Cerrada",color:"#b91c1c"};
+    const dias2=Math.floor(diff2/86400000);
+    const horas2=Math.floor((diff2%86400000)/3600000);
+    const mins2=Math.floor((diff2%3600000)/60000);
+    if(dias2>3)  return {pasado:false,urgente:false,label:dias2+"d "+horas2+"h",color:"#94a3b8"};
+    if(dias2>0)  return {pasado:false,urgente:false,label:dias2+"d "+horas2+"h",color:"#854d0e"};
+    if(horas2>0) return {pasado:false,urgente:true, label:horas2+"h "+mins2+"m",color:"#b91c1c"};
+    return       {pasado:false,urgente:true, label:mins2+" min",color:"#b91c1c"};
+  }
+  // DD/MM/YYYY HH:MM
+  const parts=str.split(" ");
+  const dateParts=parts[0].split("/");
+  if(dateParts.length<3) return null;
+  [d,m,y]=dateParts;
+  if(parts[1]){const tp=parts[1].split(":");hh=tp[0]||"23";mm=tp[1]||"59";}
+  if(!d||!m||!y||isNaN(Number(y))) return null;
+  const cierre=new Date(Number(y),Number(m)-1,Number(d),Number(hh),Number(mm),0);
+  if(isNaN(cierre.getTime())) return null;
   const diff=cierre-new Date();
-  if(diff<0) return {pasado:true,label:"Cerrada"};
+  if(diff<0) return {pasado:true,label:"Cerrada",color:"#b91c1c"};
   const dias=Math.floor(diff/86400000);
   const horas=Math.floor((diff%86400000)/3600000);
   const mins=Math.floor((diff%3600000)/60000);
-  if(dias>3)  return {pasado:false,urgente:false,label:`${dias}d ${horas}h`,color:"#94a3b8"};
-  if(dias>0)  return {pasado:false,urgente:false,label:`${dias}d ${horas}h`,color:"#854d0e"};
-  if(horas>0) return {pasado:false,urgente:true, label:`${horas}h ${mins}m`,color:"#b91c1c"};
-  return       {pasado:false,urgente:true, label:`${mins} min`,color:"#b91c1c"};
+  if(dias>3)  return {pasado:false,urgente:false,label:dias+"d "+horas+"h",color:"#94a3b8"};
+  if(dias>0)  return {pasado:false,urgente:false,label:dias+"d "+horas+"h",color:"#854d0e"};
+  if(horas>0) return {pasado:false,urgente:true, label:horas+"h "+mins+"m",color:"#b91c1c"};
+  return       {pasado:false,urgente:true, label:mins+" min",color:"#b91c1c"};
 }
 function calcPotencial(ia, productos) {
   if (!ia) return null;
@@ -3840,16 +3861,22 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const detenerRef = useRef(false);
   const isMob = window.innerWidth < 768;
 
-  // ── Limpieza automática 30 días ────────────────────────────
+  // ── Limpieza y auto-archivo al cargar ──────────────────────
   useEffect(()=>{
+    const hoy=new Date(); hoy.setHours(0,0,0,0);
     const hace30=new Date(); hace30.setDate(hace30.getDate()-30);
-    const viejas=oportunidades.filter(o=>
-      ["archivada","perdida"].includes(o.estado) &&
-      o.importadaEn && new Date(o.importadaEn)<hace30
-    );
-    if(viejas.length>0){
-      setOportunidades(prev=>prev.filter(o=>!viejas.find(v=>v.id===o.id)));
-    }
+    setOportunidades(prev=>prev.map(o=>{
+      // Auto-archivar cerradas que aún estén como "nueva"
+      if(o.estado==="nueva"&&o.fechaCierre){
+        const parts=o.fechaCierre.split(" ")[0]; const [d,m,y]=parts.split("/");
+        if(d&&m&&y&&new Date(y,m-1,d)<hoy) return {...o,estado:"perdida"};
+      }
+      return o;
+    }).filter(o=>{
+      // Eliminar archivadas/perdidas > 30 días
+      if(["archivada","perdida"].includes(o.estado)&&o.importadaEn&&new Date(o.importadaEn)<hace30) return false;
+      return true;
+    }));
   },[]);
 
   // ── Palabras clave ─────────────────────────────────────────
@@ -3945,6 +3972,8 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       }
       const ts=nowISO();
       setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis,analisisTs:ts}:o));
+      // Switch to analizadas tab only if not in a queue (queue handles its own tab switch)
+      if(!colaRef.current.length) setFiltro("analizadas");
       if(supabase) supabase.from("oportunidades").upsert({id:op.id,estado:"analizada",analisis_ia:analisis,
         nombre:op.nombre,institucion:op.institucion,unidad_compra:op.unidadCompra,
         fecha_publicacion:op.fechaPublicacion,fecha_cierre:op.fechaCierre,presupuesto:op.presupuesto,
@@ -4225,13 +4254,13 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
             {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16}}>×</button>}
           </div>
           {/* Sort */}
-          <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-            style={{fontSize:12,padding:"6px 10px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#475569",cursor:"pointer"}}>
-            <option value="monto_desc">Mayor monto primero</option>
-            <option value="monto_asc">Menor monto primero</option>
-            <option value="cierre_asc">Cierre más próximo</option>
-            <option value="potencial">Mayor potencial</option>
-          </select>
+          <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:8,padding:3,flexShrink:0}}>
+            {[["potencial","Potencial"],["monto_desc","$↓"],["monto_asc","$↑"],["cierre_asc","Cierre"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setSortBy(v)} style={{padding:"4px 9px",borderRadius:5,border:"none",cursor:"pointer",fontSize:11,
+                fontWeight:sortBy===v?700:400,background:sortBy===v?"#fff":"transparent",
+                color:sortBy===v?"#0f172a":"#64748b",boxShadow:sortBy===v?"0 1px 2px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap"}}>{l}</button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -4296,7 +4325,8 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 
   const handleExpand=e=>{
     if(modoSel){e.stopPropagation();onToggleSel();return;}
-    setExpandida(isExp?null:op.id);
+    // Only expand if has analysis - otherwise no point
+    if(ia) setExpandida(isExp?null:op.id);
   };
 
   return (
@@ -4306,7 +4336,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
       opacity:["archivada","perdida"].includes(op.estado)?.6:1,overflow:"hidden"}}>
 
       {/* ── HEADER ──────────────────────────────────────────── */}
-      <div style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:10}}
+      <div style={{padding:"13px 16px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:12}}
         onClick={handleExpand}>
         {modoSel&&(
           <div onClick={e=>{e.stopPropagation();onToggleSel();}}
@@ -4320,7 +4350,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 
         <div style={{flex:1,minWidth:0}}>
           {/* Row 1: badges */}
-          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:3,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
             {/* Estado pill */}
             <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,background:ec.bg,color:ec.text,flexShrink:0}}>{ec.label}</span>
             {/* Potencial dot + label */}
@@ -4339,7 +4369,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
             {op.cotizacionesEnviadas>0&&<span style={{fontSize:10,color:"#854d0e",background:"#fef9c3",padding:"1px 6px",borderRadius:20,flexShrink:0}}>{op.cotizacionesEnviadas} cot. enviadas</span>}
           </div>
           {/* Row 2: nombre */}
-          <div style={{fontSize:13,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{op.nombre}</div>
           {/* Row 3: institución + cierre + link */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:300}}>{op.institucion}</span>
@@ -4359,33 +4389,29 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
         {/* Derecha: monto + acción rápida + chevron */}
         <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
           <div style={{fontSize:14,fontWeight:700}}>{fmt(op.presupuesto)}</div>
-          {!ia&&op.estado==="nueva"&&analizando!==op.id&&(
-            <button onClick={e=>{e.stopPropagation();onAnalizar(op);}}
-              style={{fontSize:10,fontWeight:600,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:6,padding:"2px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
-              Analizar IA
-            </button>
-          )}
-          {analizando===op.id&&<span style={{fontSize:10,color:"#1d4ed8"}}>Analizando…</span>}
+          {analizando===op.id&&<span style={{fontSize:10,color:"#1d4ed8",fontWeight:600}}>Analizando…</span>}
           {ia&&enCatalogo.length>0&&<div style={{fontSize:10,color:"#64748b"}}>{enCatalogo.length}/{detectados.length||enCatalogo.length+nuevos.length} prod.</div>}
-          <div style={{color:"#94a3b8",fontSize:10,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
+          {ia&&<div style={{color:"#94a3b8",fontSize:10,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>}
         </div>
       </div>
 
-      {/* ── EXPANDIDO ───────────────────────────────────────── */}
-      {isExp&&(
-        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafafa",padding:"14px 16px"}}>
+      {/* ── ACCIONES INLINE (sin análisis) ──────────────────── */}
+      {!ia&&(
+        <div style={{padding:"10px 16px 12px",display:"flex",gap:8,alignItems:"center",borderTop:"1px solid #f1f5f9"}}>
+          <Btn onClick={e=>{e.stopPropagation();onAnalizar(op);}} disabled={analizando===op.id} size="sm"
+            style={{opacity:analizando===op.id?.6:1}}>
+            {analizando===op.id?"Analizando…":"Analizar con IA"}
+          </Btn>
+          <Btn onClick={e=>{e.stopPropagation();onArchivar();}} variant="ghost" size="sm">Archivar</Btn>
+          {analizando!==op.id&&<span style={{fontSize:11,color:"#94a3b8"}}>La IA leerá el detalle desde Mercado Público</span>}
+        </div>
+      )}
 
-          {/* Sin análisis — botón directo sin texto extra */}
-          {!ia&&(
-            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:0}}>
-              <Btn onClick={()=>onAnalizar(op)} disabled={analizando===op.id} size="sm"
-                style={{opacity:analizando===op.id?.6:1}}>
-                {analizando===op.id?"Analizando…":"Analizar con IA"}
-              </Btn>
-              {!esCerrada&&<span style={{fontSize:12,color:"#94a3b8"}}>La IA leerá el detalle real desde Mercado Público</span>}
-              {esCerrada&&<span style={{fontSize:12,color:"#b91c1c"}}>Licitación cerrada — solo análisis histórico</span>}
-            </div>
-          )}
+      {/* ── EXPANDIDO (solo con análisis) ───────────────────── */}
+      {isExp&&ia&&(
+        <div style={{borderTop:"1px solid #f1f5f9",background:"#fafafa",padding:"16px 18px"}}>
+
+
 
           {/* Con análisis */}
           {ia&&(

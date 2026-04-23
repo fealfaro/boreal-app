@@ -4312,6 +4312,21 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
   );
 }
 
+
+function BtnCotizar({op,nuevos,overrides,onCrearYCotizar}) {
+  const [procesando,setProcesando]=useState(false);
+  return (
+    <Btn disabled={procesando} onClick={async()=>{
+      setProcesando(true);
+      try { await onCrearYCotizar(op,overrides); }
+      catch(e){ console.error(e); toast("Error al generar cotización","danger"); }
+      setProcesando(false);
+    }} size="sm">
+      {procesando?"Procesando…":nuevos.length>0?"Crear productos y cotizar":"Generar cotización"}
+    </Btn>
+  );
+}
+
 // ── HELPER: calcular potencial de una oportunidad ────────────
 function calcPotencial(ia, productos) {
   if (!ia) return null;
@@ -4550,11 +4565,17 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                                     </div>
                                     {prodsFiltrados.map(p=>(
                                       <div key={p.id} onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(prev=>({...prev,[i]:p.id}));setBuscandoFila(null);setBusqFila("");}}
-                                        style={{padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
+                                        style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
                                         onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
                                         onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                        <div style={{fontSize:13,fontWeight:500}}>{p.nombre}</div>
-                                        <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · {getStockTotal(p)} uds en stock</div>
+                                        {p.foto_url
+                                          ?<img src={p.foto_url} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,background:"#f8fafc",flexShrink:0}}/>
+                                          :<div style={{width:36,height:36,background:"#f1f5f9",borderRadius:6,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>{Ic.box}</div>
+                                        }
+                                        <div style={{flex:1,minWidth:0}}>
+                                          <div style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
+                                          <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · {getStockTotal(p)} uds · {fmt(calcPrecioVenta(p.costo,p.margen))}</div>
+                                        </div>
                                       </div>
                                     ))}
                                     {prodsFiltrados.length===0&&busqFila&&(
@@ -4595,15 +4616,7 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                 {op.estado!=="cotizada"&&op.estado!=="descartada"&&(
                   <>
                     {puedeGenerar&&(
-                      <Btn onClick={async(e)=>{
-                        e.currentTarget.disabled=true;
-                        e.currentTarget.textContent="Procesando…";
-                        await onCrearYCotizar(op,overrides);
-                        e.currentTarget.disabled=false;
-                        e.currentTarget.textContent=nuevos.length>0?"Crear productos y cotizar":"Generar cotización";
-                      }} size="sm">
-                        {nuevos.length>0?"Crear productos y cotizar":"Generar cotización"}
-                      </Btn>
+                      <BtnCotizar op={op} nuevos={nuevos} overrides={overrides} onCrearYCotizar={onCrearYCotizar}/>
                     )}
                     <Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm" disabled={analizando===op.id}
                       style={{opacity:analizando===op.id?.6:1}}>

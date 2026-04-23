@@ -607,7 +607,7 @@ export default function App() {
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos} dbOrg={dbOrganismos} dbProv={dbProveedores}/>}
-        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot}/>}
+        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -3763,7 +3763,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 }
 
 // ── MÓDULO OPORTUNIDADES (Mercado Público) ────────────────────
-function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot}) {
+function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot,guardarProductoDB,guardarCotDB,empresasNombres=[]}){
   const [filtro,setFiltro]=useState("nueva");
   const [busqueda,setBusqueda]=useState("");
   const [analizando,setAnalizando]=useState(null); // id siendo analizado ahora

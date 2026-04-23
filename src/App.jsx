@@ -755,9 +755,6 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
-        <div><h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Productos</h1><p style={{color:"#64748b",fontSize:13,margin:0}}>{sorted.length} de {productos.length}</p></div>
-      </div>
       {/* Volver a cotización banner */}
       {volverACot&&cots&&(()=>{
         const cot=cots.find(c=>c.id===volverACot);
@@ -796,7 +793,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
         );
       })()}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
-        <div>
+        <div><h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Productos</h1><p style={{color:"#64748b",fontSize:13,margin:0}}>{sorted.length} de {productos.length}</p></div>
         <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
           <input style={{display:"none"}} type="file" accept=".csv,.xlsx" ref={fileRef} onChange={handleImport}/>
           <Btn onClick={()=>fileRef.current?.click()} variant="ghost" size="sm"><span style={{display:"flex",alignItems:"center",gap:4}}>{Ic.upload} Importar CSV</span></Btn>

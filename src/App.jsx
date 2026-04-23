@@ -3886,7 +3886,6 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const [analizando, setAnalizando] = useState(null);
   const [cola,       setCola]       = useState([]);
   const [seleccion,  setSeleccion]  = useState(new Set());
-  const [modoSel,    setModoSel]    = useState(false);
   const [expandida,  setExpandida]  = useState(null);
   const [pagina,     setPagina]     = useState(1);
   const [showConfig, setShowConfig] = useState(false);
@@ -4048,7 +4047,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       if(completados<ids.length) await new Promise(r=>setTimeout(r,800));
     }
     setAnalizando(null); setCola([]); colaRef.current=[];
-    setSeleccion(new Set()); setModoSel(false);
+    setSeleccion(new Set());
     if(!detenerRef.current){
       toast(`${completados} oportunidades analizadas`,"success",4000);
       setFiltro("analizadas");
@@ -4204,22 +4203,13 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
             Filtros activos ({todasKW.length})
           </Btn>
           {/* Selección */}
-          {!modoSel&&cola.length===0&&(
-            <Btn onClick={()=>setModoSel(true)} variant="ghost" size="sm">Seleccionar</Btn>
-          )}
-          {modoSel&&(
+          {seleccion.size>0&&(
             <>
-              <span style={{fontSize:12,color:"#64748b"}}>{seleccion.size} sel.</span>
-              <Btn onClick={()=>{setModoSel(false);setSeleccion(new Set());}} variant="ghost" size="sm">Cancelar</Btn>
-              {seleccion.size>0&&<Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size}</Btn>}
-              {seleccion.size>0&&<Btn onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());setModoSel(false);toast("Archivadas");}} variant="ghost" size="sm">Archivar sel.</Btn>}
+              <span style={{fontSize:12,color:"#64748b",fontWeight:500}}>{seleccion.size} seleccionadas</span>
+              <Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size}</Btn>
+              <Btn onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());toast("Archivadas");}} variant="ghost" size="sm">Archivar sel.</Btn>
+              <Btn onClick={()=>setSeleccion(new Set())} variant="ghost" size="sm">Deseleccionar</Btn>
             </>
-          )}
-          {/* Analizar todas con coincidencias */}
-          {!modoSel&&cola.length===0&&oportunidades.filter(o=>o.estado==="nueva"&&!o.analisisIA).length>0&&(
-            <Btn onClick={()=>encolarAnalisis(oportunidades.filter(o=>o.estado==="nueva"&&!o.analisisIA).map(o=>o.id))} variant="ghost" size="sm">
-              Analizar todas ({oportunidades.filter(o=>o.estado==="nueva"&&!o.analisisIA).length})
-            </Btn>
           )}
           {/* Detener cola */}
           {cola.length>0&&(
@@ -4332,7 +4322,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           onArchivar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"archivada"}:o))}
           onRestaurar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:o.matches?.length?"nueva":"archivada"}:o))}
           ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}
-          modoSel={modoSel} seleccionada={seleccion.has(op.id)}
+          seleccionada={seleccion.has(op.id)}
           onToggleSel={()=>setSeleccion(prev=>{const s=new Set(prev);s.has(op.id)?s.delete(op.id):s.add(op.id);return s;})}
           mpUrl={MP_URL(op.id)}/>
       ))}
@@ -4350,7 +4340,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 }
 
 function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearYCotizar,
-  onArchivar,onRestaurar,ESTADOS_OP_COLORS,productos,modoSel,seleccionada,onToggleSel,mpUrl}) {
+  onArchivar,onRestaurar,ESTADOS_OP_COLORS,productos,seleccionada,onToggleSel,mpUrl}) {
 
   const isExp=expandida===op.id;
   const ia=op.analisisIA;
@@ -4368,8 +4358,12 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
   const puedeGenerar=ia&&(enCatalogo.length>0||nuevos.length>0);
   const UNITS={"EA":"un","BX":"cajas","GL":"galones","KG":"kg","LT":"lts","MT":"mts","UN":"un","UNI":"un","PACK":"pack"};
 
-  // Potencial color bar on left edge
-  const potColor=potencial?.nivel==="alto"?"#22c55e":potencial?.nivel==="medio"?"#f59e0b":potencial?"#ef4444":null;
+  // Color de la barra lateral: potencial (post-IA) o relevancia por keywords (pre-IA)
+  const kwCount=op.matches?.length||0;
+  const barColor=ia
+    ? (potencial?.nivel==="alto"?"#22c55e":potencial?.nivel==="medio"?"#f59e0b":potencial?"#ef4444":null)
+    : (kwCount>=3?"#22c55e":kwCount>=2?"#f59e0b":kwCount>=1?"#94a3b8":null);
+  const potColor=barColor; // alias for existing refs
 
   return (
     <div style={{
@@ -4380,17 +4374,17 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
     }}>
       {/* Potencial color bar */}
       {potColor&&<div style={{width:3,background:potColor,flexShrink:0,borderRadius:"10px 0 0 10px"}}/>}
-      {/* Checkbox */}
-      {modoSel&&(
-        <div style={{display:"flex",alignItems:"center",padding:"0 10px",flexShrink:0}}
-          onClick={e=>{e.stopPropagation();onToggleSel();}}>
-          <div style={{width:16,height:16,borderRadius:4,border:"1.5px solid "+(seleccionada?"#1d4ed8":"#cbd5e1"),
-            background:seleccionada?"#1d4ed8":"#fff",cursor:"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center"}}>
-            {seleccionada&&<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1,4.5 3.5,7 8,1.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-          </div>
+      {/* Checkbox — siempre visible */}
+      <div style={{display:"flex",alignItems:"center",padding:"0 10px 0 14px",flexShrink:0}}
+        onClick={e=>{e.stopPropagation();onToggleSel();}}>
+        <div style={{width:16,height:16,borderRadius:4,border:"1.5px solid "+(seleccionada?"#1d4ed8":"#e2e8f0"),
+          background:seleccionada?"#1d4ed8":"#fff",cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+          onMouseEnter={e=>{if(!seleccionada)e.currentTarget.style.borderColor="#1d4ed8";}}
+          onMouseLeave={e=>{if(!seleccionada)e.currentTarget.style.borderColor="#e2e8f0";}}>
+          {seleccionada&&<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1,4.5 3.5,7 8,1.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg>}
         </div>
-      )}
+      </div>
 
       {/* Main content */}
       <div style={{flex:1,minWidth:0}}>
@@ -4409,10 +4403,14 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                  op.estado==="cotizada"?"Cotizada":op.estado==="perdida"?"Perdida":"Archivada"}
               </span>
               {/* Dot separator */}
-              {potencial&&<span style={{color:"#e2e8f0"}}>·</span>}
-              {/* Potencial */}
-              {potencial&&<span style={{fontSize:11,color:potColor,fontWeight:500}}>
+              {(potencial||(!ia&&kwCount>0))&&<span style={{color:"#e2e8f0"}}>·</span>}
+              {/* Potencial post-IA */}
+              {potencial&&<span style={{fontSize:11,color:barColor,fontWeight:500}}>
                 {potencial.nivel.charAt(0).toUpperCase()+potencial.nivel.slice(1)} potencial
+              </span>}
+              {/* Keywords pre-IA */}
+              {!ia&&kwCount>0&&<span style={{fontSize:11,color:barColor,fontWeight:400}}>
+                {kwCount} {kwCount===1?"coincidencia":"coincidencias"}
               </span>}
               {/* Tiempo cierre */}
               {tr&&<span style={{color:"#e2e8f0"}}>·</span>}

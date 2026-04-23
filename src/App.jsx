@@ -3886,7 +3886,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({
-            model:"claude-sonnet-4-20250514",max_tokens:1000,
+            model:"claude-sonnet-4-5-20251001",max_tokens:1000,
             messages:[{role:"user",content:`Eres asistente de ventas de limpieza en Chile.
 LICITACIÓN: ID:${op.id} Nombre:"${op.nombre}" Institución:${op.institucion} Presupuesto:${fmt(op.presupuesto)} Cierre:${op.fechaCierre}
 CATÁLOGO:\n${catalogoResumen}
@@ -3901,8 +3901,6 @@ Responde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sk
         toast("Análisis completado (sin detalle de MP)","warning");
       } else {
         const analisis=data.analisis;
-        console.log("Analisis IA recibido:", JSON.stringify(analisis, null, 2));
-        console.log("Worker response data:", JSON.stringify(data, null, 2));
         analisis._source="web";
         // Map productosEnCatalogo → productosEncontrados for compatibility
         if(analisis.productosEnCatalogo&&!analisis.productosEncontrados)
@@ -4234,7 +4232,7 @@ function OpCard({op,expandida,setExpandida,analizando,onAnalizar,onCotizar,onDes
                 ✓ Cotización generada → Para revisar
               </span>
             )}
-            <a href={`https://compra-agil.mercadopublico.cl/resumen-cotizacion/${op.id}`}
+            <a href={`https://buscador.mercadopublico.cl/ficha?code=${op.id}`}
               target="_blank" rel="noreferrer"
               style={{fontSize:12,color:"#1d4ed8",padding:"5px 0",textDecoration:"none"}}>
               Ver en Mercado Público →

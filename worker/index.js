@@ -61,51 +61,60 @@ export default {
       }
 
       try {
-        // 1. Fetch página de Mercado Público
-        const mpUrl = `https://compra-agil.mercadopublico.cl/resumen-cotizacion/${id}`;
-        const mpResp = await fetch(mpUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'es-CL,es;q=0.9',
-          },
-        });
+        // 1. Llamar a la API interna del buscador de Compra Ágil
+        const MP_API = 'https://api.buscador.mercadopublico.cl/compra-agil';
+        const MP_KEY = 'e93089e4-437c-4723-b343-4fa20045e3bc';
 
-        if (!mpResp.ok) {
-          return new Response(JSON.stringify({
-            error: `Mercado Público respondió ${mpResp.status}`,
-            url: mpUrl,
-          }), {
-            status: 502,
-            headers: { ...CORS, 'Content-Type': 'application/json' },
-          });
-        }
+        const [fichaResp, historialResp] = await Promise.all([
+          fetch(`${MP_API}?action=ficha&code=${id}`, {
+            headers: { 'x-api-key': MP_KEY, 'Content-Type': 'application/json' },
+          }),
+          fetch(`${MP_API}?action=historial&code=${id}`, {
+            headers: { 'x-api-key': MP_KEY, 'Content-Type': 'application/json' },
+          }),
+        ]);
 
-        const html = await mpResp.text();
+        const fichaData  = fichaResp.ok  ? await fichaResp.json()  : {};
+        const historial  = historialResp.ok ? await historialResp.json() : {};
 
-        // 2. Extraer texto relevante (quitar scripts/styles)
-        const textoLimpio = html
-          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 6000); // límite conservador
+        // Log para debug
+        const mpDebug = {
+          fichaStatus: fichaResp.status,
+          historialStatus: historialResp.status,
+          fichaKeys: Object.keys(fichaData?.data || fichaData || {}),
+        };
+
+        // 2. Construir texto estructurado para Claude
+        // La API devuelve datos en payload, no en data
+        const ficha = fichaData?.payload || fichaData?.data || fichaData || {};
+        const hist  = historial?.payload || historial?.data || historial || {};
+
+        const textoLicitacion = `
+ID: ${id}
+Nombre: ${ficha.nombre || ficha.title || ''}
+Institución: ${ficha.nombreOrganismo || ficha.institucion || ficha.organismo || ''}
+Unidad de compra: ${ficha.unidadCompra || ficha.unidad || ''}
+Descripción: ${ficha.descripcion || ficha.description || ficha.glosa || ''}
+Presupuesto: ${ficha.presupuesto || ficha.monto || ficha.montoEstimado || ''}
+Fecha cierre: ${ficha.fechaCierre || ficha.fechaTermino || ficha.fechaCierreOferta || ''}
+Estado: ${ficha.estado || ficha.estadoActual || ''}
+Items/Productos solicitados: ${JSON.stringify(ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [])}
+Condiciones: ${ficha.condiciones || ficha.observaciones || ficha.descripcionAdj || ''}
+Datos completos: ${JSON.stringify(ficha).slice(0, 2000)}
+        `.trim();
 
         // 3. Analizar con Claude
-        const prompt = `Analiza esta licitación chilena de Mercado Público y responde en JSON.
+        const prompt = `Eres asistente de ventas de empresa de suministros de limpieza en Chile.
 
-LICITACIÓN ID: ${id}
-CONTENIDO DE LA PÁGINA:
-${textoLimpio}
+LICITACIÓN COMPRA ÁGIL:
+${textoLicitacion}
 
-CATÁLOGO DE LA EMPRESA:
+CATÁLOGO DISPONIBLE (nombre exacto y SKU):
 ${catalogo.slice(0, 2000)}
 
-IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.
-
-Formato exacto requerido:
-{"titulo":"nombre de la licitación","institucion":"nombre institución","descripcion":"qué productos o servicios piden en 2 oraciones","productosDetectados":[{"nombre":"producto","cantidad":10,"unidad":"unidades"}],"productosEnCatalogo":[{"sku":"ASE-001","nombre":"nombre","cantidadEstimada":10,"confianza":"alta"}],"productosNuevos":[{"nombre":"producto","descripcion":"descripción","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar","resumen":"resumen ejecutivo"}`;
+Analiza si esta licitación es relevante para el catálogo. Usa los SKU exactos del catálogo cuando haya coincidencia.
+Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
+{"titulo":"...","institucion":"...","descripcion":"qué piden exactamente en 1-2 oraciones","productosDetectados":[{"nombre":"...","cantidad":10,"unidad":"cajas/unidades/etc"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO-DEL-CATALOGO","nombre":"...","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"..."}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"..."}`;
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -115,7 +124,7 @@ Formato exacto requerido:
             'anthropic-version': '2023-06-01',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-5-20251001',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 1500,
             messages: [{ role: 'user', content: prompt }],
           }),
@@ -153,9 +162,8 @@ Formato exacto requerido:
 
         return new Response(JSON.stringify({
           ok: true,
-          url: mpUrl,
+          url: `https://buscador.mercadopublico.cl/ficha?code=${id}`,
           analisis,
-          _debug: debugInfo,
         }), {
           headers: { ...CORS, 'Content-Type': 'application/json' },
         });

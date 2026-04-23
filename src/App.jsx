@@ -196,7 +196,8 @@ export default function App() {
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
-  const [volverACot,setVolverACot] = useState(null); // id cot to return to after editing product
+  const [volverACot,setVolverACot] = useState(null);
+  const [prodsPendientes, setProdsPendientes] = useState([]);
   const [productos,setProductos] = useState([]);
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
@@ -605,7 +606,7 @@ export default function App() {
         {tab==="rentabilidad" && <ModuloRentabilidad adjFact={adjFact} mesRent={mesRent} setMesRent={setMesRent} gastos={gastos} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos} dbOrg={dbOrganismos} dbProv={dbProveedores}/>}
-        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres} setDetalleCot={setDetalleCot} setTab={setTab}/>}
+        {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres} setDetalleCot={setDetalleCot} setTab={setTab} setProdsPendientes={setProdsPendientes}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -3887,7 +3888,7 @@ function BtnCotizar({op, nuevos, overrides, onCrearYCotizar}) {
 
 function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,
   empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot,
-  guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab}) {
+  guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab,setProdsPendientes}) {
 
   const [filtro,     setFiltro]     = useState("nuevas");
   const [sortBy,     setSortBy]     = useState("potencial");
@@ -3897,7 +3898,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const [seleccion,  setSeleccion]  = useState(new Set());
   const [expandida,  setExpandida]  = useState(null);
   const [pagina,     setPagina]     = useState(1);
-  const [prodsPendientes, setProdsPendientes] = useState([]); // queue to edit after creation
+  const [prodsPendientes_local, setProdsPendientesLocal] = useState([]); // local queue - not used
   const POR_PAGINA = 25;
   const fileRef = useRef();
   const colaRef = useRef([]);

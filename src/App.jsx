@@ -4514,12 +4514,13 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                       const crearNuevo=overrideId==="nuevo"||(esNuevo&&overrideId===undefined);
 
                       // Productos filtrados para buscador
-                      const prodsFiltrados=busqFila?productos.filter(p=>
+                      const prodsFiltrados=productos.filter(p=>
                         p.activo!==false&&(
+                          !busqFila||
                           p.nombre.toLowerCase().includes(busqFila.toLowerCase())||
-                          p.sku.toLowerCase().includes(busqFila.toLowerCase())
+                          (p.sku||"").toLowerCase().includes(busqFila.toLowerCase())
                         )
-                      ).slice(0,6):[];
+                      ).slice(0,8);
 
                       return (
                         <div key={i} style={{borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",
@@ -4538,36 +4539,28 @@ function OpCard({op, expandida, setExpandida, analizando, enCola, onAnalizar, on
                                 <div style={{position:"relative"}}>
                                   <input autoFocus value={busqFila} onChange={e=>setBusqFila(e.target.value)}
                                     placeholder="Buscar producto…"
-                                    onBlur={()=>setTimeout(()=>{setBuscandoFila(null);setBusqFila("");},200)}
+                                    onBlur={()=>setTimeout(()=>{setBuscandoFila(null);setBusqFila("");},250)}
                                     style={{width:"100%",fontSize:11,padding:"4px 8px",borderRadius:6,border:"1px solid #1d4ed8",outline:"none",boxSizing:"border-box"}}/>
-                                  {prodsFiltrados.length>0&&(
-                                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.1)",zIndex:50,maxHeight:160,overflowY:"auto"}}>
-                                      <div onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
-                                        style={{padding:"6px 10px",fontSize:11,color:"#d97706",cursor:"pointer",borderBottom:"1px solid #f1f5f9"}}
-                                        onMouseEnter={e=>e.currentTarget.style.background="#fffbeb"}
+                                  <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,boxShadow:"0 4px 12px rgba(0,0,0,.15)",zIndex:100,maxHeight:200,overflowY:"auto"}}>
+                                    <div onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
+                                      style={{padding:"7px 10px",fontSize:11,color:"#d97706",cursor:"pointer",borderBottom:"1px solid #f1f5f9",background:"#fffbeb"}}
+                                      onMouseEnter={e=>e.currentTarget.style.background="#fef3c7"}
+                                      onMouseLeave={e=>e.currentTarget.style.background="#fffbeb"}>
+                                      + Crear como producto nuevo
+                                    </div>
+                                    {prodsFiltrados.map(p=>(
+                                      <div key={p.id} onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(prev=>({...prev,[i]:p.id}));setBuscandoFila(null);setBusqFila("");}}
+                                        style={{padding:"7px 10px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
+                                        onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
                                         onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                        + Crear como producto nuevo
+                                        <div style={{fontSize:11,fontWeight:500}}>{p.nombre}</div>
+                                        <div style={{fontSize:10,color:"#94a3b8"}}>{p.sku} · stock {getStockTotal(p)} uds</div>
                                       </div>
-                                      {prodsFiltrados.map(p=>(
-                                        <div key={p.id} onClick={()=>{setOverrides(prev=>({...prev,[i]:p.id}));setBuscandoFila(null);setBusqFila("");}}
-                                          style={{padding:"6px 10px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
-                                          onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                                          onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                          <div style={{fontSize:11,fontWeight:500}}>{p.nombre}</div>
-                                          <div style={{fontSize:10,color:"#94a3b8"}}>{p.sku} · stock {getStockTotal(p)}</div>
-                                        </div>
-                                      ))}
-                                      {!busqFila&&<div style={{padding:"6px 10px",fontSize:11,color:"#94a3b8"}}>Escribe para buscar…</div>}
-                                    </div>
-                                  )}
-                                  {busqFila&&prodsFiltrados.length===0&&(
-                                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,zIndex:50}}>
-                                      <div onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
-                                        style={{padding:"8px 10px",fontSize:11,color:"#d97706",cursor:"pointer"}}>
-                                        + Crear "{busqFila}" como producto nuevo
-                                      </div>
-                                    </div>
-                                  )}
+                                    ))}
+                                    {prodsFiltrados.length===0&&busqFila&&(
+                                      <div style={{padding:"10px",fontSize:11,color:"#94a3b8",textAlign:"center"}}>Sin resultados</div>
+                                    )}
+                                  </div>
                                 </div>
                               ):(
                                 <button onClick={()=>{setBuscandoFila(i);setBusqFila("");}}

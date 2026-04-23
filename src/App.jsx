@@ -192,6 +192,7 @@ export default function App() {
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
+  const [volverACot,setVolverACot] = useState(null); // id cot to return to after editing product
   const [productos,setProductos] = useState([]);
   const [cots,setCots]           = useState([]);
   const [gastos,setGastos]       = useState([]);
@@ -259,7 +260,6 @@ export default function App() {
     // Map camelCase keys to snake_case for DB
     const keyMap={stockMinimo:"stock_minimo",umbralVerde:"umbral_verde",umbralAmarillo:"umbral_amarillo",diasAlertaVenc:"dias_alerta_vencimiento",alertaVariacionCompra:"alerta_variacion_compra",palabrasClave:"palabras_clave"};
     if(keyMap[k]) guardarConfigDB({[keyMap[k]]:v});
-    toast("Configuración guardada");
   };
 
   const guardarProd=p=>{
@@ -280,15 +280,14 @@ export default function App() {
           guardarBodegaDB(sb.bodega);
         }
       }
-      toast("Producto guardado");
-    } catch(e){console.error(e);toast("Error al guardar","error");}
+      } catch(e){console.error(e);toast("Error al guardar","error");}
   };
 
   const elimProd=id=>{
     if(cots.some(c=>(c.items||[]).some(i=>i.productoId===id))){toast("Producto en cotizaciones — no se puede eliminar","warning");return;}
     setProductos(prev=>prev.filter(x=>x.id!==id));
     dbProductos.delete(id);
-    setModalProd(null);toast("Producto eliminado");
+    setModalProd(null);
   };
   const clonarProd=p=>setModalProd({...p,id:uid(),sku:p.sku+"-2",nombre:p.nombre+" (copia)"});
 
@@ -315,9 +314,7 @@ export default function App() {
     guardarCotDB(entry);
     const itemsSP=(entry.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
     if(itemsSP.length>0){
-      toast(isNew?"Cotización creada — "+itemsSP.length+" producto(s) sin precio":"Cotización guardada — "+itemsSP.length+" producto(s) sin precio","warning",5000);
-    } else {
-      toast(isNew?"Cotización creada":"Cotización actualizada");
+      toast("Cotización con "+itemsSP.length+" producto(s) sin precio — completa antes de enviar","warning",5000);
     }
   };
 
@@ -544,24 +541,14 @@ export default function App() {
             const isAct=tab===item.id;
             const badge = (() => {
               if(item.id==="revision")    return cots.filter(c=>c.estado==="Para revisar").length;
-              if(item.id==="compras")     return cots.filter(c=>c.estadoOp==="En compra").length;
-              if(item.id==="config")      return solicitudes.filter(s=>s.estado==="pendiente").length;
-              if(item.id==="admin")       return solicitudes.filter(s=>s.estado==="pendiente").length;
-              if(item.id==="oportunidades") return 0; // no badge - use status bar instead
-              if(item.id==="operacional") return cots.filter(c=>c.estadoOp&&["En compra","En despacho"].includes(c.estadoOp)).length;
-              if(item.id==="cotizaciones")return cots.filter(c=>
-                c.estado==="Modificada"||
-                (c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)
-              ).length;
-              if(item.id==="productos")  return productos.filter(p=>getStockTotal(p)<(config.stockMinimo||5)).length;
-              if(item.id==="inventario") return productos.filter(p=>getStockTotal(p)<(config.stockMinimo||5)).length;
+              if(item.id==="operacional") return cots.filter(c=>c.estadoOp==="En despacho").length;
               return 0;
             })();
             return (
               <button key={item.id} onClick={()=>goTab(item.id)} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 12px",borderRadius:8,background:isAct?"#eff6ff":"transparent",color:isAct?"#1d4ed8":"#64748b",border:"none",cursor:"pointer",textAlign:"left",fontSize:13,fontWeight:isAct?600:400,transition:"all .12s",width:"100%",borderLeft:isAct?"3px solid #1d4ed8":"3px solid transparent"}}>
                 <span style={{flexShrink:0,opacity:isAct?1:.75}}>{item.icon}</span>
                 <span>{item.label}</span>
-                {badge>0&&<span style={{marginLeft:"auto",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 5px"}}>{badge}</span>}
+                {badge>0&&<span style={{marginLeft:"auto",background:"#e0e7ff",color:"#1d4ed8",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 6px"}}>{badge}</span>}
               </button>
             );
           })}
@@ -623,7 +610,7 @@ export default function App() {
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
       {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
 }
@@ -732,7 +719,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 }
 
 // ── PRODUCTOS ─────────────────────────────────────────────────
-function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,prodsPendientes=[],setProdsPendientes}) {
+function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,prodsPendientes=[],setProdsPendientes,volverACot,setVolverACot,cots=[],setDetalleCot,setTab}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
   const fileRef=useRef();
@@ -868,7 +855,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
             </tr></thead>
             <tbody>
               {cots.map((c,i)=>{
-                const col=ESTADO_COLORS[c.estado]||{};const mg2=c.margenProm||0;
+                const col=ESTADO_COLORS[c.estado]||{};const mg2=c.margenProm??null;
                 const dv=c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
                 return (
                   <tr key={c.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa",cursor:"pointer"}}
@@ -971,7 +958,6 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
       if(!receptor?.trim()){toast("Debes ingresar el nombre de quien recibió","warning");return;}
       const fechaEnt=prompt("Fecha de entrega (YYYY-MM-DD):",today());
       onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor:receptor.trim(),fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor.trim()}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"Entregado",nota:`Entregado a ${receptor.trim()}`,usuario:"Felipe Alfaro"}]});
-      toast(`Entregado a ${receptor.trim()}`,"success");
       // Deduct stock for each item and register movement
       if(setProductos && setMovimientos) {
         (c.items||[]).forEach(item=>{
@@ -1127,8 +1113,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
       const costoCPP=calcCPP(prod.stock||0,prod.costo||0,qty,precioReal);
       const nuevaHist=[...(prod.historialCostos||[]),{fecha:today(),costo:precioReal,cantidad:qty,usuario:perfil?.nombre||"",cpp:costoCPP}];
       setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,costo:costoCPP,stock:(p.stock||0)+qty,historialCostos:nuevaHist,updatedAt:nowISO()}));
-      toast(`Comprado: +${fmtN(qty)} uds · Costo CPP: ${fmt(costoCPP)}`);
-    // Register inventory movement
+      // Register inventory movement
     if(setMovimientos) setMovimientos(prev=>[...prev,{
       id:uid(),ts:nowISO(),fecha:today(),tipo:"entrada",
       productoId:prod.id,nombreProducto:prod.nombre,
@@ -1152,7 +1137,6 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
     }
     setCompradas(prev=>{const n={...prev};delete n[key];return n;});
     setHistorial(prev=>prev.filter(x=>x.key!==key));
-    toast("Compra deshecha","warning");
   };
 
   const histFiltrado=filtrarPorPeriodo(historial,periodo,"fecha");
@@ -1276,7 +1260,7 @@ function ModuloGastos({gastos,setGastos,adjFact,perfil,isAdmin=false,umbrales={}
     setGastos(prev=>[...prev,nuevo]);
     if(onGuardarDB) onGuardarDB(nuevo);
     sf("descripcion","");sf("monto","");sf("boletaUrl","");
-    toast("Gasto registrado");
+    sf("categoria",form.categoria);
   };
   const porCat=CATEGORIAS_GASTO.map(cat=>({cat,total:gastosF.filter(g=>g.categoria===cat).reduce((a,g)=>a+(g.monto||0),0)})).filter(x=>x.total>0);
   return (
@@ -1360,7 +1344,7 @@ function ModuloRentabilidad({adjFact,mesRent,setMesRent,gastos,umbrales={}}) {
         <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Por cotización {mesRent!==null?`— ${MESES_FULL[mesRent]}`:""}</div>
         {!filtMes(adjFact,mesRent).length&&<div style={{color:"#94a3b8",fontSize:13}}>Sin datos</div>}
         {filtMes(adjFact,mesRent).map(c=>{
-          const util=(c.total||0)-(c.costoTotal||0);const mg3=c.margenProm||0;
+          const util=(c.total||0)-(c.costoTotal||0);const mg3=c.margenProm??null;
           return (<div key={c.id} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:90}}><div style={{fontWeight:500,fontSize:13}}>{c.organismo}</div><div style={{color:"#94a3b8",fontSize:10,fontFamily:"'DM Mono',monospace"}}>{c.numero}</div></div>
             <div style={{textAlign:"right",minWidth:80}}><div style={{fontSize:10,color:"#64748b"}}>Venta</div><div style={{fontWeight:700,fontSize:13}}>{fmt(c.total||0)}</div></div>
@@ -1403,13 +1387,13 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
   const si=(k,v)=>setInputs(p=>({...p,[k]:v}));
   const addItem=(items,setItems,val,k)=>{
     if(!val.trim()||items.includes(val.trim())){toast("Ya existe o vacío","warning");return;}
-    setItems(prev=>[...prev,val.trim()]);si(k,"");toast("Agregado");
+    setItems(prev=>[...prev,val.trim()]);si(k,"");
   };
   const delItem=(items,setItems,item,tipo)=>{
     const enUso=tipo==="prov"?cots.some(c=>(c.items||[]).some(i=>i.proveedor===item))
       :tipo==="emp"?cots.some(c=>c.organismo===item):false;
     if(enUso){toast(`"${item}" tiene cotizaciones — no se puede eliminar`,"warning");return;}
-    setItems(prev=>prev.filter(x=>x!==item));toast("Eliminado");
+    setItems(prev=>prev.filter(x=>x!==item));
   };
   const Toggle=({label,sub,k})=>(
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
@@ -1479,8 +1463,8 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
                 <div style={{fontSize:12,color:"#475569",marginTop:4,fontStyle:"italic"}}>"{s.motivo}"</div>
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
-                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x));toast("Solicitud aprobada — el usuario puede editar");}} size="sm">Aprobar</Btn>
-                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x));toast("Solicitud rechazada");}} variant="ghost" size="sm">Rechazar</Btn>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"aprobada"}:x));toast("Solicitud aprobada","success",3000);}} size="sm">Aprobar</Btn>
+                <Btn onClick={()=>{if(setSolicitudes)setSolicitudes(prev=>prev.map(x=>x.id===s.id?{...x,estado:"rechazada"}:x));}} variant="ghost" size="sm">Rechazar</Btn>
               </div>
             </div>
           ))}
@@ -1523,7 +1507,7 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
                   <td style={{padding:"7px 10px",color:"#64748b",fontSize:11}}>{u.email}</td>
                   <td style={{padding:"7px 10px"}}>
                     {isAdmin ? (
-                      <select value={u.rol} onChange={e=>{if(setUsuarios)setUsuarios(prev=>prev.map(x=>x.id===u.id?{...x,rol:e.target.value}:x));toast("Rol actualizado");}}
+                      <select value={u.rol} onChange={e=>{if(setUsuarios)setUsuarios(prev=>prev.map(x=>x.id===u.id?{...x,rol:e.target.value}:x));}}
                         style={{padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
                         <option value="admin">Admin</option>
                         <option value="ejecutivo">Ejecutivo</option>
@@ -1533,7 +1517,7 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
                     )}
                   </td>
                   <td style={{padding:"7px 10px"}}>
-                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(window.confirm(`¿Eliminar a "${u.nombre}"? Esta acción no se puede deshacer.`)){if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));toast("Usuario eliminado");}}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
+                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(window.confirm(`¿Eliminar a "${u.nombre}"? Esta acción no se puede deshacer.`)){if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));}}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
                   </td>
                 </tr>
               ))}
@@ -1541,7 +1525,7 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
           </table>
         </div>
         {isAdmin && (
-          <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>[...prev,{id:uid(),nombre:"Nuevo usuario",cargo:"Ejecutivo",email:"",rol:"ejecutivo"}]);toast("Usuario agregado — edita los datos en Mi perfil");}} style={{marginTop:10,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontSize:12,color:"#1d4ed8",fontWeight:500}}>+ Agregar usuario</button>
+          <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>[...prev,{id:uid(),nombre:"Nuevo usuario",cargo:"Ejecutivo",email:"",rol:"ejecutivo"}]);}} style={{marginTop:10,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontSize:12,color:"#1d4ed8",fontWeight:500}}>+ Agregar usuario</button>
         )}
       </div>
 
@@ -1585,7 +1569,7 @@ function ModuloPerfil({perfil,setPerfil}) {
               <div key={f.k}><label style={{fontSize:11,color:"#64748b",fontWeight:500,display:"block",marginBottom:3}}>{f.label}</label><input value={form[f.k]||""} onChange={e=>set(f.k,e.target.value)} style={inp}/></div>
             ))}
             <div style={{display:"flex",gap:8,marginTop:4}}>
-              <Btn onClick={()=>{setPerfil(form);setEdit(false);toast("Perfil guardado");}}>Guardar</Btn>
+              <Btn onClick={()=>{setPerfil(form);setEdit(false);}}>Guardar</Btn>
               <Btn onClick={()=>{setForm({...perfil});setEdit(false);}} variant="ghost">Cancelar</Btn>
             </div>
           </div>
@@ -1787,7 +1771,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const {subtotalNeto,iva,total,costoTotal,margenProm}=calcTotalesCot(form.items);
+  const {subtotalNeto,iva,total,costoTotal,margenProm,tieneSinCosto}=calcTotalesCot(form.items);
   const [wizStep,setWizStep]=useState(1); // 1=datos, 2=productos, 3=totales
   // ESC to close
   useEffect(()=>{
@@ -2266,7 +2250,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                         </td>
                         {/* Margen */}
                         {showMargen&&<td style={{padding:"6px 10px",width:80}}>
-                          <span style={{fontSize:11,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{item.costo>0?fmtPct(mgL):"—"}</span>
+                          <span style={{fontSize:11,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{item.costo>0&&item.precioVenta>0?fmtPct(mgL):<span style={{color:"#d97706",fontWeight:600}}>sin costo</span>}</span>
                         </td>}
                         {/* Eliminar */}
                         <td style={{padding:"6px 8px",textAlign:"center",width:36}}>
@@ -2317,7 +2301,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                   <span>Total</span><span>{fmt(total)}</span>
                 </div>
                 <div style={{marginTop:6,textAlign:"right"}}>
-                  <MargenBadge pct={margenProm} monto={calcUtilidad(total,costoTotal)}/>
+                  <MargenBadge pct={margenProm??null} monto={calcUtilidad(total,costoTotal)} sinCosto={tieneSinCosto}/>
                 </div>
               </div>
             )}
@@ -2399,7 +2383,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
 }
 
 // ── DETALLE COTIZACION ────────────────────────────────────────
-function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes}) {
+function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
@@ -2430,12 +2414,10 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         const ok=window.confirm("⚠ Stock insuficiente:\n"+sinStock.map(i=>i.nombre).join(", ")+"\n\n¿Adjudicar e iniciar compra?");
         if(!ok) return;
         onCambiarEstado(c.id,"Adjudicada",{estadoOp:"En compra",fechaCompra:today(),nota:"Adjudicada — compra iniciada"});
-        toast("Cotización adjudicada — proceso de compra iniciado","info");
         return;
       }
     }
     onCambiarEstado(c.id,nuevoEstado,{nota:"→ "+nuevoEstado});
-    toast("Estado: \""+nuevoEstado+"\"");
   };
 
   return (
@@ -2461,9 +2443,12 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
             <div style={{fontSize:12,color:"#854d0e"}}>
               {itemsSinPrecio.map(i=>i.nombre).join(" · ")}
             </div>
-            <button onClick={onEditar}
+            <button onClick={()=>{
+                setVolverACot&&setVolverACot(c.id);
+                if(onGoProductos) onGoProductos();
+              }}
               style={{marginTop:6,fontSize:12,fontWeight:600,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-              Editar cotización para completar precios →
+              Ir a Productos para completar costos →
             </button>
           </div>
         </div>
@@ -2490,7 +2475,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
           {c.facturaUrl&&<a href={c.facturaUrl} target="_blank" rel="noreferrer" style={{display:"inline-block",background:"#fde68a",color:"#92400e",padding:"3px 11px",borderRadius:6,fontSize:12,fontWeight:600,textDecoration:"none",marginBottom:5}}>🔗 Ver factura</a>}
           {facturando&&c.estado!=="Facturada"&&<div style={{display:"flex",gap:7}}>
             <Btn onClick={()=>setFacturando(false)} variant="ghost" size="sm">Cancelar</Btn>
-            <Btn onClick={()=>{if(!factNum.trim()){toast("Ingresa N° de factura","warning");return;}onCambiarEstado(c.id,"Facturada",{facturaNum:factNum,facturaUrl:factUrl,nota:"Facturada"});setFacturando(false);toast("Facturada");}} size="sm">✓ Confirmar</Btn>
+            <Btn onClick={()=>{if(!factNum.trim()){toast("Ingresa N° de factura","warning");return;}onCambiarEstado(c.id,"Facturada",{facturaNum:factNum,facturaUrl:factUrl,nota:"Facturada"});setFacturando(false);}} size="sm">✓ Confirmar</Btn>
           </div>}
         </div>
       )}
@@ -2601,7 +2586,6 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
       usuario:perfil?.nombre||"",notas:ajuste.notas
     }]);
     setAjuste({productoId:"",cantidad:"",tipo:"entrada",motivo:"Conteo físico",bodega:"",notas:""});
-    toast(`Ajuste registrado: ${ajuste.tipo==="entrada"?"+":"-"}${fmtN(cant)} uds de ${prod.nombre}`);
   };
 
   const registrarTransferencia=()=>{
@@ -2622,8 +2606,7 @@ function ModuloInventario({productos,setProductos,movimientos,setMovimientos,per
     }]);
     setProductos(prev=>prev.map(p=>p.id!==prod.id?p:{...p,ubicacion:transf.bodegaDestino,updatedAt:nowISO()}));
     setTransf({productoId:"",cantidad:"",bodegaOrigen:"",bodegaDestino:"",notas:""});
-    toast(`Transferencia registrada: ${prod.nombre} → ${transf.bodegaDestino}`);
-  };
+      };
 
   const hasMovs=movimientos.length>0&&!seenMovs;
   const tabs=[
@@ -2914,8 +2897,7 @@ function ResumenStock({productos,setProductos,movimientos,setMovimientos,stockMi
       usuario:perfil?.nombre||""
     }]);
     setEditando(e=>{const n={...e};delete n[key];return n;});
-    toast(`Stock actualizado: ${prod.nombre} · ${prod.stockPorBodega[bIdx].bodega}`);
-  };
+      };
 
   const prodOrdenados=[...productos].sort((a,b)=>getStockTotal(a)-getStockTotal(b));
 
@@ -3116,7 +3098,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
     if(isOrgEnUso(org.nombre)){toast(`"${org.nombre}" está en uso`,"warning");setConfirmDel(null);return;}
     saveOrgList(orgList.filter((_,i)=>i!==idx));
     deleteOrgDB(org.nombre);
-    setConfirmDel(null); toast("Eliminado");
+    setConfirmDel(null);
   };
 
   // ── Proveedores (objetos enriquecidos) ────────────────────
@@ -3137,7 +3119,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
     if(isProvEnUso(p.nombre)){toast(`"${p.nombre}" está en uso`,"warning");setConfirmDel(null);return;}
     saveProvList(provList.filter((_,i)=>i!==idx));
     deleteProvDB(p.nombre);
-    setConfirmDel(null); toast("Eliminado");
+    setConfirmDel(null);
   };
 
   const TABS=[
@@ -3253,10 +3235,10 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
         <div style={{maxWidth:480}}>
           <div style={{display:"flex",gap:8,marginBottom:14}}>
             <input value={nuevaBodega} onChange={e=>setNuevaBodega(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&nuevaBodega.trim()){if(bodegas.includes(nuevaBodega.trim())){toast("Ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");toast("Bodega agregada");}}}
+              onKeyDown={e=>{if(e.key==="Enter"&&nuevaBodega.trim()){if(bodegas.includes(nuevaBodega.trim())){toast("Ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");}}}
               placeholder="Nombre de la bodega…"
               style={{flex:1,padding:"8px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
-            <Btn onClick={()=>{if(!nuevaBodega.trim()||bodegas.includes(nuevaBodega.trim())){toast("Nombre inválido o ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");toast("Bodega agregada");}} size="sm">+ Agregar</Btn>
+            <Btn onClick={()=>{if(!nuevaBodega.trim()||bodegas.includes(nuevaBodega.trim())){toast("Nombre inválido o ya existe","warning");return;}const nb=nuevaBodega.trim();setBodegas(prev=>[...prev,nb]);guardarBodegaDB&&guardarBodegaDB(nb);setNuevaBodega("");}} size="sm">+ Agregar</Btn>
           </div>
           <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
             {bodegas.map((b,i)=>(
@@ -3316,8 +3298,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                 else newList[modalOrg.idx]=d;
                 saveOrgList(newList, d);
                 setModalOrg(null);
-                toast(modalOrg.idx===null?"Organismo creado":"Organismo actualizado");
-              }} size="sm">Guardar</Btn>
+                              }} size="sm">Guardar</Btn>
             </div>
           </div>
         </Modal>
@@ -3352,8 +3333,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                 else newList[modalProv.idx]=d;
                 saveProvList(newList, d);
                 setModalProv(null);
-                toast(modalProv.idx===null?"Proveedor creado":"Proveedor actualizado");
-              }} size="sm">Guardar</Btn>
+                              }} size="sm">Guardar</Btn>
             </div>
           </div>
         </Modal>
@@ -3383,8 +3363,7 @@ function ModuloMaestros({proveedores,setProv,empresas,setEmpresas,bodegas,setBod
                   setBodegas(prev=>prev.filter((_,i)=>i!==confirmDelBod.idx));
                   if(supabase) supabase.from('bodegas').delete().eq('nombre',confirmDelBod.nombre).then(({error})=>{if(error)console.error("Error eliminando bodega:",error);});
                   setConfirmDelBod(null);
-                  toast("Bodega eliminada");
-                }
+                                  }
               }} variant="danger">Sí, eliminar</Btn>
             </div>
           </div>
@@ -3773,8 +3752,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                 if(modalUser.idx===null) setUsuarios(prev=>[...prev,{id:uid(),...modalUser.data}]);
                 else setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
                 setModalUser(null);
-                toast(modalUser.idx===null?"Usuario creado":"Usuario actualizado");
-              }} size="sm">Guardar</Btn>
+                              }} size="sm">Guardar</Btn>
             </div>
           </div>
         </Modal>
@@ -3792,7 +3770,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
               <Btn onClick={()=>{
                 setUsuarios(prev=>prev.filter((_,i)=>i!==confirmDelUser.idx));
                 setConfirmDelUser(null);
-                toast("Usuario eliminado");
+                
               }} variant="danger">Sí, eliminar</Btn>
             </div>
           </div>
@@ -3888,7 +3866,6 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const [seleccion,  setSeleccion]  = useState(new Set());
   const [expandida,  setExpandida]  = useState(null);
   const [pagina,     setPagina]     = useState(1);
-  const [showConfig, setShowConfig] = useState(false);
   const [prodsPendientes, setProdsPendientes] = useState([]); // queue to edit after creation
   const POR_PAGINA = 25;
   const fileRef = useRef();
@@ -4049,10 +4026,18 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     setAnalizando(null); setCola([]); colaRef.current=[];
     setSeleccion(new Set());
     if(!detenerRef.current){
-      toast(`${completados} oportunidades analizadas`,"success",4000);
+      toast(completados+" analizadas","success",3000);
       setFiltro("analizadas");
       document.dispatchEvent(new CustomEvent("boreal-analisis-completo",{detail:{completados}}));
     }
+  };
+
+  const persistirEstadoOp = (ids, estado) => {
+    if(!supabase||!ids.length) return;
+    ids.forEach(id=>{
+      supabase.from("oportunidades").update({estado}).eq("id",id)
+        .then(({error})=>{if(error) console.error("Error persistiendo estado op:",error);});
+    });
   };
 
   const encolarAnalisis = (ids) => {
@@ -4129,6 +4114,8 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     setCots(prev=>[cot,...prev]);
     guardarCotDB(cot);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
+    if(supabase) supabase.from("oportunidades").update({estado:"cotizada",cotizacion_id:cot.id}).eq("id",op.id)
+      .then(({error})=>{if(error) console.error("Error persistiendo cotizada:",error);});
     if(setDetalleCot) setDetalleCot(cot);
     if(setTab) setTab("cotizaciones");
     if(productosCreados.length>0){
@@ -4210,19 +4197,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         </div>
       </div>
 
-      {/* ── CONFIG PALABRAS CLAVE ────────────────────────────── */}
-      {showConfig&&(
-        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#64748b",marginBottom:8}}>PALABRAS CLAVE ACTIVAS</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
-            {todasKW.map(kw=>(
-              <span key={kw} style={{fontSize:11,background:"#dbeafe",color:"#1d4ed8",padding:"2px 10px",borderRadius:20,border:"1px solid #bfdbfe"}}>{kw}</span>
-            ))}
-          </div>
-          <div style={{fontSize:11,color:"#94a3b8"}}>Edita las palabras clave en Configuración → Oportunidades. Las palabras de tus productos se agregan automáticamente.</div>
-          <button onClick={()=>setShowConfig(false)} style={{marginTop:8,fontSize:11,color:"#64748b",background:"none",border:"none",cursor:"pointer",padding:0}}>Cerrar</button>
-        </div>
-      )}
+
 
       {/* ── BARRA COLA ───────────────────────────────────────── */}
       {cola.length>0&&(
@@ -4284,7 +4259,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
                   style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:7,padding:"5px 12px",cursor:"pointer"}}>
                   Analizar {seleccion.size}
                 </button>
-                <button onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());toast("Archivadas");}}
+                <button onClick={()=>{const ids=[...seleccion];setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));persistirEstadoOp(ids,"archivada");setSeleccion(new Set());}}
                   style={{fontSize:12,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer"}}>
                   Archivar sel.
                 </button>
@@ -4305,14 +4280,21 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
                     {l}
                   </button>
                 ))}
-                {/* Keywords */}
-                <button onClick={()=>setShowConfig(v=>!v)}
-                  style={{marginLeft:"auto",fontSize:11,color:"#94a3b8",background:"none",border:"none",cursor:"pointer",padding:"3px 6px"}}>
-                  {todasKW.length} palabras clave {showConfig?"▴":"▾"}
-                </button>
+
                 {/* Reprocesar / archivar contextuales */}
                 {filtro==="archivadas"&&counts.archivadas>0&&(
-                  <button onClick={()=>{setOportunidades(prev=>prev.map(o=>o.estado==="archivada"?{...o,matches:matchKW(o.nombre),estado:matchKW(o.nombre).length>0?"nueva":"archivada"}:o));toast("Reprocesado");}}
+                  <button onClick={()=>{
+      const updates=[];
+      setOportunidades(prev=>prev.map(o=>{
+        if(o.estado!=="archivada") return o;
+        const m=matchKW(o.nombre);
+        const nuevoEstado=m.length>0?"nueva":"archivada";
+        if(nuevoEstado!==o.estado) updates.push({id:o.id,estado:nuevoEstado});
+        return {...o,matches:m,estado:nuevoEstado};
+      }));
+      updates.forEach(({id,estado})=>persistirEstadoOp([id],estado));
+      updates.filter(u=>u.estado==="nueva").length>0&&toast(updates.filter(u=>u.estado==="nueva").length+" oportunidades restauradas");
+    }}
                     style={{fontSize:11,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 9px",cursor:"pointer"}}>
                     Reprocesar con filtros actuales
                   </button>
@@ -4328,8 +4310,8 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         <OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
           analizando={analizando} enCola={cola.includes(op.id)}
           onAnalizar={analizarConIA} onCrearYCotizar={crearYCotizar}
-          onArchivar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"archivada"}:o))}
-          onRestaurar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:o.matches?.length?"nueva":"archivada"}:o))}
+          onArchivar={()=>{setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"archivada"}:o));persistirEstadoOp([op.id],"archivada");}}
+          onRestaurar={()=>{const nuevoEstado=op.matches?.length?"nueva":"archivada";setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:nuevoEstado}:o));persistirEstadoOp([op.id],nuevoEstado);}}
           ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}
           seleccionada={seleccion.has(op.id)}
           onToggleSel={()=>setSeleccion(prev=>{const s=new Set(prev);s.has(op.id)?s.delete(op.id):s.add(op.id);return s;})}

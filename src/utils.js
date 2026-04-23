@@ -26,8 +26,20 @@ export const calcMargenDesde = (costo,pvConIva) => {
 export const calcTotalesCot = items => {
   const sn=items.reduce((a,i)=>a+(i.precioVenta/1.19)*i.cantidad,0);
   const iva=sn*0.19, total=sn+iva;
-  const ct=items.reduce((a,i)=>a+i.costo*i.cantidad,0);
-  return {subtotalNeto:Math.round(sn),iva:Math.round(iva),total:Math.round(total),costoTotal:Math.round(ct),margenProm:total>0?((total-ct)/total*100):0};
+  const ct=items.reduce((a,i)=>a+(i.costo||0)*i.cantidad,0);
+  // Only calculate margen for items that have a cost — exclude $0 items to avoid distortion
+  const itemsConCosto=items.filter(i=>i.costo>0&&i.precioVenta>0);
+  const snConCosto=itemsConCosto.reduce((a,i)=>a+(i.precioVenta/1.19)*i.cantidad,0);
+  const ctConCosto=itemsConCosto.reduce((a,i)=>a+i.costo*i.cantidad,0);
+  const margenProm=snConCosto>0?((snConCosto-ctConCosto)/snConCosto*100):null;
+  const tieneSinCosto=items.some(i=>!i.costo||i.costo===0);
+  return {
+    subtotalNeto:Math.round(sn),iva:Math.round(iva),total:Math.round(total),
+    costoTotal:Math.round(ct),
+    margenProm:margenProm,           // null if no items with cost
+    tieneSinCosto,                   // flag to warn user
+    itemsSinCosto:items.filter(i=>!i.costo||i.costo===0).map(i=>i.nombre),
+  };
 };
 
 // CPP: Costo Promedio Ponderado (estándar ERP)
@@ -105,7 +117,7 @@ export const copiarAlPortapapeles = async texto => {
   catch { return false; }
 };
 
-export const BUILD_VERSION = "v1.19.3";
+export const BUILD_VERSION = "v1.19.8";
 export const USUARIO_DEFAULT = {nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",telefono:"+56 9 3200 0969",email:"fealfaro@gmail.com",foto:""};
 
 // Format ISO date to dd/mm/yyyy

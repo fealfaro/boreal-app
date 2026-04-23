@@ -196,6 +196,7 @@ export default function App() {
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
+  const [dismissedNotifs,setDismissedNotifs] = useState(new Set());
   const [volverACot,setVolverACot] = useState(null);
   const [prodsPendientes, setProdsPendientes] = useState([]);
   const [productos,setProductos] = useState([]);
@@ -532,11 +533,11 @@ export default function App() {
             <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" onClick={()=>goTab("dashboard")}
               style={{height:40,maxWidth:140,objectFit:"contain",cursor:"pointer"}}
               onError={e=>{e.target.style.display="none";}}/>
-            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",position:"relative",padding:4,display:"flex",alignItems:"center",borderRadius:8,transition:"background .12s"}}
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0&&!seenNotifs?"#1d4ed8":"#94a3b8",position:"relative",padding:"6px",display:"flex",alignItems:"center",borderRadius:8,transition:"all .12s"}}
               onMouseEnter={e=>e.currentTarget.style.background="#f1f5f9"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
-              {Ic.bell}
-              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:2,right:2,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:7,fontWeight:700,padding:"1px 3px",minWidth:12,textAlign:"center",lineHeight:"12px"}}>{notifList.length}</span>}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:2,right:2,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center",lineHeight:"14px"}}>{notifList.length}</span>}
             </button>
           </div>
         )}
@@ -577,9 +578,9 @@ export default function App() {
           <img src={`data:image/png;base64,${LOGO_B64_COLOR}`} alt="Boreal"
             style={{height:34,objectFit:"contain",display:"block"}}/>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",position:"relative",padding:4,display:"flex",alignItems:"center"}}>
-              {Ic.bell}
-              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:0,right:0,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0&&!seenNotifs?"#1d4ed8":"#64748b",position:"relative",padding:"6px",display:"flex",alignItems:"center"}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+              {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:2,right:2,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{notifList.length}</span>}
             </button>
             <button onClick={()=>setSideOpen(v=>!v)} style={{
               background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,
@@ -594,7 +595,7 @@ export default function App() {
 
       {/* MAIN */}
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
-        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)}/>}
+        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
@@ -4657,69 +4658,90 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 
 
 // ── MÓDULO NOTIFICACIONES ─────────────────────────────────────
-function ModuloNotificaciones({notifList,goTab,cots,config,onSeen}) {
+function ModuloNotificaciones({notifList,goTab,cots,config,onSeen,dismissed=new Set(),onDismiss,onClearAll}) {
   useEffect(()=>{if(onSeen)onSeen();},[]);
-  const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0);
-  const stockBajo=notifList.filter(n=>n.tipo==="warning"&&n.id.startsWith("s"));
-  const paraRev=cots.filter(c=>c.estado==="Para revisar");
-  const enCompra=cots.filter(c=>c.estadoOp==="En compra");
+
+  const now=new Date();
+  const fmtRelative=ts=>{
+    if(!ts) return "";
+    const d=Math.floor((now-new Date(ts))/60000);
+    if(d<1) return "ahora";
+    if(d<60) return `${d}m`;
+    if(d<1440) return `${Math.floor(d/60)}h`;
+    return `${Math.floor(d/1440)}d`;
+  };
+
+  // Build enriched notif list with timestamps from cot data
+  const enriched=notifList.map(n=>{
+    const cot=cots.find(c=>n.id.includes(c.id));
+    return {...n, ts:cot?.updatedAt||cot?.creadaEn||null};
+  });
+
+  const visible=enriched.filter(n=>!dismissed.has(n.id));
 
   const GRUPOS=[
-    {
-      id:"urgente",label:"Urgente",color:"#b91c1c",bg:"#fee2e2",
-      items:[
-        ...porVencer.map(c=>({id:"v"+c.id,msg:`Cotización ${c.numero} vence en ${diffDays(c.fechaVencimiento)}d`,sub:c.organismo,tab:"cotizaciones",tipo:"danger"})),
-      ]
-    },
-    {
-      id:"atencion",label:"Requiere atención",color:"#854d0e",bg:"#fef9c3",
-      items:[
-        ...paraRev.map(c=>({id:"r"+c.id,msg:`${c.numero} pendiente de revisión`,sub:c.organismo,tab:"revision",tipo:"warning"})),
-        ...enCompra.map(c=>({id:"c"+c.id,msg:`${c.numero} en proceso de compra`,sub:c.organismo,tab:"compras",tipo:"warning"})),
-      ]
-    },
-    {
-      id:"stock",label:"Stock bajo",color:"#1d4ed8",bg:"#eff6ff",
-      items:stockBajo.map(n=>({...n,tab:"inventario",tipo:"info"}))
-    },
+    {id:"urgente",label:"Urgente",color:"#b91c1c",
+      items:visible.filter(n=>n.tipo==="danger")},
+    {id:"atencion",label:"Atención",color:"#854d0e",
+      items:visible.filter(n=>n.tipo==="warning")},
+    {id:"info",label:"Información",color:"#1d4ed8",
+      items:visible.filter(n=>n.tipo==="info")},
   ].filter(g=>g.items.length>0);
 
   return (
     <div>
-      <div style={{marginBottom:20}}>
-        <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Notificaciones</h1>
-        <p style={{color:"#64748b",fontSize:13,margin:0}}>
-          {notifList.length===0?"Todo al día — sin alertas pendientes":`${notifList.length} alerta${notifList.length>1?"s":""} activa${notifList.length>1?"s":""}`}
-        </p>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Notificaciones</h1>
+          <p style={{color:"#64748b",fontSize:13,margin:0}}>
+            {visible.length===0?"Todo al día":""+visible.length+" alerta"+(visible.length>1?"s":"")}
+          </p>
+        </div>
+        {visible.length>0&&(
+          <button onClick={onClearAll}
+            style={{fontSize:12,color:"#94a3b8",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 12px",cursor:"pointer"}}>
+            Limpiar todo
+          </button>
+        )}
       </div>
 
-      {notifList.length===0&&(
+      {/* Empty state */}
+      {visible.length===0&&(
         <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-          <div style={{width:56,height:56,background:"#dcfce7",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px",color:"#15803d"}}>
-            {Ic.check}
+          <div style={{width:52,height:52,background:"#dcfce7",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",color:"#15803d"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
-          <h3 style={{fontSize:16,fontWeight:700,marginBottom:6,color:"#15803d"}}>Todo al día</h3>
-          <p style={{color:"#64748b",fontSize:13}}>No hay alertas ni notificaciones pendientes</p>
+          <h3 style={{fontSize:15,fontWeight:700,marginBottom:4,color:"#15803d"}}>Todo al día</h3>
+          <p style={{color:"#64748b",fontSize:12}}>Sin alertas pendientes</p>
         </div>
       )}
 
+      {/* Grupos */}
       {GRUPOS.map(g=>(
         <div key={g.id} style={{marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <span style={{fontSize:11,fontWeight:700,color:g.color,letterSpacing:".06em"}}>{g.label.toUpperCase()}</span>
-            <span style={{background:g.bg,color:g.color,fontSize:10,fontWeight:700,padding:"1px 7px",borderRadius:20}}>{g.items.length}</span>
+          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:".08em",marginBottom:6}}>
+            {g.label.toUpperCase()} · {g.items.length}
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
             {g.items.map(item=>(
-              <div key={item.id} onClick={()=>goTab(item.tab)}
-                style={{background:"#fff",borderRadius:12,padding:"14px 16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",borderLeft:`3px solid ${g.color}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,transition:"box-shadow .12s"}}
-                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,.1)"}
-                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,.06)"}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.msg}</div>
-                  {item.sub&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.sub}</div>}
+              <div key={item.id} style={{background:"#fff",borderRadius:10,border:"1px solid #f1f5f9",borderLeft:"3px solid "+g.color,display:"flex",alignItems:"center",gap:0,overflow:"hidden"}}>
+                {/* Click area */}
+                <div onClick={()=>goTab(item.tab)}
+                  style={{flex:1,padding:"12px 14px",cursor:"pointer",minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                    <span style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{item.msg}</span>
+                    {item.ts&&<span style={{fontSize:10,color:"#cbd5e1",flexShrink:0}}>{fmtRelative(item.ts)}</span>}
+                  </div>
+                  {item.sub&&<div style={{fontSize:11,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.sub}</div>}
                 </div>
-                <div style={{color:"#94a3b8",flexShrink:0,fontSize:16}}>›</div>
+                {/* Dismiss button */}
+                <button onClick={()=>onDismiss&&onDismiss(item.id)}
+                  style={{padding:"0 12px",height:"100%",background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,alignSelf:"stretch",display:"flex",alignItems:"center"}}
+                  onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
+                  onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>
+                  ×
+                </button>
               </div>
             ))}
           </div>

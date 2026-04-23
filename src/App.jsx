@@ -313,7 +313,12 @@ export default function App() {
     setDetalleCot(prev=>prev?.id===entry.id?entry:prev);
     setModalCot(null);
     guardarCotDB(entry);
-    toast(isNew?"Cotización creada":"Cotización actualizada");
+    const itemsSP=(entry.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
+    if(itemsSP.length>0){
+      toast(isNew?"Cotización creada — "+itemsSP.length+" producto(s) sin precio":"Cotización guardada — "+itemsSP.length+" producto(s) sin precio","warning",5000);
+    } else {
+      toast(isNew?"Cotización creada":"Cotización actualizada");
+    }
   };
 
   const cambiarEstado=(id,estado,extra={})=>{
@@ -2400,10 +2405,19 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
   const util=(c.total||total)-(c.costoTotal||0);
   const mg=c.margenProm||0;
 
+  // Items sin precio (costo=0 Y precioVenta=0)
+  const itemsSinPrecio=(c.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
+  const tienePreciosPendientes=itemsSinPrecio.length>0;
+
   const handleEstado=nuevoEstado=>{
-    const critico=ESTADOS_CRITICOS.includes(nuevoEstado);
+    // Bloquear si hay precios pendientes (excepto retrocesos)
     const retro=esRetroceso(c.estado,nuevoEstado);
-    if((critico||retro)&&!window.confirm(`¿${retro?"Retroceder":"Cambiar"} a "${nuevoEstado}"?${retro?"\nRequiere revisión.":"\nEstado crítico."}`)) return;
+    if(!retro&&tienePreciosPendientes){
+      toast(`No se puede cambiar estado — ${itemsSinPrecio.length} producto(s) sin precio: ${itemsSinPrecio.map(i=>i.nombre).join(", ")}. Edita la cotización para completarlos.`,"warning",6000);
+      return;
+    }
+    const critico=ESTADOS_CRITICOS.includes(nuevoEstado);
+    if((critico||retro)&&!window.confirm("¿"+(retro?"Retroceder":"Cambiar")+" a \""+nuevoEstado+"\"?"+(retro?"\nRequiere revisión.":"\nEstado crítico."))) return;
     if(nuevoEstado==="Facturada"&&c.estado==="Adjudicada"){setFacturando(true);return;}
     if(nuevoEstado==="Adjudicada"){
       const sinStock=(c.items||[]).filter(item=>{
@@ -2411,15 +2425,15 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         return !p||getStockTotal(p)<item.cantidad;
       });
       if(sinStock.length>0){
-        const ok=window.confirm(`⚠ Stock insuficiente:\n${sinStock.map(i=>i.nombre).join(", ")}\n\n¿Adjudicar e iniciar compra?`);
+        const ok=window.confirm("⚠ Stock insuficiente:\n"+sinStock.map(i=>i.nombre).join(", ")+"\n\n¿Adjudicar e iniciar compra?");
         if(!ok) return;
         onCambiarEstado(c.id,"Adjudicada",{estadoOp:"En compra",fechaCompra:today(),nota:"Adjudicada — compra iniciada"});
         toast("Cotización adjudicada — proceso de compra iniciado","info");
         return;
       }
     }
-    onCambiarEstado(c.id,nuevoEstado,{nota:`→ ${nuevoEstado}`});
-    toast(`Estado: "${nuevoEstado}"`);
+    onCambiarEstado(c.id,nuevoEstado,{nota:"→ "+nuevoEstado});
+    toast("Estado: \""+nuevoEstado+"\"");
   };
 
   return (
@@ -2434,6 +2448,25 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}><EstadoBadge estado={c.estado}/><CloseBtn onClose={onClose}/></div>
       </div>
+      {/* Banner precios pendientes */}
+      {tienePreciosPendientes&&(
+        <div style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",alignItems:"flex-start",gap:10}}>
+          <span style={{color:"#92400e",flexShrink:0,marginTop:1}}>{Ic.warn}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#92400e",marginBottom:3}}>
+              {itemsSinPrecio.length} producto{itemsSinPrecio.length>1?"s":""} sin precio — no se puede avanzar de estado
+            </div>
+            <div style={{fontSize:12,color:"#854d0e"}}>
+              {itemsSinPrecio.map(i=>i.nombre).join(" · ")}
+            </div>
+            <button onClick={onEditar}
+              style={{marginTop:6,fontSize:12,fontWeight:600,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>
+              Editar cotización para completar precios →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Estados */}
       <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginBottom:6}}>Cambiar estado</div>
@@ -2469,7 +2502,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
                 <td style={{padding:"5px 9px",width:30}}>{item.foto_url?<img src={item.foto_url} alt="" style={{width:22,height:22,objectFit:"cover",borderRadius:4}}/>:<span style={{fontSize:12}}></span>}</td>
                 <td style={{padding:"5px 9px",fontWeight:500}}>{item.nombre}</td>
                 <td style={{padding:"5px 9px"}}>{fmtN(item.cantidad)}</td>
-                <td style={{padding:"5px 9px"}}>{fmt(Math.round(item.precioVenta/1.19))}</td>
+                <td style={{padding:"5px 9px",color:(!item.precioVenta||item.precioVenta===0)?"#b91c1c":"inherit",fontWeight:(!item.precioVenta||item.precioVenta===0)?700:"inherit"}}>{(!item.precioVenta||item.precioVenta===0)?"⚠ $0":fmt(Math.round(item.precioVenta/1.19))}</td>
                 <td style={{padding:"5px 9px",fontWeight:600}}>{fmt(Math.round(item.precioVenta/1.19)*item.cantidad)}</td>
               </tr>
             ))}</tbody>

@@ -91,17 +91,17 @@ export const dbPerfiles = {
 
 export const toDbProducto = (p) => ({
   id:               p.id,
-  sku:              p.sku,
+  sku:              p.sku?.trim()||null,  // null if empty - avoids unique constraint
   nombre:           p.nombre,
-  proveedor:        p.proveedor,
-  costo:            p.costo,
-  margen:           p.margen,
-  foto_url:         p.foto_url,
-  categoria:        p.categoria,
-  stock:            p.stock,
+  proveedor:        p.proveedor||null,
+  costo:            Number(p.costo)||0,
+  margen:           Number(p.margen)||0,
+  foto_url:         p.foto_url||null,
+  categoria:        p.categoria||null,
+  stock:            Number(p.stock)||0,
   stock_por_bodega: p.stockPorBodega||[],
   historial_costos: p.historialCostos||[],
-  activo:           p.activo===true||p.activo===undefined?true:false,
+  activo:           p.activo===false?false:true,
   updated_at:       new Date().toISOString(),
 });
 

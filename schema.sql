@@ -46,7 +46,7 @@ create table if not exists bodegas (
 -- ── PRODUCTOS ─────────────────────────────────────────────────
 create table if not exists productos (
   id                uuid primary key default uuid_generate_v4(),
-  sku               text unique,
+  sku               text,
   nombre            text not null,
   proveedor         text,
   costo             numeric default 0,

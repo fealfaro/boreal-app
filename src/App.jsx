@@ -372,11 +372,11 @@ export default function App() {
     }));
   };
 
-  const nuevaCot=()=>setDetalleCot({
+  const nuevaCot=()=>setModalCot({
     id:uid(),numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
     fecha:today(),fechaVencimiento:addDays(today(),10),organismo:"",oportunidad_id:"",
     rut_cliente:"",items:[],estado:"Borrador",notas:"",notasInternas:"",ejecutivo:perfil.nombre,
-    facturaNum:"",facturaUrl:"",estadoOp:"",log:[],_isNew:true
+    facturaNum:"",facturaUrl:"",estadoOp:"",log:[]
   });
 
   const goTab=t=>{setTab(t);setSideOpen(false);};

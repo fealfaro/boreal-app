@@ -272,13 +272,43 @@ export default function App() {
     try {
       if(p.proveedor&&!proveedoresNombres.includes(p.proveedor)) setProv(prev=>[...prev,{nombre:p.proveedor}]);
       const spb=(p.stockPorBodega||[]).filter(b=>b.bodega&&b.cantidad>=0);
-      const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stockPorBodega:spb,stock:spb.reduce((a,b)=>a+(b.cantidad||0),0),updatedAt:nowISO()};
+      const nuevoStock=spb.reduce((a,b)=>a+(b.cantidad||0),0);
+      const limpio={...p,costo:Number(p.costo)||0,margen:Number(p.margen)||0,stockPorBodega:spb,stock:nuevoStock,updatedAt:nowISO()};
       const isNew=!productos.find(x=>x.id===p.id);
+      const productoAnterior=productos.find(x=>x.id===p.id);
       const withId={...limpio,id:limpio.id||uid()};
       if(!isNew) setProductos(prev=>prev.map(x=>x.id===p.id?withId:x));
       else setProductos(prev=>[...prev,withId]);
       setModalProd(null);
       guardarProductoDB(withId);
+
+      // ── Registrar movimiento si cambió el stock ───────────
+      const stockAnterior=productoAnterior?getStockTotal(productoAnterior):0;
+      const diff=nuevoStock-stockAnterior;
+      if(diff!==0||isNew){
+        const mov={
+          id:uid(),
+          tipo:isNew?"entrada":diff>0?"entrada":diff<0?"salida":"ajuste",
+          signo:diff>=0?"+":"-",
+          productoId:withId.id,
+          nombreProducto:withId.nombre,
+          cantidad:Math.abs(diff)||(isNew?nuevoStock:0),
+          stockAntes:stockAnterior,
+          stockDespues:nuevoStock,
+          referencia:"",
+          motivo:isNew?"Producto creado":"Ajuste manual desde ficha de producto",
+          bodegaOrigen:"",
+          bodegaDestino:"",
+          usuario:perfil?.nombre||"",
+          fecha:today(),
+          ts:nowISO(),
+        };
+        if(mov.cantidad>0||(isNew&&nuevoStock>0)){
+          setMovimientos(prev=>[mov,...prev]);
+          guardarMovDB(mov);
+        }
+      }
+
       // Auto-agregar bodegas nuevas al maestro
       for(const sb of spb){
         if(sb.bodega&&!bodegas.includes(sb.bodega)){
@@ -286,7 +316,8 @@ export default function App() {
           guardarBodegaDB(sb.bodega);
         }
       }
-      } catch(e){console.error(e);toast("Error al guardar","error");}
+      toast(isNew?"Producto creado":"Producto actualizado");
+    } catch(e){console.error(e);toast("Error al guardar","error");}
   };
 
   const elimProd=id=>{

@@ -2488,7 +2488,11 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
           {/* Izquierda */}
           <div style={{display:"flex",gap:8}}>
             {isSaved&&vistaTab==="detalle"&&["Enviada","Adjudicada"].includes(form.estado)&&(
-              <Btn onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)} variant="dark" size="sm">PDF</Btn>
+              <button onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)}
+                style={{display:"flex",alignItems:"center",gap:7,background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:500}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar cotización
+              </button>
             )}
           </div>
           {/* Derecha */}
@@ -2629,19 +2633,36 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
       </div>
       {/* Items */}
       {(c.items||[]).length>0&&(
-        <div style={{marginBottom:10,overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-              {["Producto","Cant.","P. Unit.","Subtotal"].map(h=><th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:"#64748b",fontWeight:600}}>{h}</th>)}
+        <div style={{marginBottom:10,background:"#fff",borderRadius:10,border:"1px solid #f1f5f9",overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>
+              <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#94a3b8",fontWeight:600,width:44}}></th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#94a3b8",fontWeight:600}}>PRODUCTO</th>
+              <th style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:"#94a3b8",fontWeight:600,width:60}}>CANT.</th>
+              <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#94a3b8",fontWeight:600,width:90}}>P. UNIT.</th>
+              <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#94a3b8",fontWeight:600,width:90}}>SUBTOTAL</th>
             </tr></thead>
-            <tbody>{(c.items||[]).map((item,i)=>(
-              <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
-                <td style={{padding:"8px 10px",fontWeight:500}}>{item.nombre}</td>
-                <td style={{padding:"8px 10px"}}>{item.cantidad}</td>
-                <td style={{padding:"8px 10px",color:!item.precioVenta?"#b91c1c":"inherit"}}>{!item.precioVenta?"⚠ $0":fmt(Math.round(item.precioVenta/1.19))}</td>
-                <td style={{padding:"8px 10px",fontWeight:600}}>{fmt(Math.round((item.precioVenta||0)/1.19)*item.cantidad)}</td>
-              </tr>
-            ))}</tbody>
+            <tbody>{(c.items||[]).map((item,i)=>{
+              const prod=productos.find(p=>p.id===item.productoId);
+              const foto=item.foto_url||prod?.foto_url||"";
+              return (
+                <tr key={i} style={{borderBottom:"1px solid #f8fafc"}}>
+                  <td style={{padding:"8px 8px 8px 12px"}}>
+                    {foto
+                      ? <img src={foto} alt="" style={{width:32,height:32,borderRadius:6,objectFit:"cover",display:"block"}}/>
+                      : <div style={{width:32,height:32,borderRadius:6,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
+                    }
+                  </td>
+                  <td style={{padding:"8px 12px"}}>
+                    <div style={{fontWeight:500,color:"#0f172a"}}>{item.nombre}</div>
+                    {item.sku&&<div style={{fontSize:10,color:"#94a3b8",fontFamily:"'Geist Mono',monospace",marginTop:1}}>{item.sku}</div>}
+                  </td>
+                  <td style={{padding:"8px 12px",textAlign:"center",color:"#475569"}}>{item.cantidad}</td>
+                  <td style={{padding:"8px 12px",textAlign:"right",color:!item.precioVenta?"#b91c1c":"#475569"}}>{!item.precioVenta?"⚠ $0":fmt(Math.round(item.precioVenta/1.19))}</td>
+                  <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,color:"#0f172a"}}>{fmt(Math.round((item.precioVenta||0)/1.19)*item.cantidad)}</td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </div>
       )}

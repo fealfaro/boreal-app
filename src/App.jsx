@@ -351,8 +351,7 @@ export default function App() {
     const entry={...c,estado:estadoFinal,log,updatedAt:nowISO()};
     if(isNew) setCots(prev=>[entry,...prev]);
     else setCots(prev=>prev.map(x=>x.id===entry.id?entry:x));
-    setModalCot(null);
-    setDetalleCot(entry); // always open detalle after save
+    setModalCot(entry); // stay in ModalCotizacion, now with isSaved=true
     guardarCotDB(entry);
     const itemsSP=(entry.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
     if(itemsSP.length>0){
@@ -652,7 +651,7 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
@@ -1931,7 +1930,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
 }
 
 // ── MODAL COTIZACION (Odoo-style) ────────────────────────────
-function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,onSave,onClose,logoB64,perfil,isSaved=false}) {
+function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,onSave,onCambiarEstado,onClose,logoB64,perfil,isSaved=false}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null);

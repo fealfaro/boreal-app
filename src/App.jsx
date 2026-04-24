@@ -634,7 +634,7 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>cambiarEstado(id,"Archivada",{nota:"Archivada manualmente"}))} />}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setModalCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setModalCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
@@ -881,29 +881,26 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 }
 
 // ── COTIZACIONES ──────────────────────────────────────────────
-function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={},periodo,setPeriodo}) {
+function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={},periodo,setPeriodo,onArchivar}) {
   const isMob=window.innerWidth<768;
+  const [seleccionados,setSeleccionados]=useState(new Set());
+  const [modoSel,setModoSel]=useState(false);
 
-  // Smart filter logic
-  const SMART_FILTERS=[
-    {id:"accion", label:"Requieren acción",
-     fn:c=>["Borrador","Enviada"].includes(c.estado)||
-           (c.fechaVencimiento&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)},
-    {id:"activas", label:"Activas",
-     fn:c=>["Borrador","Enviada"].includes(c.estado)},
-    {id:"ganadas", label:"Adjudicadas",
-     fn:c=>c.estado==="Adjudicada"},
-    {id:"perdidas", label:"Rechazadas",
-     fn:c=>c.estado==="Rechazada"},
-    {id:"todas",   label:"Todas",   fn:()=>true},
+  // Tabs por estado real
+  const TABS=[
+    {id:"accion",   label:"Activas",     fn:c=>["Borrador","Enviada"].includes(c.estado)&&c.estado!=="Archivada"},
+    {id:"Borrador",   label:"Borrador",    fn:c=>c.estado==="Borrador"},
+    {id:"Enviada",    label:"Enviada",     fn:c=>c.estado==="Enviada"},
+    {id:"Adjudicada", label:"Adjudicada",  fn:c=>c.estado==="Adjudicada"},
+    {id:"Rechazada",  label:"Rechazada",   fn:c=>c.estado==="Rechazada"},
+    {id:"Archivada",  label:"Archivada",   fn:c=>c.estado==="Archivada"},
+    {id:"todas",      label:"Todas",       fn:()=>true},
   ];
 
-  // Use filtroEst to store smart filter id
-  const activeFiltro=SMART_FILTERS.find(f=>f.id===filtroEst)||SMART_FILTERS[0];
+  const activeTab=TABS.find(t=>t.id===filtroEst)||TABS[0];
 
-  // Period filter helper
   const enPeriodo=(fecha)=>{
-    if(activeFiltro.id==="accion") return true; // ignore period for action filter
+    if(filtroEst==="accion") return true;
     if(!periodo||periodo==="todo") return true;
     if(!fecha) return false;
     const d=new Date(fecha); const now=new Date();
@@ -916,9 +913,8 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
     return true;
   };
 
-  // Apply filters
   const filtered=cots.filter(c=>{
-    if(!activeFiltro.fn(c)) return false;
+    if(!activeTab.fn(c)) return false;
     if(!enPeriodo(c.fecha)) return false;
     if(busqueda){
       const b=busqueda.toLowerCase();
@@ -927,13 +923,18 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
     return true;
   });
 
-  // Counts for badges
-  const counts={
-    accion: cots.filter(SMART_FILTERS[0].fn).length,
-    activas: cots.filter(SMART_FILTERS[1].fn).length,
-    ganadas: cots.filter(SMART_FILTERS[2].fn).length,
-    perdidas: cots.filter(SMART_FILTERS[3].fn).length,
-    todas: cots.length,
+  const counts={};
+  TABS.forEach(t=>{ counts[t.id]=cots.filter(t.fn).length; });
+
+  const toggleSel=(id)=>setSeleccionados(prev=>{const s=new Set(prev);s.has(id)?s.delete(id):s.add(id);return s;});
+  const selAll=()=>setSeleccionados(new Set(filtered.map(c=>c.id)));
+  const deselAll=()=>setSeleccionados(new Set());
+  const archivarSel=()=>{
+    if(!seleccionados.size)return;
+    if(!window.confirm(`¿Archivar ${seleccionados.size} cotización(es)?`))return;
+    onArchivar&&onArchivar([...seleccionados]);
+    setSeleccionados(new Set());
+    setModoSel(false);
   };
 
   return (
@@ -942,31 +943,44 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
           <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Cotizaciones</h1>
-          <p style={{color:"#94a3b8",fontSize:12,margin:"3px 0 0"}}>
-            {filtered.length} {activeFiltro.id!=="accion"&&periodo!=="todo"?`en este período`:""}
-            {activeFiltro.id==="accion"?" — requieren atención":""}
-          </p>
+          <p style={{color:"#94a3b8",fontSize:12,margin:"3px 0 0"}}>{filtered.length} de {cots.length}</p>
         </div>
-        <Btn onClick={onNew}>+ Nueva</Btn>
+        <div style={{display:"flex",gap:8}}>
+          {modoSel?(
+            <>
+              <button onClick={selAll} style={{fontSize:12,color:"#1d4ed8",background:"none",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>Seleccionar todo</button>
+              <button onClick={deselAll} style={{fontSize:12,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>Deseleccionar</button>
+              {seleccionados.size>0&&<button onClick={archivarSel} style={{fontSize:12,color:"#fff",background:"#64748b",border:"none",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontWeight:600}}>Archivar {seleccionados.size}</button>}
+              <button onClick={()=>{setModoSel(false);deselAll();}} style={{fontSize:12,color:"#64748b",background:"none",border:"none",cursor:"pointer",padding:"6px 4px"}}>Cancelar</button>
+            </>
+          ):(
+            <>
+              <button onClick={()=>setModoSel(true)} style={{fontSize:12,color:"#64748b",background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>Seleccionar</button>
+              <Btn onClick={onNew}>+ Nueva</Btn>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Smart filter tabs */}
-      <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:12}}>
-        {SMART_FILTERS.map(f=>(
-          <button key={f.id} onClick={()=>setFiltroEst(f.id)}
-            style={{flex:1,padding:"7px 4px",borderRadius:8,border:"none",cursor:"pointer",
-              fontSize:isMob?11:12,fontWeight:filtroEst===f.id?600:400,whiteSpace:"nowrap",
-              background:filtroEst===f.id?"#fff":"transparent",
-              color:filtroEst===f.id?"#0f172a":"#64748b",
-              boxShadow:filtroEst===f.id?"0 1px 3px rgba(0,0,0,.08)":"none",
-              transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
-            {f.label}
-            {counts[f.id]>0&&<span style={{fontSize:10,color:filtroEst===f.id?"#1d4ed8":"#94a3b8",fontWeight:700}}>{counts[f.id]}</span>}
-          </button>
-        ))}
+      {/* Tabs */}
+      <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9",marginBottom:12,overflowX:"auto"}}>
+        {TABS.map(t=>{
+          const isAct=filtroEst===t.id||(filtroEst==="accion"&&t.id==="accion");
+          const cnt=counts[t.id];
+          return (
+            <button key={t.id} onClick={()=>setFiltroEst(t.id)}
+              style={{padding:"8px 14px",border:"none",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",
+                fontSize:13,fontWeight:isAct?600:400,color:isAct?"#0f172a":"#94a3b8",
+                borderBottom:isAct?"2px solid #1d4ed8":"2px solid transparent",
+                transition:"all .12s"}}>
+              {t.label}
+              {cnt>0&&<span style={{marginLeft:5,fontSize:10,fontWeight:700,color:isAct?"#1d4ed8":"#cbd5e1"}}>{cnt}</span>}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Search + period + sort row */}
+      {/* Search + period + sort */}
       <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:160,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
           <span style={{color:"#94a3b8",display:"flex"}}>{Ic.search}</span>
@@ -974,8 +988,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
             style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
           {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
         </div>
-        {/* Period selector - hidden when "accion" filter active */}
-        {activeFiltro.id!=="accion"&&(
+        {filtroEst!=="accion"&&(
           <select value={periodo} onChange={e=>setPeriodo(e.target.value)}
             style={{padding:"7px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer",color:"#475569"}}>
             <option value="7d">Últimos 7 días</option>
@@ -999,15 +1012,18 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
       <div style={{background:"#fff",borderRadius:12,overflow:"hidden",border:"1px solid #f1f5f9"}}>
         {filtered.length===0?(
           <div style={{padding:"40px 24px",textAlign:"center"}}>
-            <div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>
-              {filtroEst==="accion"?"No hay cotizaciones que requieran acción hoy":"Sin resultados"}
-            </div>
-            {filtroEst==="accion"&&<button onClick={()=>setFiltroEst("todas")} style={{fontSize:12,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Ver todas</button>}
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>Sin cotizaciones</div>
+            <button onClick={()=>setFiltroEst("todas")} style={{fontSize:12,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Ver todas</button>
           </div>
         ):(
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead>
               <tr style={{borderBottom:"1px solid #f1f5f9"}}>
+                {modoSel&&<th style={{padding:"10px 8px 10px 14px",width:36}}>
+                  <input type="checkbox" checked={seleccionados.size===filtered.length&&filtered.length>0}
+                    onChange={e=>e.target.checked?selAll():deselAll()}
+                    style={{cursor:"pointer",width:15,height:15}}/>
+                </th>}
                 {["Número","Fecha","Organismo","Total","Estado",""].map(h=>(
                   <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:".06em"}}>{h}</th>
                 ))}
@@ -1015,15 +1031,22 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
             </thead>
             <tbody>
               {filtered.map((c,i)=>{
-                const ec=ESTADO_COLORS[c.estado]||{bg:"#f1f5f9",text:"#64748b"};
                 const dv=c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
                 const urgente=dv!==null&&dv<=3;
+                const isSel=seleccionados.has(c.id);
+                const borderColor={Borrador:"#e2e8f0",Enviada:"#3b82f6",Adjudicada:"#16a34a",Rechazada:"#f87171",Archivada:"#e2e8f0"}[c.estado]||"#e2e8f0";
                 return (
-                  <tr key={c.id} onClick={()=>onDetalle(c)}
+                  <tr key={c.id}
+                    onClick={()=>modoSel?toggleSel(c.id):onDetalle(c)}
                     style={{borderBottom:"1px solid #f8fafc",cursor:"pointer",transition:"background .1s",
-                      borderLeft:"3px solid "+({Borrador:"#e2e8f0",Enviada:"#3b82f6",Adjudicada:"#16a34a",Rechazada:"#f87171"}[c.estado]||"#e2e8f0")}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background=""}>
+                      borderLeft:"3px solid "+borderColor,
+                      background:isSel?"#eff6ff":""}}
+                    onMouseEnter={e=>!isSel&&(e.currentTarget.style.background="#f8fafc")}
+                    onMouseLeave={e=>!isSel&&(e.currentTarget.style.background="")}>
+                    {modoSel&&<td style={{padding:"11px 8px 11px 14px"}} onClick={e=>e.stopPropagation()}>
+                      <input type="checkbox" checked={isSel} onChange={()=>toggleSel(c.id)}
+                        style={{cursor:"pointer",width:15,height:15}}/>
+                    </td>}
                     <td style={{padding:"11px 14px"}}>
                       <div style={{fontFamily:"'Geist Mono',monospace",fontSize:12,fontWeight:600,color:"#1d4ed8"}}>{c.numero}</div>
                       {dv!==null&&<div style={{fontSize:10,marginTop:2,color:urgente?"#dc2626":"#94a3b8",fontWeight:urgente?600:400}}>
@@ -1033,16 +1056,12 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
                     <td style={{padding:"11px 14px",color:"#94a3b8",fontSize:12,whiteSpace:"nowrap"}}>{fmtFecha(c.fecha)}</td>
                     <td style={{padding:"11px 14px",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{c.organismo||<span style={{color:"#cbd5e1"}}>—</span>}</td>
                     <td style={{padding:"11px 14px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
-                    <td style={{padding:"11px 14px"}}>
-                      <span style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:20,background:ec.bg,color:ec.text,whiteSpace:"nowrap"}}>
-                        {c.estado}
-                      </span>
-                    </td>
+                    <td style={{padding:"11px 14px"}}><EstadoBadge estado={c.estado}/></td>
                     <td style={{padding:"11px 14px"}} onClick={e=>e.stopPropagation()}>
-                      <button onClick={e=>{e.stopPropagation();onEditar(c);}}
+                      {!modoSel&&<button onClick={e=>{e.stopPropagation();onEditar(c);}}
                         style={{fontSize:11,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>
                         Editar
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 );
@@ -1054,6 +1073,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
     </div>
   );
 }
+
 
 // ── REVISIÓN ──────────────────────────────────────────────────
 function ModuloRevision({cots,cambiarEstado,onDetalle}) {

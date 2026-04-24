@@ -651,7 +651,7 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setModalCot(null);setTab("productos");}}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
@@ -1930,7 +1930,7 @@ function ModalProducto({producto,proveedores,bodegas,onSave,onDelete,onClose,per
 }
 
 // ── MODAL COTIZACION (Odoo-style) ────────────────────────────
-function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,onSave,onCambiarEstado,onClose,logoB64,perfil,isSaved=false}) {
+function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,onSave,onCambiarEstado,onClose,logoB64,perfil,isSaved=false,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null);
@@ -2293,7 +2293,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
 
         {/* ── DETALLE TAB ─────────────────────────────── */}
         {vistaTab==="detalle"&&(
-          <DetalleCotBody c={form} productos={productos} onCambiarEstado={onCambiarEstado} onEditar={()=>setVistaTab("editar")} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={onGoProductos} logoB64={logoB64}/>
+          <DetalleCotBody c={form} productos={productos} onCambiarEstado={onCambiarEstado} onEditar={()=>setVistaTab("editar")} perfil={perfil} isAdmin={isAdmin||false} solicitudes={solicitudes||[]} setSolicitudes={setSolicitudes||function(){}} setVolverACot={setVolverACot||function(){}} onGoProductos={onGoProductos||function(){}} logoB64={logoB64}/>
         )}
 
         {/* ── EDITAR TAB ──────────────────────────────── */}

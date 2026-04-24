@@ -563,7 +563,7 @@ export default function App() {
       {isMob&&sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.35)",zIndex:299,top:56}}/>}
 
       {/* SIDEBAR */}
-      <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#fff",borderLeft:isMob?"1px solid #e2e8f0":"none",borderRight:isMob?"none":"1px solid #e2e8f0",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
+      <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#0f1117",borderLeft:"none",borderRight:"none",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
         {!isMob&&(
           <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:64}}>
             <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" onClick={()=>goTab("dashboard")}
@@ -595,9 +595,8 @@ export default function App() {
             );
           })}
         </nav>
-        <div style={{padding:"10px 12px",borderTop:"1px solid #f1f5f9"}}>
-
-          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"#94a3b8"}}>{BUILD_VERSION}</div>
+        <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,255,255,.08)"}}>
+          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"rgba(255,255,255,.2)"}}>{BUILD_VERSION}</div>
         </div>
       </div>
 

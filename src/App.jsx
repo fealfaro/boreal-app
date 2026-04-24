@@ -2481,6 +2481,10 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
               </div>
             )}
           </div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:8}}>
+            {isSaved&&<Btn onClick={()=>setVistaTab("detalle")} variant="ghost">Cancelar</Btn>}
+            <Btn onClick={handleSave}>Guardar</Btn>
+          </div>
         </div>}
       </div>
     </div>
@@ -7611,6 +7615,10 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                 </div>
               </div>
             )}
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:8}}>
+            {isSaved&&<Btn onClick={()=>setVistaTab("detalle")} variant="ghost">Cancelar</Btn>}
+            <Btn onClick={handleSave}>Guardar</Btn>
           </div>
         </div>}
       </div>

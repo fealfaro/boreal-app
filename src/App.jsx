@@ -2551,7 +2551,8 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
-  const [editMode,setEditMode]=useState(!c.organismo||c._isNew); // open in edit mode if new
+  const isNew=!!c._isNew;
+  const [editMode,setEditMode]=useState(isNew||!c.organismo);
   // Edit form state
   const [form,setForm]=useState({...c,ejecutivo:c.ejecutivo||perfil?.nombre||"",items:[...(c.items||[])]});
   const [showMargen,setShowMargen]=useState(false);
@@ -2716,8 +2717,8 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
         </div>
       )}
 
-      {/* Estados */}
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
+      {/* Estados — only for saved cots */}
+      {!isNew&&<div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginBottom:6}}>Cambiar estado</div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
           {ESTADOS_COT.map(e=>{
@@ -2725,7 +2726,7 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
             return <button key={e} onClick={()=>handleEstado(e)} style={{padding:"4px 10px",borderRadius:20,border:`2px solid ${isA?ec.text:"#e2e8f0"}`,background:isA?ec.bg:"#fff",color:isA?ec.text:"#64748b",fontWeight:isA?700:400,cursor:"pointer",fontSize:11,transition:"all .12s"}}>{e}</button>;
           })}
         </div>
-      </div>
+      </div>}
       {/* Facturación */}
       {(facturando||c.estado==="Facturada")&&(
         <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 13px",marginBottom:10}}>
@@ -2741,8 +2742,8 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
           </div>}
         </div>
       )}
-      {/* Items */}
-      {(c.items||[]).length>0&&(
+      {/* Items — only for saved cots */}
+      {!isNew&&(c.items||[]).length>0&&(
         <div style={{marginBottom:10,overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:300}}>
             <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>{["","Producto","Cant.","P. Unit.","Subtotal"].map(h=><th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,color:"#64748b",fontWeight:600}}>{h}</th>)}</tr></thead>

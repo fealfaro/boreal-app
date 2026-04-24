@@ -634,7 +634,7 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={c=>{setDetalleCot(c);}} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
@@ -653,7 +653,7 @@ export default function App() {
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
       {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onEditar={()=>{setModalCot(detalleCot);setDetalleCot(null);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onCambiarEstado={cambiarEstado} onSave={c=>{guardarCot(c);setDetalleCot(prev=>prev?.id===c.id?{...prev,...c}:prev);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
 }
@@ -2547,10 +2547,35 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
 }
 
 // ── DETALLE COTIZACION ────────────────────────────────────────
-function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
+function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],config={},onCambiarEstado,onSave,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
+  const [editMode,setEditMode]=useState(!c.organismo); // open in edit mode if new
+  // Edit form state
+  const [form,setForm]=useState({...c,ejecutivo:c.ejecutivo||perfil?.nombre||"",items:[...(c.items||[])]});
+  const [showMargen,setShowMargen]=useState(false);
+  const [searchIdx,setSearchIdx]=useState(null);
+  const [prodSearch,setProdSearch]=useState("");
+  const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const {subtotalNeto:fSn,iva:fIva,total:fTotal,costoTotal:fCt,margenProm:fMg,tieneSinCosto:fSinCosto}=calcTotalesCot(form.items);
+  const addEmptyRow=()=>setSearchIdx("new");
+  const selectProductInRow=(idx,p)=>{
+    const pv=calcPrecioVenta(p.costo,p.margen);
+    if(idx==="new") setForm(f=>({...f,items:[...f.items,{productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,cantidad:1,foto_url:p.foto_url||"",proveedor:p.proveedor||""}]}));
+    else setForm(f=>{const items=[...f.items];items[idx]={...items[idx],productoId:p.id,nombre:p.nombre,sku:p.sku,costo:p.costo,precioVenta:pv,foto_url:p.foto_url||"",proveedor:p.proveedor||""};return{...f,items};});
+    setSearchIdx(null);setProdSearch("");
+  };
+  const removeItem=i=>setForm(f=>({...f,items:f.items.filter((_,j)=>j!==i)}));
+  const updateItem=(i,k,v)=>{setForm(f=>{const items=[...f.items];items[i]={...items[i],[k]:v};return{...f,items};});if(k==="precioVenta")setShowMargen(true);};
+  const handleSaveEdit=()=>{
+    const realItems=form.items.filter(i=>i.nombre);
+    if(!form.organismo?.trim()){toast("El organismo es obligatorio","warning");return;}
+    onSave&&onSave({...form,items:realItems,total:fTotal,costoTotal:fCt,margenProm:fMg});
+    setEditMode(false);
+  };
+  const inp={width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:14,boxSizing:"border-box",outline:"none",background:"#fff"};
+  const inpSm={...inp,padding:"6px 10px",fontSize:13,borderRadius:6};
   const {subtotalNeto,iva,total}=calcTotalesCot(c.items||[]);
   const util=(c.total||total)-(c.costoTotal||0);
   const mg=c.margenProm||0;
@@ -2595,7 +2620,13 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
           <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{c.organismo}</h2>
           <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{fmtFecha(c.fecha)}{c.fechaVencimiento?` · Vence ${fmtFecha(c.fechaVencimiento)}`:""} · Ej: {c.ejecutivo||"—"}</div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}><EstadoBadge estado={c.estado}/><CloseBtn onClose={onClose}/></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <EstadoBadge estado={editMode?form.estado:c.estado}/>
+        <button onClick={()=>setEditMode(v=>!v)} style={{fontSize:12,color:editMode?"#64748b":"#1d4ed8",background:editMode?"#f1f5f9":"#eff6ff",border:"1px solid "+(editMode?"#e2e8f0":"#bfdbfe"),borderRadius:7,padding:"4px 12px",cursor:"pointer",fontWeight:500}}>
+          {editMode?"Cancelar":"Editar"}
+        </button>
+        <CloseBtn onClose={onClose}/>
+      </div>
       </div>
       {/* Banner precios pendientes */}
       {tienePreciosPendientes&&(
@@ -2616,6 +2647,72 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
               Ir a Productos para completar costos →
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Edit form - shown when editMode */}
+      {editMode&&(
+        <div style={{background:"#f8fafc",borderRadius:10,padding:"14px",marginBottom:12,border:"1px solid #e2e8f0"}}>
+          {/* Organismo */}
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10,fontWeight:700,color:"#64748b",display:"block",marginBottom:4,letterSpacing:".06em"}}>ORGANISMO *</label>
+            <Combobox value={form.organismo||""} onChange={v=>setF("organismo",v)} options={empresas} placeholder="Buscar o crear organismo…" style={inp}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <label style={{fontSize:10,fontWeight:700,color:"#64748b",display:"block",marginBottom:4,letterSpacing:".06em"}}>EJECUTIVO</label>
+              <input value={form.ejecutivo||""} onChange={e=>setF("ejecutivo",e.target.value)} style={inpSm}/>
+            </div>
+            <div>
+              <label style={{fontSize:10,fontWeight:700,color:"#64748b",display:"block",marginBottom:4,letterSpacing:".06em"}}>VENCIMIENTO</label>
+              <input type="date" value={form.fechaVencimiento||""} onChange={e=>setF("fechaVencimiento",e.target.value)} style={inpSm}/>
+            </div>
+          </div>
+          {/* Líneas */}
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:6,letterSpacing:".06em"}}>LÍNEAS DE COTIZACIÓN</div>
+            <div style={{background:"#fff",borderRadius:8,border:"1px solid #e2e8f0",overflow:"hidden"}}>
+              {form.items.map((item,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 70px 100px 28px",gap:6,padding:"7px 10px",borderBottom:"1px solid #f8fafc",alignItems:"center"}}>
+                  <div style={{fontSize:12,fontWeight:500,color:"#0f172a"}}>{item.nombre}</div>
+                  <input type="number" value={item.cantidad} min={1} onChange={e=>updateItem(i,"cantidad",Number(e.target.value))}
+                    style={{padding:"4px 6px",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,textAlign:"center"}}/>
+                  <MilesInput value={item.precioVenta} onChange={v=>updateItem(i,"precioVenta",v)}
+                    style={{padding:"4px 8px",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,textAlign:"right"}}/>
+                  <button onClick={()=>removeItem(i)} style={{color:"#94a3b8",background:"none",border:"none",cursor:"pointer",fontSize:16,padding:0}}>×</button>
+                </div>
+              ))}
+              {searchIdx==="new"?(
+                <div style={{padding:"8px 10px",borderTop:form.items.length?"1px solid #f8fafc":"none"}}>
+                  <ProductoSearch productos={productos} value={prodSearch} onChange={setProdSearch}
+                    onSelect={p=>selectProductInRow("new",p)} placeholder="Buscar producto…" autoFocus
+                    onBlur={()=>setTimeout(()=>setSearchIdx(null),200)}/>
+                </div>
+              ):(
+                <button onClick={addEmptyRow} style={{width:"100%",padding:"8px",background:"none",border:"none",color:"#1d4ed8",fontSize:12,cursor:"pointer",textAlign:"left"}}>
+                  + Agregar producto
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Notas */}
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10,fontWeight:700,color:"#64748b",display:"block",marginBottom:4,letterSpacing:".06em"}}>NOTAS (visibles al cliente)</label>
+            <textarea value={form.notas||""} onChange={e=>setF("notas",e.target.value)} rows={2}
+              style={{...inpSm,resize:"vertical"}}/>
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10,fontWeight:700,color:"#64748b",display:"block",marginBottom:4,letterSpacing:".06em"}}>NOTAS INTERNAS</label>
+            <textarea value={form.notasInternas||""} onChange={e=>setF("notasInternas",e.target.value)} rows={2}
+              style={{...inpSm,resize:"vertical",background:"#fefce8",borderColor:"#fde68a"}}/>
+          </div>
+          {/* Totales */}
+          <div style={{background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid #e2e8f0",marginBottom:12,fontSize:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#64748b"}}>Base</span><span>{fmt(fSn)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:"#64748b"}}>IVA 19%</span><span>{fmt(fIva)}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:14}}><span>Total</span><span style={{color:"#1d4ed8"}}>{fmt(fTotal)}</span></div>
+          </div>
+          <Btn onClick={handleSaveEdit}>Guardar cambios</Btn>
         </div>
       )}
 

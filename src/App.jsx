@@ -351,8 +351,8 @@ export default function App() {
     const entry={...c,estado:estadoFinal,log,updatedAt:nowISO()};
     if(isNew) setCots(prev=>[entry,...prev]);
     else setCots(prev=>prev.map(x=>x.id===entry.id?entry:x));
-    setDetalleCot(prev=>prev?.id===entry.id?entry:prev);
     setModalCot(null);
+    setDetalleCot(entry); // always open detalle after save
     guardarCotDB(entry);
     const itemsSP=(entry.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
     if(itemsSP.length>0){
@@ -372,11 +372,11 @@ export default function App() {
     }));
   };
 
-  const nuevaCot=()=>setModalCot({
+  const nuevaCot=()=>setDetalleCot({
     id:uid(),numero:`BOT-${new Date().getFullYear()}-${String(cots.length+1).padStart(3,"0")}`,
     fecha:today(),fechaVencimiento:addDays(today(),10),organismo:"",oportunidad_id:"",
-    rut_cliente:"",items:[],estado:"Borrador",notas:"",ejecutivo:perfil.nombre,
-    facturaNum:"",facturaUrl:"",estadoOp:"",log:[]
+    rut_cliente:"",items:[],estado:"Borrador",notas:"",notasInternas:"",ejecutivo:perfil.nombre,
+    facturaNum:"",facturaUrl:"",estadoOp:"",log:[],_isNew:true
   });
 
   const goTab=t=>{setTab(t);setSideOpen(false);};
@@ -2551,7 +2551,7 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
-  const [editMode,setEditMode]=useState(!c.organismo); // open in edit mode if new
+  const [editMode,setEditMode]=useState(!c.organismo||c._isNew); // open in edit mode if new
   // Edit form state
   const [form,setForm]=useState({...c,ejecutivo:c.ejecutivo||perfil?.nombre||"",items:[...(c.items||[])]});
   const [showMargen,setShowMargen]=useState(false);

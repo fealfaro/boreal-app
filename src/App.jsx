@@ -65,6 +65,7 @@ const NAV = [
   {id:"admin",       label:"Administración",icon:Ic.settings, adminOnly:true},
   {id:"maestros",    label:"Maestros",      icon:Ic.box},
   {id:"oportunidades",label:"Oportunidades", icon:Ic.file},
+  {id:"facturacion", label:"Facturación",  icon:Ic.file},
   {id:"config",      label:"Configuración",icon:Ic.settings},
   {id:"perfil",      label:"Mi perfil",    icon:Ic.user},
 ];

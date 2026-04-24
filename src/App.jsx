@@ -2547,7 +2547,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
 }
 
 // ── DETALLE COTIZACION ────────────────────────────────────────
-function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],config={},onCambiarEstado,onSave,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
+function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onSave,onClose,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
   const [factNum,setFactNum]=useState(c.facturaNum||"");
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
@@ -2700,10 +2700,10 @@ function DetalleCotizacion({cotizacion:c,productos,empresas=[],empresasData=[],c
         {["Facturada","Adjudicada"].includes(c.estado) && !isAdmin ? (
           <SolicitarModificacion cot={c} perfil={perfil} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>
         ) : (
-          <Btn onClick={onEditar} size="sm">Editar</Btn>
+          <Btn onClick={()=>onSave&&onSave(c)} size="sm">Editar</Btn>
         )}
         <div style={{display:"flex",gap:7}}>
-          <Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">PDF</Btn>
+          {["Enviada","Adjudicada"].includes(c.estado)&&<Btn onClick={()=>generarPDFCotizacion(c,logoB64)} variant="dark" size="sm">PDF</Btn>}
           <Btn onClick={onClose} variant="ghost" size="sm">Cerrar</Btn>
         </div>
       </div>

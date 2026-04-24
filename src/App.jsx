@@ -2597,7 +2597,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onSave,onClos
           <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{fmtFecha(c.fecha)}{c.fechaVencimiento?` · Vence ${fmtFecha(c.fechaVencimiento)}`:""} · Ej: {c.ejecutivo||"—"}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <EstadoBadge estado={editMode?form.estado:c.estado}/>
+        <EstadoBadge estado={c.estado}/>
 
         <CloseBtn onClose={onClose}/>
       </div>

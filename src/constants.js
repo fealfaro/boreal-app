@@ -1,4 +1,4 @@
-export const ESTADOS_COT = ["Borrador","Enviada","Adjudicada","Rechazada","Facturada"];
+export const ESTADOS_COT = ["Borrador","Revisada","Enviada","Adjudicada","Rechazada"];
 export const ESTADOS_OP  = ["En compra","En despacho","Entregado"];
 export const ESTADO_COLORS = {
   Borrador:      {bg:"#f1f5f9",text:"#475569"},
@@ -9,7 +9,7 @@ export const ESTADO_COLORS = {
   "En compra":   {bg:"#fef3c7",text:"#92400e"},
   "En despacho": {bg:"#e0e7ff",text:"#3730a3"},
   Entregado:     {bg:"#d1fae5",text:"#065f46"},
-  "Para revisar":{bg:"#fce7f3",text:"#9d174d"},
+  "Revisada":{bg:"#f0fdf4",text:"#15803d"},
 };
 export const MESES_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];

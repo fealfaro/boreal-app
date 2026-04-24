@@ -82,8 +82,8 @@ export const filtrarPorPeriodo = (arr,periodo,campo="fecha") => {
   return arr;
 };
 
-export const ESTADOS_CRITICOS = ["Adjudicada","Facturada"];
-export const ORDEN_ESTADOS = ["Borrador","Para revisar","Enviada","Adjudicada","Facturada","Rechazada"];
+export const ESTADOS_CRITICOS = ["Adjudicada"];
+export const ORDEN_ESTADOS = ["Borrador","Revisada","Enviada","Adjudicada","Rechazada"];
 export const esRetroceso = (de,a) => {
   const i=ORDEN_ESTADOS.indexOf(de), j=ORDEN_ESTADOS.indexOf(a);
   return j<i&&i>=0&&j>=0;
@@ -117,7 +117,7 @@ export const copiarAlPortapapeles = async texto => {
   catch { return false; }
 };
 
-export const BUILD_VERSION = "v1.20.0";
+export const BUILD_VERSION = "v1.20.1";
 export const USUARIO_DEFAULT = {nombre:"Felipe Alfaro",cargo:"Ejecutivo Comercial",telefono:"+56 9 3200 0969",email:"fealfaro@gmail.com",foto:""};
 
 // Format ISO date to dd/mm/yyyy

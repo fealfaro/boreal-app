@@ -577,7 +577,7 @@ export default function App() {
           {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
             const isAct=tab===item.id;
             const badge = (() => {
-              if(item.id==="revision")    return cots.filter(c=>c.estado==="Para revisar").length;
+              if(item.id==="revision")    return cots.filter(c=>c.estado==="Revisada").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp==="En despacho").length;
               return 0;
             })();
@@ -639,6 +639,7 @@ export default function App() {
         {tab==="admin"        && <ModuloAdmin usuarios={usuarios} setUsuarios={setUsuarios} solicitudes={solicitudes} setSolicitudes={setSolicitudes} activityLog={activityLog} cots={cots} perfil={perfil} isAdmin={isAdmin}/>}
         {tab==="maestros"     && <ModuloMaestros proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} cots={cots} guardarBodegaDB={guardarBodegaDB} products={productos} dbOrg={dbOrganismos} dbProv={dbProveedores}/>}
         {tab==="oportunidades"&& <ModuloOportunidades oportunidades={oportunidades} setOportunidades={setOportunidades} productos={productos} setProductos={setProductos} empresas={empresasNombres} setEmpresas={setEmpresas} cots={cots} setCots={setCots} config={config} perfil={perfil} nuevaCot={nuevaCot} setModalCot={setModalCot} guardarProductoDB={guardarProductoDB} guardarCotDB={guardarCotDB} empresasNombres={empresasNombres} setDetalleCot={setDetalleCot} setTab={setTab} setProdsPendientes={setProdsPendientes}/>}
+        {tab==="facturacion"  && <ModuloFacturacion cots={cots} perfil={perfil}/>}
         {tab==="config"       && <ModuloConfig proveedores={proveedores} setProv={setProv} empresas={empresasNombres} setEmpresas={setEmpresas} bodegas={bodegas} setBodegas={setBodegas} config={config} setConfigKey={setConfigKey} cots={cots} usuarios={usuarios} setUsuarios={setUsuarios} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes}/>}
         {tab==="perfil"       && <ModuloPerfil perfil={perfil} setPerfil={setPerfil}/>}
       </div>
@@ -657,7 +658,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
   const [tooltip,setTooltip]=useState(null);
   const mgNeto=mgBruto-dashGastos;
   const enCurso=cots.filter(c=>["Enviada","Adjudicada"].includes(c.estado)).length;
-  const paraRev=cots.filter(c=>c.estado==="Para revisar").length;
+  const paraRev=cots.filter(c=>c.estado==="Revisada").length;
   const pendComp=cots.filter(c=>c.estadoOp==="En compra").length;
   const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0).length;
 
@@ -717,7 +718,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
           <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Gestión activa</div>
           {[
             {label:"En curso",     val:enCurso,   color:"#1d4ed8",tab:"cotizaciones"},
-            {label:"Para revisar", val:paraRev,   color:"#9d174d",tab:"revision"},
+            {label:"Revisada", val:paraRev,   color:"#9d174d",tab:"revision"},
             {label:"En compra",    val:pendComp,  color:"#92400e",tab:"compras"},
             {label:"Vencen pronto",val:porVencer, color:"#b91c1c",tab:"cotizaciones"},
           ].map((r,i)=>{
@@ -737,7 +738,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
       <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
         <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Estados de cotizaciones</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
-          {[...ESTADOS_COT,"Para revisar"].map(e=>{
+          {[...ESTADOS_COT,"Revisada"].map(e=>{
             const cnt=cots.filter(c=>c.estado===e).length;
             if(!cnt) return null;
             const col=ESTADO_COLORS[e]; const pct=cots.length>0?(cnt/cots.length*100):0;
@@ -905,7 +906,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
           <option value="estado_asc">Estado A→Z</option>
         </select>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-          {["Todos",...ESTADOS_COT,"Para revisar"].map(e=>{
+          {["Todos",...ESTADOS_COT,"Revisada"].map(e=>{
             const ec=ESTADO_COLORS[e];
             return <button key={e} onClick={()=>setFiltroEst(e)} style={{padding:"5px 9px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:11,cursor:"pointer",fontWeight:filtroEst===e?600:400,background:filtroEst===e?(ec?.bg||"#0f172a"):"#fff",color:filtroEst===e?(ec?.text||"#fff"):"#64748b",transition:"all .12s"}}>{e}</button>;
           })}
@@ -956,7 +957,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
 
 // ── REVISIÓN ──────────────────────────────────────────────────
 function ModuloRevision({cots,cambiarEstado,onDetalle}) {
-  const lista=cots.filter(c=>c.estado==="Para revisar");
+  const lista=cots.filter(c=>c.estado==="Revisada");
   return (
     <div>
       <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Revisión</h1>
@@ -1978,7 +1979,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                   <div>
                     <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Estado</label>
                     <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff"}}>
-                      {[...ESTADOS_COT,"Para revisar"].map(e=><option key={e}>{e}</option>)}
+                      {[...ESTADOS_COT,"Revisada"].map(e=><option key={e}>{e}</option>)}
                     </select>
                   </div>
                 </div>
@@ -2225,7 +2226,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ESTADO</label>
               <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
-                {[...ESTADOS_COT,"Para revisar"].map(e=><option key={e}>{e}</option>)}
+                {[...ESTADOS_COT,"Revisada"].map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
             <div>
@@ -2522,7 +2523,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
       <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginBottom:6}}>Cambiar estado</div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-          {[...ESTADOS_COT,"Para revisar"].map(e=>{
+          {[...ESTADOS_COT,"Revisada"].map(e=>{
             const ec=ESTADO_COLORS[e]||{bg:"#f1f5f9",text:"#475569"};const isA=c.estado===e;
             return <button key={e} onClick={()=>handleEstado(e)} style={{padding:"4px 10px",borderRadius:20,border:`2px solid ${isA?ec.text:"#e2e8f0"}`,background:isA?ec.bg:"#fff",color:isA?ec.text:"#64748b",fontWeight:isA?700:400,cursor:"pointer",fontSize:11,transition:"all .12s"}}>{e}</button>;
           })}
@@ -4172,7 +4173,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     const notasInternas="Compra Ágil MP — ID: "+op.id+"\nPresupuesto: "+fmt(op.presupuesto)+(productosCreados.length>0?"\nProductos pendientes de precio: "+productosCreados.map(p=>p.nombre).join(", "):"");
     const tots=calcTotalesCot(items);
     const cot={id:uid(),numero:numCot,organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
-      ejecutivo:perfil?.nombre||"",estado:"Para revisar",fecha:today(),fechaVencimiento:fechaVenc,
+      ejecutivo:perfil?.nombre||"",estado:"Revisada",fecha:today(),fechaVencimiento:fechaVenc,
       items:items.map(({_pendiente,...r})=>r),notas:"",notasInternas,creadaEn:nowISO(),origenMP:true,
       total:tots.total,costoTotal:tots.costoTotal,margenProm:tots.margenProm};
     setCots(prev=>[cot,...prev]);
@@ -4776,6 +4777,126 @@ function ModuloNotificaciones({notifList,goTab,cots,config,onSeen,dismissed=new 
               </div>
             ))}
           </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── MÓDULO FACTURACIÓN ────────────────────────────────────────
+function ModuloFacturacion({cots, perfil}) {
+  const [busqueda, setBusqueda] = useState("");
+  const [filtro, setFiltro] = useState("pendiente");
+
+  // Cotizaciones adjudicadas = candidatas a facturar
+  const adjudicadas = cots.filter(c => c.estado === "Adjudicada");
+  const facturadas  = cots.filter(c => c._folio); // las que ya tienen folio vinculado
+
+  const base = filtro === "pendiente"
+    ? adjudicadas.filter(c => !c._folio)
+    : adjudicadas.filter(c => !!c._folio);
+
+  const filtradas = busqueda
+    ? base.filter(c => [c.numero, c.organismo, c._folio||""].some(v => (v||"").toLowerCase().includes(busqueda.toLowerCase())))
+    : base;
+
+  const totalPendiente = adjudicadas.filter(c=>!c._folio).reduce((a,c)=>a+(c.total||0),0);
+  const totalFacturado = adjudicadas.filter(c=>!!c._folio).reduce((a,c)=>a+(c.total||0),0);
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Facturación</h1>
+        <p style={{fontSize:13,color:"#94a3b8",margin:0}}>
+          Vincula cotizaciones adjudicadas con documentos tributarios del SII
+        </p>
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+        {[
+          {label:"Por facturar",val:adjudicadas.filter(c=>!c._folio).length,monto:totalPendiente,color:"#854d0e",bg:"#fef9c3"},
+          {label:"Facturadas",val:adjudicadas.filter(c=>!!c._folio).length,monto:totalFacturado,color:"#15803d",bg:"#dcfce7"},
+          {label:"Total adjudicado",val:adjudicadas.length,monto:adjudicadas.reduce((a,c)=>a+(c.total||0),0),color:"#1d4ed8",bg:"#eff6ff"},
+        ].map(k=>(
+          <div key={k.label} style={{background:"#fff",borderRadius:10,padding:"14px 16px",border:"1px solid #f1f5f9",borderTop:`3px solid ${k.color}`}}>
+            <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>{k.label}</div>
+            <div style={{fontSize:20,fontWeight:700,color:k.color}}>{k.val}</div>
+            <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{fmt(k.monto)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* API Banner */}
+      <div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:10,padding:"16px",marginBottom:20,display:"flex",gap:14,alignItems:"flex-start"}}>
+        <div style={{width:36,height:36,background:"#e0e7ff",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#3730a3",fontSize:18}}>
+          🔌
+        </div>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:"#1e293b",marginBottom:3}}>Integración con SII pendiente</div>
+          <div style={{fontSize:12,color:"#64748b",lineHeight:1.5}}>
+            Conecta tu proveedor de facturación electrónica (Bsale, Defontana, Nubox u otro) para importar documentos automáticamente y vincularlos a tus cotizaciones adjudicadas.
+          </div>
+          <div style={{marginTop:8,display:"flex",gap:6}}>
+            {["Bsale","Defontana","Nubox","Siigo"].map(p=>(
+              <span key={p} style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0"}}>{p}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs + búsqueda */}
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:8,padding:3}}>
+          {[["pendiente","Por facturar"],["facturado","Facturadas"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setFiltro(v)}
+              style={{padding:"5px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:12,
+                fontWeight:filtro===v?600:400,background:filtro===v?"#fff":"transparent",
+                color:filtro===v?"#0f172a":"#64748b",boxShadow:filtro===v?"0 1px 3px rgba(0,0,0,.08)":"none"}}>
+              {l} ({filtro===v?filtradas.length:(v==="pendiente"?adjudicadas.filter(c=>!c._folio).length:adjudicadas.filter(c=>!!c._folio).length)})
+            </button>
+          ))}
+        </div>
+        <div style={{flex:1,minWidth:160,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
+          <span style={{color:"#94a3b8",display:"flex"}}>{Ic.search}</span>
+          <input value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+            placeholder="Buscar cotización u organismo…"
+            style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
+        </div>
+      </div>
+
+      {/* Lista */}
+      {filtradas.length===0&&(
+        <div style={{background:"#fff",borderRadius:12,padding:"40px 24px",textAlign:"center",border:"1px solid #f1f5f9"}}>
+          <div style={{fontSize:13,color:"#94a3b8"}}>{filtro==="pendiente"?"Todas las cotizaciones adjudicadas ya están facturadas":"Sin documentos vinculados aún"}</div>
+        </div>
+      )}
+
+      {filtradas.map(c=>(
+        <div key={c.id} style={{background:"#fff",borderRadius:10,border:"1px solid #f1f5f9",marginBottom:6,padding:"12px 16px",display:"flex",alignItems:"center",gap:14}}>
+          {/* Info cotización */}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#1d4ed8"}}>{c.numero}</span>
+              {c._folio&&<span style={{fontSize:10,background:"#dcfce7",color:"#15803d",padding:"1px 7px",borderRadius:20,fontWeight:600}}>Folio {c._folio}</span>}
+            </div>
+            <div style={{fontSize:13,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.organismo}</div>
+            <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{c.fecha} · {fmt(c.total||0)}</div>
+          </div>
+
+          {/* Acción */}
+          {!c._folio?(
+            <button onClick={()=>toast("Conecta tu API de facturación para vincular documentos","info",3000)}
+              style={{fontSize:12,fontWeight:600,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"5px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>
+              + Vincular factura
+            </button>
+          ):(
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:12,fontWeight:600,color:"#15803d"}}>✓ Facturada</div>
+              {c._fechaFactura&&<div style={{fontSize:10,color:"#94a3b8"}}>{c._fechaFactura}</div>}
+            </div>
+          )}
         </div>
       ))}
     </div>

@@ -243,11 +243,14 @@ export default function App() {
   const dashGastos = filtrarPorPeriodo(gastos, periDash).reduce((a,g)=>a+(g.monto||0),0);
 
   // Filtered + sorted cotizaciones
+  const SMART_FILTER_IDS=["accion","activas","ganadas","perdidas","todas"];
   const filtCots = (() => {
+    const isSmartFilter=SMART_FILTER_IDS.includes(filtroEst);
     let arr = filtrarPorPeriodo(
       cots.filter(c=>{
         const mb=!busqueda||[c.organismo,c.numero,c.oportunidad_id].some(x=>(x||"").toLowerCase().includes(busqueda.toLowerCase()));
-        return mb && (filtroEst==="Todos"||c.estado===filtroEst);
+        // If smart filter, don't pre-filter by estado - module handles it
+        return mb && (isSmartFilter||filtroEst==="Todos"||c.estado===filtroEst);
       }), periodo);
     const [key,dir]=sortCot.split("_");
     const mul=dir==="asc"?1:-1;
@@ -257,6 +260,7 @@ export default function App() {
       if(key==="estado")   return mul*(a.estado||"").localeCompare(b.estado||"");
       if(key==="valor")    return mul*((a.total||0)-(b.total||0));
       if(key==="margen")   return mul*((a.margenProm||0)-(b.margenProm||0));
+      if(key==="vence")    return mul*((a.fechaVencimiento||"").localeCompare(b.fechaVencimiento||""));
       return 0;
     });
     return arr;
@@ -630,7 +634,7 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={filtCots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} periodo={periodo} setPeriodo={setPeriodo} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}

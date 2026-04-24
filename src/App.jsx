@@ -565,12 +565,15 @@ export default function App() {
       {/* SIDEBAR */}
       <div className="no-print" style={{position:"fixed",left:isMob?"auto":0,right:isMob?0:"auto",top:0,bottom:0,width:isMob?260:220,background:"#0f1117",borderLeft:"none",borderRight:"none",display:"flex",flexDirection:"column",zIndex:isMob?300:200,transform:isMob?(sideOpen?"translateX(0)":"translateX(100%)"):"translateX(0)",transition:"transform .22s ease",boxShadow:isMob?"-8px 0 32px rgba(0,0,0,.15)":"none",top:isMob?56:0}}>
         {!isMob&&(
-          <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:64}}>
-            <img src={`data:image/png;base64,${LOGO_B64}`} alt="Boreal" onClick={()=>goTab("dashboard")}
-              style={{height:40,maxWidth:140,objectFit:"contain",cursor:"pointer"}}
-              onError={e=>{e.target.style.display="none";}}/>
-            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0&&!seenNotifs?"#1d4ed8":"#94a3b8",position:"relative",padding:"6px",display:"flex",alignItems:"center",borderRadius:8,transition:"all .12s"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#f1f5f9"}
+          <div style={{padding:"14px 16px 12px",borderBottom:"1px solid rgba(255,255,255,.08)",display:"flex",justifyContent:"space-between",alignItems:"center",minHeight:56}}>
+            <div onClick={()=>goTab("dashboard")} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:28,height:28,background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="white"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+              </div>
+              <span style={{fontSize:15,fontWeight:700,color:"#fff",letterSpacing:"-.3px"}}>Boreal</span>
+            </div>
+            <button onClick={()=>goTab("notificaciones")} style={{background:"none",border:"none",cursor:"pointer",color:notifList.length>0&&!seenNotifs?"#60a5fa":"rgba(255,255,255,.4)",position:"relative",padding:"6px",display:"flex",alignItems:"center",borderRadius:8,transition:"all .12s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.06)"}
               onMouseLeave={e=>e.currentTarget.style.background="none"}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
               {notifList.length>0&&!seenNotifs&&<span style={{position:"absolute",top:2,right:2,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:8,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center",lineHeight:"14px"}}>{notifList.length}</span>}

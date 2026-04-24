@@ -222,7 +222,7 @@ export default function App() {
   const [detalleCot,setDetalleCot]= useState(null);
   const [showNotifs,setShowNotifs]= useState(false);
   const [busqueda,setBusqueda]   = useState("");
-  const [filtroEst,setFiltroEst] = useState("Todos");
+  const [filtroEst,setFiltroEst] = useState("accion");
   const [periodo,setPeriodo]     = useState("todo");
   const [sortCot,setSortCot]     = useState("fecha_desc");
   const [periDash,setPeriDash]   = useState("mes");
@@ -739,7 +739,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
       <div style={{background:"#fff",borderRadius:12,padding:"18px",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
         <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Estados de cotizaciones</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
-          {[...ESTADOS_COT,"Revisada"].map(e=>{
+          {ESTADOS_COT.map(e=>{
             const cnt=cots.filter(c=>c.estado===e).length;
             if(!cnt) return null;
             const col=ESTADO_COLORS[e]; const pct=cots.length>0?(cnt/cots.length*100):0;
@@ -878,79 +878,144 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 
 // ── COTIZACIONES ──────────────────────────────────────────────
 function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,periodo,setPeriodo,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={}}) {
-  const handleCopy=async (c,e)=>{
-    e.stopPropagation();
-    const ok=await copiarAlPortapapeles(`Cotización ${c.numero} — ${c.organismo} — ${fmt(c.total||0)}`);
-    toast(ok?"Link copiado al portapapeles":"No se pudo copiar",ok?"success":"error");
+  const isMob=window.innerWidth<768;
+
+  // Smart filter logic
+  const SMART_FILTERS=[
+    {id:"accion", label:"Requieren acción",
+     fn:c=>["Borrador","Revisada","Enviada"].includes(c.estado)||
+           (c.fechaVencimiento&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)},
+    {id:"activas", label:"Activas",
+     fn:c=>["Borrador","Revisada","Enviada"].includes(c.estado)},
+    {id:"ganadas", label:"Adjudicadas",
+     fn:c=>c.estado==="Adjudicada"},
+    {id:"perdidas", label:"Rechazadas",
+     fn:c=>c.estado==="Rechazada"},
+    {id:"todas",   label:"Todas",   fn:()=>true},
+  ];
+
+  // Use filtroEst to store smart filter id
+  const activeFiltro=SMART_FILTERS.find(f=>f.id===filtroEst)||SMART_FILTERS[0];
+
+  // Apply filters
+  const filtered=cots.filter(c=>{
+    if(!activeFiltro.fn(c)) return false;
+    if(busqueda){
+      const b=busqueda.toLowerCase();
+      if(![c.numero,c.organismo,c.ejecutivo].some(v=>(v||"").toLowerCase().includes(b))) return false;
+    }
+    return true;
+  });
+
+  // Counts for badges
+  const counts={
+    accion: cots.filter(SMART_FILTERS[0].fn).length,
+    activas: cots.filter(SMART_FILTERS[1].fn).length,
+    ganadas: cots.filter(SMART_FILTERS[2].fn).length,
+    perdidas: cots.filter(SMART_FILTERS[3].fn).length,
+    todas: cots.length,
   };
+
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:10}}>
-        <div><h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Cotizaciones</h1><p style={{color:"#64748b",fontSize:13,margin:0}}>{cots.length} de {total}</p></div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Cotizaciones</h1>
+          <p style={{color:"#94a3b8",fontSize:12,margin:"3px 0 0"}}>
+            {filtered.length} de {cots.length}
+          </p>
+        </div>
         <Btn onClick={onNew}>+ Nueva</Btn>
       </div>
-      <div style={{background:"#fff",borderRadius:10,padding:"10px 13px",marginBottom:10,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-        <PeriodoChips periodo={periodo} setPeriodo={setPeriodo}/>
+
+      {/* Smart filter tabs */}
+      <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:12}}>
+        {SMART_FILTERS.map(f=>(
+          <button key={f.id} onClick={()=>setFiltroEst(f.id)}
+            style={{flex:1,padding:"7px 4px",borderRadius:8,border:"none",cursor:"pointer",
+              fontSize:isMob?11:12,fontWeight:filtroEst===f.id?600:400,whiteSpace:"nowrap",
+              background:filtroEst===f.id?"#fff":"transparent",
+              color:filtroEst===f.id?"#0f172a":"#64748b",
+              boxShadow:filtroEst===f.id?"0 1px 3px rgba(0,0,0,.08)":"none",
+              transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+            {f.label}
+            {counts[f.id]>0&&<span style={{fontSize:10,color:filtroEst===f.id?"#1d4ed8":"#94a3b8",fontWeight:700}}>{counts[f.id]}</span>}
+          </button>
+        ))}
       </div>
-      <div style={{display:"flex",gap:7,marginBottom:10,flexWrap:"wrap"}}>
-        <div style={{position:"relative",flex:1,minWidth:130}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#94a3b8"}}>{Ic.search}</span>
-          <input placeholder="Buscar…" value={busqueda} onChange={e=>setBusqueda(e.target.value)} style={{width:"100%",padding:"7px 12px 7px 30px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+
+      {/* Search + sort row */}
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+        <div style={{flex:1,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
+          <span style={{color:"#94a3b8",display:"flex"}}>{Ic.search}</span>
+          <input placeholder="Buscar número u organismo…" value={busqueda} onChange={e=>setBusqueda(e.target.value)}
+            style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
+          {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
         </div>
-        <select value={sortCot} onChange={e=>setSortCot(e.target.value)} style={{padding:"6px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
-          <option value="fecha_desc">Fecha ↓</option>
-          <option value="fecha_asc">Fecha ↑</option>
-          <option value="modificado_desc">Modificado ↓</option>
-          <option value="valor_desc">Valor ↓</option>
-          <option value="valor_asc">Valor ↑</option>
-          <option value="margen_desc">Margen ↓</option>
-          <option value="estado_asc">Estado A→Z</option>
+        <select value={sortCot} onChange={e=>setSortCot(e.target.value)}
+          style={{padding:"7px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer",color:"#475569"}}>
+          <option value="fecha_desc">Más recientes</option>
+          <option value="fecha_asc">Más antiguas</option>
+          <option value="valor_desc">Mayor valor</option>
+          <option value="vence_asc">Por vencer</option>
         </select>
-        <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-          {["Todos",...ESTADOS_COT,"Revisada"].map(e=>{
-            const ec=ESTADO_COLORS[e];
-            return <button key={e} onClick={()=>setFiltroEst(e)} style={{padding:"5px 9px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:11,cursor:"pointer",fontWeight:filtroEst===e?600:400,background:filtroEst===e?(ec?.bg||"#0f172a"):"#fff",color:filtroEst===e?(ec?.text||"#fff"):"#64748b",transition:"all .12s"}}>{e}</button>;
-          })}
-        </div>
       </div>
-      <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:480}}>
-            <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-              {["Número","Fecha","Vence","Organismo","Total","Margen","Estado",""].map(h=><th key={h} style={{padding:"8px 11px",textAlign:"left",fontWeight:600,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>{h}</th>)}
-            </tr></thead>
+
+      {/* Table */}
+      <div style={{background:"#fff",borderRadius:12,overflow:"hidden",border:"1px solid #f1f5f9"}}>
+        {filtered.length===0?(
+          <div style={{padding:"40px 24px",textAlign:"center"}}>
+            <div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>
+              {filtroEst==="accion"?"No hay cotizaciones que requieran acción hoy":"Sin resultados"}
+            </div>
+            {filtroEst==="accion"&&<button onClick={()=>setFiltroEst("todas")} style={{fontSize:12,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Ver todas</button>}
+          </div>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid #f1f5f9"}}>
+                {["Número","Fecha","Organismo","Total","Estado",""].map(h=>(
+                  <th key={h} style={{padding:"10px 14px",textAlign:"left",fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:".06em"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
-              {cots.map((c,i)=>{
-                const col=ESTADO_COLORS[c.estado]||{};const mg2=c.margenProm??null;
-                const dv=c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
+              {filtered.map((c,i)=>{
+                const ec=ESTADO_COLORS[c.estado]||{bg:"#f1f5f9",text:"#64748b"};
+                const dv=c.fechaVencimiento&&["Borrador","Revisada","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
+                const urgente=dv!==null&&dv<=3;
                 return (
-                  <tr key={c.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa",cursor:"pointer"}}
-                    onClick={()=>onDetalle(c)}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f0f9ff"}
-                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#fafafa"}>
-                    <td style={{padding:"8px 11px"}}>
-                      <button onClick={e=>handleCopy(c,e)} title="Copiar referencia" style={{fontFamily:"'DM Mono',monospace",fontSize:10,color:"#1d4ed8",fontWeight:600,background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4}}>
-                        {c.numero} <span style={{opacity:.5}}>{Ic.copy}</span>
+                  <tr key={c.id} onClick={()=>onDetalle(c)}
+                    style={{borderBottom:"1px solid #f8fafc",cursor:"pointer",transition:"background .1s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                    onMouseLeave={e=>e.currentTarget.style.background=""}>
+                    <td style={{padding:"11px 14px"}}>
+                      <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:600,color:"#1d4ed8"}}>{c.numero}</div>
+                      {dv!==null&&<div style={{fontSize:10,marginTop:2,color:urgente?"#dc2626":"#94a3b8",fontWeight:urgente?600:400}}>
+                        {dv<0?"Venció":dv===0?"Vence hoy":dv===1?"Vence mañana":`Vence en ${dv}d`}
+                      </div>}
+                    </td>
+                    <td style={{padding:"11px 14px",color:"#94a3b8",fontSize:12,whiteSpace:"nowrap"}}>{fmtFecha(c.fecha)}</td>
+                    <td style={{padding:"11px 14px",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500}}>{c.organismo||<span style={{color:"#cbd5e1"}}>—</span>}</td>
+                    <td style={{padding:"11px 14px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
+                    <td style={{padding:"11px 14px"}}>
+                      <span style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:20,background:ec.bg,color:ec.text,whiteSpace:"nowrap"}}>
+                        {c.estado}
+                      </span>
+                    </td>
+                    <td style={{padding:"11px 14px"}} onClick={e=>e.stopPropagation()}>
+                      <button onClick={e=>{e.stopPropagation();onEditar(c);}}
+                        style={{fontSize:11,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>
+                        Editar
                       </button>
-                    </td>
-                    <td style={{padding:"8px 11px",color:"#64748b",whiteSpace:"nowrap"}}>{fmtFecha(c.fecha)}</td>
-                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}>
-                      {dv!==null?<span style={{fontSize:10,fontWeight:600,color:dv<0?"#b91c1c":dv<=3?"#92400e":"#64748b",background:dv<0?"#fee2e2":dv<=3?"#fef3c7":"transparent",padding:"1px 6px",borderRadius:4}}>{dv<0?"Venció":`${dv}d`}</span>:<span style={{color:"#94a3b8",fontSize:10}}>—</span>}
-                    </td>
-                    <td style={{padding:"8px 11px",fontWeight:500,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.organismo}</td>
-                    <td style={{padding:"8px 11px",fontWeight:700,whiteSpace:"nowrap"}}>{fmt(c.total||0)}</td>
-                    <td style={{padding:"8px 11px",whiteSpace:"nowrap"}}><MargenBadge pct={mg2} monto={calcUtilidad(c.total,c.costoTotal)} umbrales={umbrales} sinCosto={mg2===null}/></td>
-                    <td style={{padding:"8px 11px"}}><EstadoBadge estado={c.estado}/></td>
-                    <td style={{padding:"8px 11px"}} onClick={e=>e.stopPropagation()}>
-                      <button onClick={e=>{e.stopPropagation();onEditar(c);}} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#64748b",transition:"all .12s"}}>Editar</button>
                     </td>
                   </tr>
                 );
               })}
-              {!cots.length&&<tr><td colSpan={8} style={{padding:28,textAlign:"center",color:"#94a3b8",fontSize:13}}>Sin resultados</td></tr>}
             </tbody>
           </table>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1980,7 +2045,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
                   <div>
                     <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:5}}>Estado</label>
                     <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff"}}>
-                      {[...ESTADOS_COT,"Revisada"].map(e=><option key={e}>{e}</option>)}
+                      {ESTADOS_COT.map(e=><option key={e}>{e}</option>)}
                     </select>
                   </div>
                 </div>
@@ -2227,7 +2292,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             <div>
               <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ESTADO</label>
               <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
-                {[...ESTADOS_COT,"Revisada"].map(e=><option key={e}>{e}</option>)}
+                {ESTADOS_COT.map(e=><option key={e}>{e}</option>)}
               </select>
             </div>
             <div>
@@ -2470,7 +2535,8 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
     }
     const critico=ESTADOS_CRITICOS.includes(nuevoEstado);
     if((critico||retro)&&!window.confirm("¿"+(retro?"Retroceder":"Cambiar")+" a \""+nuevoEstado+"\"?"+(retro?"\nRequiere revisión.":"\nEstado crítico."))) return;
-    if(nuevoEstado==="Facturada"&&c.estado==="Adjudicada"){setFacturando(true);return;}
+    // Facturada handled in Facturación module
+    if(nuevoEstado==="Facturada"){toast("Usa el módulo Facturación para vincular facturas","info");return;}
     if(nuevoEstado==="Adjudicada"){
       const sinStock=(c.items||[]).filter(item=>{
         const p=productos.find(x=>x.id===item.productoId||x.nombre===item.nombre);
@@ -2524,7 +2590,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onEditar,onCl
       <div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginBottom:6}}>Cambiar estado</div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-          {[...ESTADOS_COT,"Revisada"].map(e=>{
+          {ESTADOS_COT.map(e=>{
             const ec=ESTADO_COLORS[e]||{bg:"#f1f5f9",text:"#475569"};const isA=c.estado===e;
             return <button key={e} onClick={()=>handleEstado(e)} style={{padding:"4px 10px",borderRadius:20,border:`2px solid ${isA?ec.text:"#e2e8f0"}`,background:isA?ec.bg:"#fff",color:isA?ec.text:"#64748b",fontWeight:isA?700:400,cursor:"pointer",fontSize:11,transition:"all .12s"}}>{e}</button>;
           })}

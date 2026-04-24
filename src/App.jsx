@@ -367,6 +367,7 @@ export default function App() {
       const updated={...c,estado,...extra,log:[...(c.log||[]),logEntry],updatedAt:nowISO()};
       guardarCotDB(updated);
       setDetalleCot(prev2=>prev2?.id===id?updated:prev2);
+      setModalCot(prev2=>prev2?.id===id?updated:prev2);
       return updated;
     }));
   };
@@ -633,9 +634,9 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={c=>{setDetalleCot(c);}} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
-        {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
-        {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
+        {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setModalCot}/>}
+        {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setModalCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
         {tab==="inventario"   && <ModuloInventario productos={productos} setProductos={setProductos} movimientos={movimientos} setMovimientos={setMovimientos} perfil={perfil} bodegas={bodegas} stockMinimo={config.stockMinimo||5}/>}
         {tab==="gastos"       && <ModuloGastos gastos={gastos} setGastos={setGastos} adjFact={adjFact} perfil={perfil} isAdmin={isAdmin} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} onGuardarDB={guardarGastoDB} onEliminarDB={(id)=>{if(supabase)supabase.from("gastos").delete().eq("id",id).then(({error})=>{if(error)console.error("Error delete gasto:",error);});}}/>}
@@ -2276,14 +2277,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             <EstadoBadge estado={form.estado||"Borrador"}/>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <div style={{position:"relative",display:"inline-block"}}>
-              <Btn onClick={()=>{
-                if(!isSaved){toast("Guarda la cotización antes de generar el PDF","warning");return;}
-                generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64);
-              }} variant={isSaved?"dark":"ghost"} size="sm" style={{opacity:isSaved?1:.5}}>PDF</Btn>
-              {!isSaved&&<div style={{position:"absolute",top:"calc(100% + 4px)",right:0,background:"#0f172a",color:"#fff",borderRadius:7,padding:"4px 10px",fontSize:11,whiteSpace:"nowrap",zIndex:10,pointerEvents:"none"}}>Guarda primero</div>}
-            </div>
-            <Btn onClick={handleSave}>Guardar</Btn>
+            
             <CloseBtn onClose={onClose}/>
           </div>
         </div>

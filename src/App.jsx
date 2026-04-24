@@ -223,7 +223,7 @@ export default function App() {
   const [showNotifs,setShowNotifs]= useState(false);
   const [busqueda,setBusqueda]   = useState("");
   const [filtroEst,setFiltroEst] = useState("accion");
-  const [periodo,setPeriodo]     = useState("todo");
+  const [periodo,setPeriodo]     = useState("30d");
   const [sortCot,setSortCot]     = useState("fecha_desc");
   const [periDash,setPeriDash]   = useState("mes");
   const [mesRent,setMesRent]     = useState(null);
@@ -582,7 +582,7 @@ export default function App() {
           {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
             const isAct=tab===item.id;
             const badge = (() => {
-              if(item.id==="revision")    return cots.filter(c=>c.estado==="Revisada").length;
+              if(item.id==="revision")    return cots.filter(c=>c.estado==="Borrador").length;
               if(item.id==="operacional") return cots.filter(c=>c.estadoOp==="En despacho").length;
               return 0;
             })();
@@ -634,7 +634,7 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}}/>}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setDetalleCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo}/>}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setDetalleCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setDetalleCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
@@ -663,7 +663,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
   const [tooltip,setTooltip]=useState(null);
   const mgNeto=mgBruto-dashGastos;
   const enCurso=cots.filter(c=>["Enviada","Adjudicada"].includes(c.estado)).length;
-  const paraRev=cots.filter(c=>c.estado==="Revisada").length;
+  const paraRev=cots.filter(c=>c.estado==="Borrador").length;
   const pendComp=cots.filter(c=>c.estadoOp==="En compra").length;
   const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0).length;
 
@@ -723,7 +723,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
           <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Gestión activa</div>
           {[
             {label:"En curso",     val:enCurso,   color:"#1d4ed8",tab:"cotizaciones"},
-            {label:"Revisada", val:paraRev,   color:"#9d174d",tab:"revision"},
+            {label:"Borrador", val:paraRev,   color:"#64748b",tab:"cotizaciones"},
             {label:"En compra",    val:pendComp,  color:"#92400e",tab:"compras"},
             {label:"Vencen pronto",val:porVencer, color:"#b91c1c",tab:"cotizaciones"},
           ].map((r,i)=>{
@@ -881,16 +881,16 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
 }
 
 // ── COTIZACIONES ──────────────────────────────────────────────
-function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,periodo,setPeriodo,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={}}) {
+function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltroEst,sortCot,setSortCot,onNew,onDetalle,onEditar,umbrales={},periodo,setPeriodo}) {
   const isMob=window.innerWidth<768;
 
   // Smart filter logic
   const SMART_FILTERS=[
     {id:"accion", label:"Requieren acción",
-     fn:c=>["Borrador","Revisada","Enviada"].includes(c.estado)||
+     fn:c=>["Borrador","Enviada"].includes(c.estado)||
            (c.fechaVencimiento&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0)},
     {id:"activas", label:"Activas",
-     fn:c=>["Borrador","Revisada","Enviada"].includes(c.estado)},
+     fn:c=>["Borrador","Enviada"].includes(c.estado)},
     {id:"ganadas", label:"Adjudicadas",
      fn:c=>c.estado==="Adjudicada"},
     {id:"perdidas", label:"Rechazadas",
@@ -901,9 +901,25 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
   // Use filtroEst to store smart filter id
   const activeFiltro=SMART_FILTERS.find(f=>f.id===filtroEst)||SMART_FILTERS[0];
 
+  // Period filter helper
+  const enPeriodo=(fecha)=>{
+    if(activeFiltro.id==="accion") return true; // ignore period for action filter
+    if(!periodo||periodo==="todo") return true;
+    if(!fecha) return false;
+    const d=new Date(fecha); const now=new Date();
+    const days=Math.floor((now-d)/86400000);
+    if(periodo==="7d")        return days<=7;
+    if(periodo==="30d")       return days<=30;
+    if(periodo==="90d")       return days<=90;
+    if(periodo==="este_mes")  return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+    if(periodo==="mes_pasado"){const lm=new Date(now.getFullYear(),now.getMonth()-1,1);return d.getMonth()===lm.getMonth()&&d.getFullYear()===lm.getFullYear();}
+    return true;
+  };
+
   // Apply filters
   const filtered=cots.filter(c=>{
     if(!activeFiltro.fn(c)) return false;
+    if(!enPeriodo(c.fecha)) return false;
     if(busqueda){
       const b=busqueda.toLowerCase();
       if(![c.numero,c.organismo,c.ejecutivo].some(v=>(v||"").toLowerCase().includes(b))) return false;
@@ -927,7 +943,8 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
         <div>
           <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Cotizaciones</h1>
           <p style={{color:"#94a3b8",fontSize:12,margin:"3px 0 0"}}>
-            {filtered.length} de {cots.length}
+            {filtered.length} {activeFiltro.id!=="accion"&&periodo!=="todo"?`en este período`:""}
+            {activeFiltro.id==="accion"?" — requieren atención":""}
           </p>
         </div>
         <Btn onClick={onNew}>+ Nueva</Btn>
@@ -949,14 +966,26 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
         ))}
       </div>
 
-      {/* Search + sort row */}
-      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
-        <div style={{flex:1,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
+      {/* Search + period + sort row */}
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:160,display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"0 10px"}}>
           <span style={{color:"#94a3b8",display:"flex"}}>{Ic.search}</span>
           <input placeholder="Buscar número u organismo…" value={busqueda} onChange={e=>setBusqueda(e.target.value)}
             style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
           {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
         </div>
+        {/* Period selector - hidden when "accion" filter active */}
+        {activeFiltro.id!=="accion"&&(
+          <select value={periodo} onChange={e=>setPeriodo(e.target.value)}
+            style={{padding:"7px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer",color:"#475569"}}>
+            <option value="7d">Últimos 7 días</option>
+            <option value="30d">Últimos 30 días</option>
+            <option value="90d">Últimos 90 días</option>
+            <option value="este_mes">Este mes</option>
+            <option value="mes_pasado">Mes pasado</option>
+            <option value="todo">Todo el historial</option>
+          </select>
+        )}
         <select value={sortCot} onChange={e=>setSortCot(e.target.value)}
           style={{padding:"7px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer",color:"#475569"}}>
           <option value="fecha_desc">Más recientes</option>
@@ -987,7 +1016,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
             <tbody>
               {filtered.map((c,i)=>{
                 const ec=ESTADO_COLORS[c.estado]||{bg:"#f1f5f9",text:"#64748b"};
-                const dv=c.fechaVencimiento&&["Borrador","Revisada","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
+                const dv=c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)?diffDays(c.fechaVencimiento):null;
                 const urgente=dv!==null&&dv<=3;
                 return (
                   <tr key={c.id} onClick={()=>onDetalle(c)}
@@ -1027,7 +1056,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
 
 // ── REVISIÓN ──────────────────────────────────────────────────
 function ModuloRevision({cots,cambiarEstado,onDetalle}) {
-  const lista=cots.filter(c=>c.estado==="Revisada");
+  const lista=cots.filter(c=>c.estado==="Borrador");
   return (
     <div>
       <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>Revisión</h1>
@@ -4244,7 +4273,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     const notasInternas="Compra Ágil MP — ID: "+op.id+"\nPresupuesto: "+fmt(op.presupuesto)+(productosCreados.length>0?"\nProductos pendientes de precio: "+productosCreados.map(p=>p.nombre).join(", "):"");
     const tots=calcTotalesCot(items);
     const cot={id:uid(),numero:numCot,organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
-      ejecutivo:perfil?.nombre||"",estado:"Revisada",fecha:today(),fechaVencimiento:fechaVenc,
+      ejecutivo:perfil?.nombre||"",estado:"Borrador",fecha:today(),fechaVencimiento:fechaVenc,
       items:items.map(({_pendiente,...r})=>r),notas:"",notasInternas,creadaEn:nowISO(),origenMP:true,
       total:tots.total,costoTotal:tots.costoTotal,margenProm:tots.margenProm};
     setCots(prev=>[cot,...prev]);

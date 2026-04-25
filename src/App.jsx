@@ -371,6 +371,17 @@ export default function App() {
     }
   };
 
+  const archivarCot=(id,archivar=true)=>{
+    setCots(prev=>prev.map(c=>{
+      if(c.id!==id) return c;
+      const updated={...c,archivada:archivar,updatedAt:nowISO()};
+      guardarCotDB(updated);
+      setModalCot(prev2=>prev2?.id===id?updated:prev2);
+      return updated;
+    }));
+    toast(archivar?"Cotización archivada":"Cotización restaurada","success",2000);
+  };
+
   const cambiarEstado=(id,estado,extra={})=>{
     const logEntry={ts:nowISO(),fecha:today(),estado,nota:extra.nota||"",usuario:perfil.nombre};
     setActivityLog(prev=>[{id:uid(),ts:nowISO(),usuario:perfil.nombre,accion:`Cambió estado cotización a "${estado}"`,ref:id},...prev].slice(0,200));
@@ -683,7 +694,7 @@ export default function App() {
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
-        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>cambiarEstado(id,"Archivada",{nota:"Archivada manualmente"}))} />}
+        {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>archivarCot(id,true))} />}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setModalCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setModalCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
         {tab==="compras"      && <ModuloCompras cots={cots} productos={productos} setProductos={setProductos} perfil={perfil} config={config} setMovimientos={setMovimientos} bodegas={bodegas}/>}
@@ -701,7 +712,7 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setModalCot(null);setTab("productos");}}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{if(estado==="_desarchivar"){archivarCot(id,false);return;}cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setModalCot(null);setTab("productos");}}/>}
       {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
@@ -937,12 +948,12 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
 
   // Tabs por estado real
   const TABS=[
-    {id:"Borrador",   label:"Borrador",    fn:c=>c.estado==="Borrador"},
-    {id:"Enviada",    label:"Enviada",     fn:c=>c.estado==="Enviada"},
-    {id:"Adjudicada", label:"Adjudicada",  fn:c=>c.estado==="Adjudicada"},
-    {id:"Rechazada",  label:"Rechazada",   fn:c=>c.estado==="Rechazada"},
-    {id:"Archivada",  label:"Archivada",   fn:c=>c.estado==="Archivada"},
-    {id:"todas",      label:"Todas",       fn:()=>true},
+    {id:"Borrador",   label:"Borrador",    fn:c=>c.estado==="Borrador"&&!c.archivada},
+    {id:"Enviada",    label:"Enviada",     fn:c=>c.estado==="Enviada"&&!c.archivada},
+    {id:"Adjudicada", label:"Adjudicada",  fn:c=>c.estado==="Adjudicada"&&!c.archivada},
+    {id:"Rechazada",  label:"Rechazada",   fn:c=>c.estado==="Rechazada"&&!c.archivada},
+    {id:"todas",      label:"Todas",       fn:c=>!c.archivada},
+    {id:"Archivada",  label:"Archivada",   fn:c=>!!c.archivada},
   ];
 
   const activeTab=TABS.find(t=>t.id===filtroEst)||TABS[0];
@@ -2010,7 +2021,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
   useEffect(()=>{
     setForm({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
     // Block editing Adjudicada without permission
-    if(cotizacion.estado==="Adjudicada"){
+    if(cotizacion.estado==="Adjudicada"||cotizacion.archivada){
       const puedeEditar=perfil?.permisos?.includes("puede_revertir")||isAdmin;
       if(!puedeEditar) setVistaTab("detalle");
     }
@@ -2356,16 +2367,16 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
   // ── END MOBILE WIZARD ─────────────────────────────────────
 
   // ── DESKTOP: Detalle always shown when saved, form when new/editing ──
-  const canEdit = cotizacion.estado!=="Adjudicada" || perfil?.permisos?.includes("puede_revertir") || isAdmin;
+  const canEdit = (!cotizacion.archivada&&cotizacion.estado!=="Adjudicada") || perfil?.permisos?.includes("puede_revertir") || isAdmin;
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:"20px"}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:860,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
+      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:860,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"visible",position:"relative"}}
         onClick={e=>e.stopPropagation()}>
 
         {/* ── Header ───────────────────────────────────── */}
-        <div style={{padding:"12px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <div style={{padding:"12px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,borderRadius:"16px 16px 0 0",background:"#fff"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {isSaved&&<span style={{fontFamily:"'Geist Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700}}>{cotizacion.numero}</span>}
             <EstadoBadge estado={(isSaved?cotizacion.estado:form.estado)||"Borrador"}/>
@@ -2374,7 +2385,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
         </div>
 
         {/* ── Cuerpo scrolleable ───────────────────────── */}
-        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+        <div style={{flex:1,overflowY:"auto",overflowX:"visible",padding:"20px 24px",minHeight:0}}>
           {/* Si guardada → mostrar detalle siempre */}
           {isSaved&&!vistaTab.startsWith("edit")&&(
             <DetalleCotBody c={cotizacion} productos={productos} onCambiarEstado={onCambiarEstado}
@@ -2499,15 +2510,23 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
         </div>
 
         {/* ── Footer fijo ───────────────────────────────── */}
-        <div style={{padding:"10px 20px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
+        <div style={{padding:"10px 20px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff",borderRadius:"0 0 16px 16px"}}>
           {/* Izquierda */}
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:16}}>
             {(!isSaved||vistaTab.startsWith("edit"))&&total>0&&(
-              <div style={{display:"flex",gap:10,fontSize:12,color:"#64748b"}}>
-                <span>Neto <strong style={{color:"#0f172a"}}>{fmt(subtotalNeto)}</strong></span>
-                <span>IVA <strong style={{color:"#0f172a"}}>{fmt(iva)}</strong></span>
-                <span>Total <strong style={{color:"#1d4ed8",fontSize:14}}>{fmt(total)}</strong></span>
-                {margenProm!=null&&costoTotal>0&&<MargenBadge pct={margenProm} monto={calcUtilidad(total,costoTotal)} sinCosto={tieneSinCosto}/>}
+              <div style={{display:"flex",alignItems:"center",gap:16,fontSize:12,color:"#64748b"}}>
+                <span>Neto <span style={{color:"#0f172a",fontWeight:600}}>{fmt(subtotalNeto)}</span></span>
+                <span style={{color:"#e2e8f0"}}>|</span>
+                <span>IVA <span style={{color:"#0f172a",fontWeight:600}}>{fmt(iva)}</span></span>
+                <span style={{color:"#e2e8f0"}}>|</span>
+                <span style={{fontSize:13}}>Total <span style={{color:"#1d4ed8",fontWeight:700,fontSize:15}}>{fmt(total)}</span></span>
+                {margenProm!=null&&costoTotal>0&&(
+                  <span style={{fontSize:11,fontWeight:600,color:margenProm>=25?"#15803d":margenProm>=15?"#92400e":"#b91c1c",
+                    background:margenProm>=25?"#dcfce7":margenProm>=15?"#fef9c3":"#fee2e2",
+                    padding:"2px 8px",borderRadius:20}}>
+                    {fmtPct(margenProm)}
+                  </span>
+                )}
               </div>
             )}
             {isSaved&&!vistaTab.startsWith("edit")&&["Enviada","Adjudicada"].includes(cotizacion.estado)&&(
@@ -2646,15 +2665,25 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
           </button>
         </div>
       )}
-      {/* Estados */}
-      <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+      {/* Archivada banner */}
+      {c.archivada&&(
+        <div style={{background:"#f1f5f9",borderRadius:8,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:12,color:"#64748b",fontWeight:500}}>📦 Esta cotización está archivada · Estado: <strong>{c.estado}</strong></span>
+          <button onClick={()=>onCambiarEstado&&onCambiarEstado(c.id,"_desarchivar")}
+            style={{fontSize:12,color:"#1d4ed8",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"4px 12px",cursor:"pointer",fontWeight:500}}>
+            Desarchivar
+          </button>
+        </div>
+      )}
+      {/* Estados — solo si no archivada */}
+      {!c.archivada&&<div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:6,letterSpacing:".06em"}}>CAMBIAR ESTADO</div>
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
           {ESTADOS_COT.map(e=>{const ec=ESTADO_COLORS[e]||{bg:"#f1f5f9",text:"#475569"};const isA=c.estado===e;
             return <button key={e} onClick={()=>handleEstado(e)} style={{padding:"4px 12px",borderRadius:20,border:"2px solid "+(isA?ec.text:"#e2e8f0"),background:isA?ec.bg:"#fff",color:isA?ec.text:"#64748b",fontWeight:isA?700:400,cursor:"pointer",fontSize:11}}>{e}</button>;
           })}
         </div>
-      </div>
+      </div>}
       {/* Items */}
       {(c.items||[]).length>0&&(
         <div style={{marginBottom:10,background:"#fff",borderRadius:10,border:"1px solid #f1f5f9",overflow:"hidden"}}>

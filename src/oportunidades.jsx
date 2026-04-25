@@ -573,6 +573,24 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
         <div style={{textAlign:"right",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
           <div style={{fontSize:14,fontWeight:700}}>{fmt(op.presupuesto)}</div>
           {ia&&enCatalogo.length>0&&<div style={{fontSize:10,color:"#64748b"}}>{enCatalogo.length}/{detectados.length||enCatalogo.length+nuevos.length} prod.</div>}
+          {ia?.cotizacionesRecibidas>0&&(
+            <div style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#fee2e2",color:"#b91c1c"}}>🔴 {ia.cotizacionesRecibidas} compet.</div>
+          )}
+          {ia?.scoreAtractivo>0&&(
+            <div style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,
+              background:ia.scoreAtractivo>=7?"#dcfce7":ia.scoreAtractivo>=4?"#fef9c3":"#fee2e2",
+              color:ia.scoreAtractivo>=7?"#15803d":ia.scoreAtractivo>=4?"#92400e":"#b91c1c"}}>
+              ★{ia.scoreAtractivo}
+            </div>
+          )}
+      {ia?.scoreAtractivo&&(
+        <div style={{display:"flex",alignItems:"center",gap:3,background:ia.scoreAtractivo>=7?"#dcfce7":ia.scoreAtractivo>=4?"#fef9c3":"#fee2e2",
+          border:`1px solid ${ia.scoreAtractivo>=7?"#bbf7d0":ia.scoreAtractivo>=4?"#fde68a":"#fecaca"}`,
+          borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+          color:ia.scoreAtractivo>=7?"#15803d":ia.scoreAtractivo>=4?"#92400e":"#b91c1c"}}>
+          ★ {ia.scoreAtractivo}/10
+        </div>
+      )}
           <div style={{color:"#94a3b8",fontSize:11,transform:isExp?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</div>
         </div>
       </div>
@@ -610,6 +628,42 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                   </span>
                 )}
               </div>
+
+              {/* 🔴 Competencia — MUY DESTACADO */}
+              {ia.cotizacionesRecibidas>0&&(
+                <div style={{background:"#fef2f2",border:"2px solid #ef4444",borderRadius:10,padding:"12px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:24}}>🔴</span>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#b91c1c",letterSpacing:"-.02em"}}>
+                      ¡HAY COMPETENCIA! — {ia.cotizacionesRecibidas} cotización{ia.cotizacionesRecibidas!==1?"es":""} recibida{ia.cotizacionesRecibidas!==1?"s":""}
+                    </div>
+                    <div style={{fontSize:11,color:"#991b1b",marginTop:2}}>
+                      Otros proveedores ya participan en esta licitación
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Score atractivo */}
+              {ia.scoreAtractivo>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"10px 12px",background:"#f8fafc",borderRadius:9,border:"1px solid #f1f5f9"}}>
+                  <div style={{fontSize:12,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>Atractivo</div>
+                  <div style={{flex:1,height:8,background:"#e2e8f0",borderRadius:4,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${ia.scoreAtractivo*10}%`,borderRadius:4,
+                      background:ia.scoreAtractivo>=7?"#16a34a":ia.scoreAtractivo>=4?"#f59e0b":"#ef4444",
+                      transition:"width .4s"}}/>
+                  </div>
+                  <div style={{fontSize:15,fontWeight:800,minWidth:36,textAlign:"right",
+                    color:ia.scoreAtractivo>=7?"#15803d":ia.scoreAtractivo>=4?"#92400e":"#b91c1c"}}>
+                    {ia.scoreAtractivo}/10
+                  </div>
+                  {ia.justificacionScore&&(
+                    <div style={{fontSize:10,color:"#94a3b8",maxWidth:160}} title={ia.justificacionScore}>
+                      {ia.justificacionScore.slice(0,60)}{ia.justificacionScore.length>60?"…":""}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ⚠ Alerta requerimientos especiales */}
               {ia.requerimientosEspeciales?.length>0&&(

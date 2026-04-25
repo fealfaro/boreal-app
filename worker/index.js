@@ -87,9 +87,12 @@ export default {
         };
 
         // 2. Construir texto estructurado para Claude
-        // La API devuelve datos en payload, no en data
         const ficha = fichaData?.payload || fichaData?.data || fichaData || {};
-        const hist  = historial?.payload || historial?.data || historial || {};
+        const hist  = historial?.payload  || historial?.data  || historial  || {};
+
+        // Extraer cotizaciones recibidas del historial
+        const cotizacionesRecibidas = hist?.cantidadOfertas || hist?.ofertas?.length || hist?.numeroOfertas || 0;
+        const tieneOfertas = cotizacionesRecibidas > 0;
 
         const textoLicitacion = `
 ID: ${id}
@@ -97,29 +100,34 @@ Nombre: ${ficha.nombre || ficha.title || ''}
 Institución: ${ficha.nombreOrganismo || ficha.institucion || ficha.organismo || ''}
 Unidad de compra: ${ficha.unidadCompra || ficha.unidad || ''}
 Descripción: ${ficha.descripcion || ficha.description || ficha.glosa || ''}
-Presupuesto: ${ficha.presupuesto || ficha.monto || ficha.montoEstimado || ''}
+Presupuesto estimado: ${ficha.presupuesto || ficha.monto || ficha.montoEstimado || 'No especificado'} CLP
 Fecha cierre: ${ficha.fechaCierre || ficha.fechaTermino || ficha.fechaCierreOferta || ''}
 Estado: ${ficha.estado || ficha.estadoActual || ''}
-Items/Productos solicitados: ${JSON.stringify(ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [])}
-Condiciones: ${ficha.condiciones || ficha.observaciones || ficha.descripcionAdj || ''}
-Datos completos: ${JSON.stringify(ficha).slice(0, 2000)}
+Cotizaciones recibidas hasta ahora: ${cotizacionesRecibidas} (${tieneOfertas ? 'HAY COMPETENCIA' : 'sin competencia aún'})
+Items/Productos solicitados (LISTA COMPLETA): ${JSON.stringify(ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [])}
+Condiciones especiales: ${ficha.condiciones || ficha.observaciones || ficha.descripcionAdj || ''}
+Datos completos ficha: ${JSON.stringify(ficha).slice(0, 3000)}
+Historial completo: ${JSON.stringify(hist).slice(0, 1000)}
         `.trim();
 
         // 3. Analizar con Claude
-        const prompt = `Eres asistente de ventas de empresa de suministros de limpieza en Chile.
+        const prompt = `Eres asistente de ventas de empresa chilena de suministros de limpieza y aseo.
 
 LICITACIÓN COMPRA ÁGIL:
 ${textoLicitacion}
 
-CATÁLOGO DISPONIBLE (nombre exacto y SKU):
-${catalogo.slice(0, 4000)}
+CATÁLOGO DISPONIBLE (busca coincidencias por nombre, sinónimos y categoría):
+${catalogo.slice(0, 5000)}
 
-Analiza si esta licitación es relevante para el catálogo. 
-IMPORTANTE: Lista CADA ítem de la licitación por separado en productosDetectados, aunque sean del mismo tipo (ej: 2 tipos de papel higiénico = 2 entradas distintas).
-Detecta en requerimientosEspeciales si la licitación exige adjuntar documentos como ficha técnica, certificados, formularios especiales, muestras u otros requisitos (ignora fotos de productos, esas siempre se suben). Solo incluye si está explícitamente mencionado.
-Usa los SKU exactos del catálogo cuando haya coincidencia.
-Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{"titulo":"...","institucion":"...","descripcion":"qué piden exactamente en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico del item","cantidad":10,"unidad":"cajas/unidades/etc","descripcionOriginal":"texto exacto del item en la licitacion"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO-DEL-CATALOGO","nombre":"...","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"..."}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":["ficha técnica del producto","formulario de oferta firmado"]}`;
+INSTRUCCIONES CRÍTICAS:
+1. ITEMS SEPARADOS: Lista CADA ítem por separado en productosDetectados aunque tengan el mismo nombre genérico (ej: "Papel higiénico 24 unidades" y "Papel higiénico industrial rollo" son 2 entradas distintas). Usa el campo descripcionOriginal con el texto exacto de la licitación.
+2. CATÁLOGO: Busca coincidencias en el catálogo por nombre, sinónimos y categoría. Sé generoso — si la licitación pide "papel higiénico" y el catálogo tiene "Papel Higiénico Doble Hoja", es una coincidencia. No dejes productosEnCatalogo vacío si hay productos similares.
+3. ATRACTIVO: Calcula un score del 1 al 10 basado en: presupuesto disponible (mayor = más puntos), cantidad de cotizaciones recibidas (más competencia = menos puntos), relevancia del catálogo (más productos = más puntos), plazo de entrega (más tiempo = más puntos).
+4. COMPETENCIA: Si hay cotizaciones recibidas, indícalo claramente en el resumen.
+5. DOCUMENTOS: Detecta si exige ficha técnica, certificados, formularios o muestras (ignora fotos).
+
+Responde ÚNICAMENTE con JSON válido sin markdown:
+{"titulo":"...","institucion":"...","descripcion":"qué piden en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico","cantidad":10,"unidad":"unidades/cajas/etc","descripcionOriginal":"texto exacto de la licitación"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO","nombre":"nombre en catálogo","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"por qué coincide"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":["ficha técnica requerida"],"cotizacionesRecibidas":${cotizacionesRecibidas},"scoreAtractivo":7,"justificacionScore":"presupuesto alto, sin competencia, productos en catálogo"}`;
 
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {

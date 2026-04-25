@@ -86,58 +86,65 @@ export default {
           fichaKeys: Object.keys(fichaData?.data || fichaData || {}),
         };
 
-        // 2. Construir texto estructurado para Claude
+        // 2. Extraer items directamente del API response (no confiar en IA para esto)
         const ficha = fichaData?.payload || fichaData?.data || fichaData || {};
         const hist  = historial?.payload  || historial?.data  || historial  || {};
 
-        // Extraer cotizaciones recibidas del historial
         const cotizacionesRecibidas = hist?.cantidadOfertas || hist?.ofertas?.length || hist?.numeroOfertas || 0;
         const tieneOfertas = cotizacionesRecibidas > 0;
 
+        // Extraer TODOS los items con sus descripciones específicas
+        // Campo real de la API: productos_solicitados[].descripcion
+        const rawItems = ficha.productos_solicitados || ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [];
+        const itemsExtraidos = rawItems.map((item, i) => {
+          const nombreGenerico = item.nombre || '';
+          const descripcion = item.descripcion || item.glosa || '';
+          const cantidad = item.cantidad || 1;
+          const unidad = item.unidad_medida || item.unidad || item.unidadMedida || 'unidades';
+          return {
+            nombre: descripcion || nombreGenerico,  // descripcion específica primero
+            nombreGenerico,
+            descripcionOriginal: descripcion,
+            cantidad: Number(cantidad) || 1,
+            unidad,
+            idx: i + 1,
+          };
+        });
+
+        const textoItems = itemsExtraidos.length > 0
+          ? itemsExtraidos.map(it => `${it.idx}. "${it.nombre}" — ${it.cantidad} ${it.unidad}`).join('\n')
+          : 'No especificado en la API';
+
         const textoLicitacion = `
 ID: ${id}
-Nombre: ${ficha.nombre || ficha.title || ''}
+Nombre: ${ficha.nombre || ''}
 Institución: ${ficha.nombreOrganismo || ficha.institucion || ficha.organismo || ''}
-Unidad de compra: ${ficha.unidadCompra || ficha.unidad || ''}
-Descripción: ${ficha.descripcion || ficha.description || ficha.glosa || ''}
-Presupuesto estimado: ${ficha.presupuesto || ficha.monto || ficha.montoEstimado || 'No especificado'} CLP
-Fecha cierre: ${ficha.fechaCierre || ficha.fechaTermino || ficha.fechaCierreOferta || ''}
-Estado: ${ficha.estado || ficha.estadoActual || ''}
-Cotizaciones recibidas hasta ahora: ${cotizacionesRecibidas} (${tieneOfertas ? 'HAY COMPETENCIA' : 'sin competencia aún'})
-Items/Productos solicitados (LISTA COMPLETA — usa el campo descripcion/glosa de cada item, no solo el nombre genérico):
-${(() => {
-  const rawItems = ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [];
-  if (!rawItems.length) return 'No especificado en la API';
-  return rawItems.map((item, i) => {
-    const nombreGenerico = item.nombre || item.nombreProducto || item.category || '';
-    const descripcion = item.descripcion || item.glosa || item.descripcionProducto || item.especificacion || item.detalle || '';
-    const cantidad = item.cantidad || item.cantidadEstimada || item.qty || '';
-    const unidad = item.unidad || item.unidadMedida || item.um || '';
-    return `${i+1}. Categoría: "${nombreGenerico}" | Descripción específica: "${descripcion || nombreGenerico}" | Cantidad: ${cantidad} ${unidad}`;
-  }).join('\n');
-})()}
-Datos completos ficha: ${JSON.stringify(ficha).slice(0, 3000)}
-Historial completo: ${JSON.stringify(hist).slice(0, 1000)}
+Descripción general: ${ficha.descripcion || ''}
+Presupuesto estimado: ${ficha.presupuesto_estimado || ficha.presupuesto || ficha.monto || 'No especificado'} ${ficha.moneda || 'CLP'}
+Fecha cierre: ${ficha.fecha_cierre || ficha.fechaCierre || ''}
+Plazo entrega: ${ficha.plazo_entrega || ''} días
+Cotizaciones recibidas: ${cotizacionesRecibidas}
+PRODUCTOS SOLICITADOS (${itemsExtraidos.length} items — YA EXTRAÍDOS, NO MODIFICAR ESTA LISTA):
+${textoItems}
         `.trim();
 
         // 3. Analizar con Claude
         const prompt = `Eres asistente de ventas de empresa chilena de suministros de limpieza y aseo.
 
-LICITACIÓN COMPRA ÁGIL:
+LICITACIÓN:
 ${textoLicitacion}
 
-CATÁLOGO DISPONIBLE (busca coincidencias por nombre, sinónimos y categoría):
+CATÁLOGO DISPONIBLE (nombre y SKU):
 ${catalogo.slice(0, 5000)}
 
-INSTRUCCIONES CRÍTICAS:
-1. ITEMS SEPARADOS: La API de MP separa nombre genérico (categoría) de descripción específica. USA SIEMPRE la descripción específica de cada ítem, no el nombre genérico. Cada ítem con distinta descripción = entrada separada en productosDetectados. "Cable rojo 2.5mm" y "Cable blanco 2.5mm" son 2 productos distintos aunque compartan el mismo nombre genérico.
-2. CATÁLOGO: Busca coincidencias por nombre, sinónimos y categoría. Sé generoso — si piden "jabón líquido" y tienes "Jabón Líquido Antibacterial", es coincidencia. No dejes productosEnCatalogo vacío si hay productos similares o equivalentes.
-3. ATRACTIVO (1-10): presupuesto alto=+3pts, sin cotizaciones recibidas=+3pts, productos en catálogo=+2pts, plazo largo=+2pts.
-4. COMPETENCIA: Si hay cotizaciones recibidas, destácalo en el resumen con exclamación.
-5. DOCUMENTOS: Detecta ficha técnica, certificados, formularios o muestras requeridos (ignora fotos).
+TAREA: Los productos solicitados YA están extraídos arriba (no los modifiques ni agrupes). Tu trabajo es:
+1. Para cada producto de la lista, busca si existe algo similar en el catálogo (por nombre, sinónimo o categoría). Sé generoso.
+2. Calcula score de atractivo 1-10: presupuesto alto=+3, sin cotizaciones=+3, productos en catálogo=+2, plazo largo=+2.
+3. Detecta documentos requeridos (ficha técnica, certificados, formularios — ignora fotos).
+4. Escribe un resumen breve.
 
 Responde ÚNICAMENTE con JSON válido sin markdown:
-{"titulo":"...","institucion":"...","descripcion":"qué piden en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico","cantidad":10,"unidad":"unidades/cajas/etc","descripcionOriginal":"texto exacto de la licitación"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO","nombre":"nombre en catálogo","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"por qué coincide"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":["ficha técnica requerida"],"cotizacionesRecibidas":${cotizacionesRecibidas},"scoreAtractivo":7,"justificacionScore":"presupuesto alto, sin competencia, productos en catálogo"}`;
+{"titulo":"...","institucion":"...","descripcion":"...","productosEnCatalogo":[{"sku":"SKU-EXACTO","nombre":"nombre en catálogo","cantidadEstimada":2,"confianza":"alta/media/baja","nota":"por qué coincide con qué item"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":1}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":[],"cotizacionesRecibidas":${cotizacionesRecibidas},"scoreAtractivo":7,"justificacionScore":"..."}`;
 
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -177,12 +184,15 @@ Responde ÚNICAMENTE con JSON válido sin markdown:
             resumen: txt.slice(0, 300) || 'Error al parsear respuesta',
             relevante: true,
             recomendacion: 'revisar',
-            productosDetectados: [],
             productosEnCatalogo: [],
             productosNuevos: [],
             _parseError: parseErr.message,
           };
         }
+
+        // ALWAYS inject items from API directly — never trust IA to list them
+        analisis.productosDetectados = itemsExtraidos;
+        analisis.cotizacionesRecibidas = analisis.cotizacionesRecibidas ?? cotizacionesRecibidas;
 
         return new Response(JSON.stringify({
           ok: true,

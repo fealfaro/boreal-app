@@ -190,7 +190,7 @@ function PeriodoChips({periodo,setPeriodo}) {
   );
 }
 
-function buildNotifs(cots, prods, stockMin=5) {
+function buildNotifs(cots, prods, stockMin=5, alertaStock=true) {
   const n=[], t=today();
   cots.forEach(c=>{
     if(c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)){
@@ -201,7 +201,7 @@ function buildNotifs(cots, prods, stockMin=5) {
   });
   const comp=cots.filter(c=>c.estadoOp==="preparando");
   if(comp.length) n.push({id:"comp",tipo:"info",msg:`${comp.length} cot. en proceso de compra`,tab:"compras"});
-  prods.forEach(p=>{if(getStockTotal(p)<stockMin) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
+  if(alertaStock) prods.forEach(p=>{if(getStockTotal(p)<stockMin) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
   return n;
 }
 
@@ -232,7 +232,7 @@ export default function App() {
   // Normalize maestros to string arrays for Combobox/selects
   const empresasNombres = empresas.map(e=>typeof e==="string"?e:e.nombre).filter(Boolean);
   const proveedoresNombres = proveedores.map(p=>typeof p==="string"?p:p.nombre).filter(Boolean);
-  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5,palabrasClave:"detergente\nlimpieza\nguante\ncloro\ndesinfectante"});
+  const [config,setConfig]       = useState({mostrarMargenLinea:false,diasAlertaVenc:3,mostrarCotizacionCompra:true,alertaVariacionCompra:30,umbralVerde:30,umbralAmarillo:15,stockMinimo:5,alertaStockActivada:true,palabrasClave:"detergente\nlimpieza\nguante\ncloro\ndesinfectante"});
   const [modalProd,setModalProd] = useState(null);
   const [modalCot,setModalCot]   = useState(null);
   const [detalleCot,setDetalleCot]= useState(null);
@@ -244,7 +244,7 @@ export default function App() {
   const [periDash,setPeriDash]   = useState("mes");
   const [mesRent,setMesRent]     = useState(null);
 
-  const notifList = buildNotifs(cots, productos, config.stockMinimo||5);
+  const notifList = buildNotifs(cots, productos, config.stockMinimo||5, config.alertaStockActivada!==false);
   const adjFact   = cots.filter(c=>["Adjudicada","Facturada"].includes(c.estado));
 
   // Dashboard aggregates
@@ -870,6 +870,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,prodsPendientes=[],setProdsPendientes,volverACot,setVolverACot,cots=[],setDetalleCot,setTab}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
+  const [filtroFoto,setFiltroFoto]=useState("todos"); // todos | sin_foto | con_foto
   const fileRef=useRef();
 
   const handleImport=e=>{
@@ -886,7 +887,13 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
   };
 
   const sorted=(()=>{
-    let arr=productos.filter(p=>p&&p.nombre&&(!busq||p.nombre.toLowerCase().includes(busq.toLowerCase())||(p.sku||"").toLowerCase().includes(busq.toLowerCase())));
+    let arr=productos.filter(p=>{
+      if(!p||!p.nombre) return false;
+      if(busq&&!p.nombre.toLowerCase().includes(busq.toLowerCase())&&!(p.sku||"").toLowerCase().includes(busq.toLowerCase())) return false;
+      if(filtroFoto==="sin_foto"&&p.foto_url) return false;
+      if(filtroFoto==="con_foto"&&!p.foto_url) return false;
+      return true;
+    });
     const [k,d]=sort.split("_");const mul=d==="asc"?1:-1;
     return [...arr].sort((a,b)=>{
       if(k==="nombre") return mul*a.nombre.localeCompare(b.nombre);
@@ -1723,6 +1730,19 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
           <input type="number" value={config.diasAlertaVenc||3} min={1} max={14} onChange={e=>setConfigKey("diasAlertaVenc",Number(e.target.value))} style={{width:60,padding:"5px 8px",borderRadius:7,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
         </div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0"}}>
+          <div>
+            <div style={{fontSize:13,fontWeight:500}}>Alertas de stock bajo</div>
+            <div style={{fontSize:11,color:"#64748b"}}>Notifica cuando el stock cae bajo el mínimo</div>
+          </div>
+          <button onClick={()=>setConfigKey("alertaStockActivada",!(config.alertaStockActivada!==false))}
+            style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",transition:"background .2s",padding:2,
+              background:config.alertaStockActivada!==false?"#1d4ed8":"#e2e8f0",display:"flex",alignItems:"center",
+              justifyContent:config.alertaStockActivada!==false?"flex-end":"flex-start"}}>
+            <span style={{width:20,height:20,borderRadius:"50%",background:"#fff",display:"block",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+          </button>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0"}}
+          style={{opacity:config.alertaStockActivada!==false?1:.4,pointerEvents:config.alertaStockActivada!==false?"auto":"none"}}>
           <div>
             <div style={{fontSize:13,fontWeight:500}}>Stock mínimo para alerta</div>
             <div style={{fontSize:11,color:"#64748b"}}>Bajo este número el producto aparece como "Stock bajo"</div>

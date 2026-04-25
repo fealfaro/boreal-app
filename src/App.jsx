@@ -213,7 +213,13 @@ export default function App() {
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
-  const [dismissedNotifs,setDismissedNotifs] = useState(new Set());
+  const [dismissedNotifs,setDismissedNotifs] = useState(()=>{
+    try{const s=JSON.parse(localStorage.getItem("boreal_dismissed_notifs")||"[]");return new Set(s);}catch{return new Set();}
+  });
+  // Persist dismissed notifs to localStorage
+  useEffect(()=>{
+    try{localStorage.setItem("boreal_dismissed_notifs",JSON.stringify([...dismissedNotifs]));}catch{}
+  },[dismissedNotifs]);
   const [volverACot,setVolverACot] = useState(null);
   const [prodsPendientes, setProdsPendientes] = useState([]);
   const [productos,setProductos] = useState([]);
@@ -533,7 +539,7 @@ export default function App() {
           const bodFromProds=[...new Set(prods.flatMap(p=>(p.stock_por_bodega||[]).map(s=>s.bodega).filter(Boolean)))];
           if(bodFromProds.length) setBodegas(bodFromProds);
         }
-        if(usuDb?.length)   setUsuarios(usuDb);
+        if(usuDb?.length)   setUsuarios(usuDb.map(u=>({...u,permisos:Array.isArray(u.permisos)?u.permisos:(u.permisos?JSON.parse(u.permisos):[]) })));
         if(solDb?.length)   setSolicitudes(solDb);
         if(opDb?.length)    setOportunidades(opDb.map(fromDbOp));
         if(cfgDb) setConfig(prev=>({
@@ -737,7 +743,7 @@ export default function App() {
 
       {/* MAIN */}
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
-        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
+        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(prev=>{const s=new Set([...prev,...notifList.map(n=>n.id)]);return s;})}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} alertaStock={config.alertaStockActivada!==false} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>archivarCot(id,true))} />}
@@ -1824,44 +1830,19 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
         </div>
       </div>
 
-      {/* Gestión de usuarios */}
-      <div style={{background:"#fff",borderRadius:12,padding:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",marginBottom:13}}>
-        <div style={{fontWeight:600,fontSize:14,marginBottom:11}}>Usuarios del sistema</div>
-        {!isAdmin && <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#92400e",marginBottom:10}}>🔒 Solo administradores pueden gestionar usuarios</div>}
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-            <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-              {["Nombre","Cargo","Email","Rol",""].map(h=><th key={h} style={{padding:"7px 10px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:600}}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {usuarios.map((u,i)=>(
-                <tr key={u.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#f8fafc"}}>
-                  <td style={{padding:"7px 10px",fontWeight:500}}>{u.nombre}</td>
-                  <td style={{padding:"7px 10px",color:"#64748b"}}>{u.cargo}</td>
-                  <td style={{padding:"7px 10px",color:"#64748b",fontSize:11}}>{u.email}</td>
-                  <td style={{padding:"7px 10px"}}>
-                    {isAdmin ? (
-                      <select value={u.rol} onChange={e=>{if(setUsuarios)setUsuarios(prev=>prev.map(x=>x.id===u.id?{...x,rol:e.target.value}:x));}}
-                        style={{padding:"3px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer"}}>
-                        <option value="admin">Admin</option>
-                        <option value="ejecutivo">Ejecutivo</option>
-                      </select>
-                    ) : (
-                      <span style={{background:u.rol==="admin"?"#dbeafe":"#f1f5f9",color:u.rol==="admin"?"#1d4ed8":"#475569",padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:500}}>{u.rol}</span>
-                    )}
-                  </td>
-                  <td style={{padding:"7px 10px"}}>
-                    {isAdmin && usuarios.length>1 && <button onClick={()=>{if(window.confirm(`¿Eliminar a "${u.nombre}"? Esta acción no se puede deshacer.`)){if(setUsuarios)setUsuarios(prev=>prev.filter(x=>x.id!==u.id));}}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}}>×</button>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Gestión de usuarios — redirige a Administración */}
+      <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"14px 16px",marginBottom:13,display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:24}}>👥</span>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600,fontSize:13,color:"#1d4ed8"}}>Gestión de usuarios y permisos</div>
+          <div style={{fontSize:12,color:"#64748b",marginTop:1}}>Administra usuarios, roles y permisos por función desde el módulo de Administración</div>
         </div>
-        {isAdmin && (
-          <button onClick={()=>{if(setUsuarios)setUsuarios(prev=>[...prev,{id:uid(),nombre:"Nuevo usuario",cargo:"Ejecutivo",email:"",rol:"ejecutivo"}]);}} style={{marginTop:10,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 14px",cursor:"pointer",fontSize:12,color:"#1d4ed8",fontWeight:500}}>+ Agregar usuario</button>
-        )}
+        <button onClick={()=>document.dispatchEvent(new CustomEvent("boreal-goto",{detail:"admin"}))}
+          style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>
+          Ir a Administración →
+        </button>
       </div>
+
 
       <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
         <span style={{fontSize:20}}>🏭</span>
@@ -4121,7 +4102,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                     </td>
                     <td style={{padding:"10px 13px"}}>
                       <div style={{display:"flex",gap:5}}>
-                        <button onClick={()=>setModalUser({idx:i,data:{...u,permisos:u.permisos||[]}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar</button>
+                        <button onClick={()=>setModalUser({idx:i,data:{...u,permisos:Array.isArray(u.permisos)?u.permisos:[]}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar permisos</button>
                         {u.nombre!==perfil?.nombre&&(
                           <button onClick={()=>setConfirmDelUser({idx:i,nombre:u.nombre})} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#b91c1c",fontWeight:500}}>Eliminar</button>
                         )}
@@ -4195,7 +4176,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 
       {/* Modal usuario */}
       {modalUser&&(
-        <Modal onClose={()=>setModalUser(null)} maxWidth={540}>
+        <Modal onClose={()=>setModalUser(null)} maxWidth={560}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{modalUser.idx===null?"Nuevo usuario":"Editar usuario"}</h2>
             <CloseBtn onClose={()=>setModalUser(null)}/>
@@ -4273,7 +4254,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                   setUsuarios(prev=>[...prev,newUser]);
                   // Save to DB perfiles
                   if(supabase&&modalUser.data.email){
-                    await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:true,permisos:modalUser.data.permisos||[]});
+                    await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:true,permisos:Array.isArray(modalUser.data.permisos)?modalUser.data.permisos:[]});
                     // Send magic link invite
                     const {error}=await auth.signInWithOtp(modalUser.data.email);
                     if(!error) toast(`Invitación enviada a ${modalUser.data.email}`,"success",4000);
@@ -4281,7 +4262,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                   }
                 } else {
                   setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
-                  if(supabase&&modalUser.data.email) await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:modalUser.data.activo!==false,permisos:modalUser.data.permisos||[]});
+                  if(supabase&&modalUser.data.email){await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:modalUser.data.activo!==false,permisos:Array.isArray(modalUser.data.permisos)?modalUser.data.permisos:[]});toast("Usuario actualizado","success",2000);}
                 }
                 setModalUser(null);
               }} size="sm">Guardar</Btn>

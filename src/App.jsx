@@ -387,7 +387,7 @@ export default function App() {
       }
 
       // ── Liberar reserva si se revierte desde Adjudicada ──
-      if(estadoAnterior==="Adjudicada"&&["Borrador","Enviada","Archivada","Rechazada"].includes(estado)){
+      if(estadoAnterior==="Adjudicada"&&["Borrador","Enviada","Rechazada"].includes(estado)){
         toast(`Reserva liberada para ${c.numero}`,"info",2000);
       }
 
@@ -2003,8 +2003,16 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
   const [form,setForm]=useState({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
   const [showMargen,setShowMargen]=useState(config?.mostrarMargenLinea||false);
   const [searchIdx,setSearchIdx]=useState(null);
-  const [vistaTab,setVistaTab]=useState(isSaved?"detalle":"editar"); // editar or detalle
+  const [vistaTab,setVistaTab]=useState(isSaved?"detalle":"editar");
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+
+  // ── Sync form when cotizacion prop changes (after save/estado change) ──
+  useEffect(()=>{
+    setForm(prev=>({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])],
+      // preserve local edits if still in edit mode
+    }));
+  },[cotizacion.id, cotizacion.estado, cotizacion.updatedAt]);
+
   const {subtotalNeto,iva,total,costoTotal,margenProm,tieneSinCosto}=calcTotalesCot(form.items);
   const [wizStep,setWizStep]=useState(1); // 1=datos, 2=productos, 3=totales
   // ESC to close
@@ -2352,15 +2360,25 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
         onClick={e=>e.stopPropagation()}>
 
         {/* ── Header fijo ─────────────────────────────── */}
-        <div style={{padding:"12px 16px",borderBottom:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{fontFamily:"'Geist Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700}}>{form.numero}</div>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            {isSaved&&<div style={{fontFamily:"'Geist Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700,flexShrink:0}}>{form.numero}</div>}
             <EstadoBadge estado={form.estado||"Borrador"}/>
+            {isSaved&&(
+              <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:7,padding:2,marginLeft:4,flexShrink:0}}>
+                {[["editar","Editar"],["detalle","Detalle"]].map(([t,l])=>(
+                  <button key={t} onClick={()=>setVistaTab(t)}
+                    style={{padding:"3px 10px",borderRadius:5,border:"none",cursor:"pointer",fontSize:12,
+                      fontWeight:vistaTab===t?600:400,background:vistaTab===t?"#fff":"transparent",
+                      color:vistaTab===t?"#0f172a":"#64748b",
+                      boxShadow:vistaTab===t?"0 1px 2px rgba(0,0,0,.08)":"none"}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            
-            <CloseBtn onClose={onClose}/>
-          </div>
+          <CloseBtn onClose={onClose}/>
         </div>
 
         {/* ── Cuerpo scrolleable ───────────────────────── */}
@@ -2368,7 +2386,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
 
         {/* ── DETALLE TAB ─────────────────────────────── */}
         {vistaTab==="detalle"&&(
-          <DetalleCotBody c={form} productos={productos} onCambiarEstado={onCambiarEstado} onEditar={()=>setVistaTab("editar")} perfil={perfil} isAdmin={isAdmin||false} solicitudes={solicitudes||[]} setSolicitudes={setSolicitudes||function(){}} setVolverACot={setVolverACot||function(){}} onGoProductos={onGoProductos||function(){}} logoB64={logoB64}/>
+          <DetalleCotBody c={cotizacion} productos={productos} onCambiarEstado={onCambiarEstado} onEditar={()=>setVistaTab("editar")} perfil={perfil} isAdmin={isAdmin||false} solicitudes={solicitudes||[]} setSolicitudes={setSolicitudes||function(){}} setVolverACot={setVolverACot||function(){}} onGoProductos={onGoProductos||function(){}} logoB64={logoB64}/>
         )}
 
         {/* ── EDITAR TAB ──────────────────────────────── */}
@@ -2562,7 +2580,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
         <div style={{padding:"12px 16px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
           {/* Izquierda */}
           <div style={{display:"flex",gap:8}}>
-            {isSaved&&vistaTab==="detalle"&&["Enviada","Adjudicada"].includes(form.estado)&&(
+            {isSaved&&vistaTab==="detalle"&&["Enviada","Adjudicada"].includes(cotizacion.estado)&&(
               <button onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)}
                 style={{display:"flex",alignItems:"center",gap:7,background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:500}}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -2662,9 +2680,11 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
 
 // ── DETALLE COT BODY (sin modal wrapper, para tabs) ───────────
 function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isAdmin=false,solicitudes=[],setSolicitudes,setVolverACot,onGoProductos}) {
-  const {subtotalNeto,iva,total}=calcTotalesCot(c.items||[]);
-  const util=(c.total||total)-(c.costoTotal||0);
-  const mg=c.margenProm||0;
+  const {subtotalNeto,iva,total,costoTotal:costoCalc,margenProm:mgCalc}=calcTotalesCot(c.items||[]);
+  const totalFinal=c.total||total;
+  const costoFinal=c.costoTotal||costoCalc||0;
+  const util=totalFinal-costoFinal;
+  const mg=c.margenProm??mgCalc??0;
   const itemsSinPrecio=(c.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));
   const tienePreciosPendientes=itemsSinPrecio.length>0;
 
@@ -2673,7 +2693,7 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
     if(!retro&&tienePreciosPendientes){toast("Sin precio en "+itemsSinPrecio.map(i=>i.nombre).join(", "),"warning",5000);return;}
     const critico=ESTADOS_CRITICOS.includes(nuevoEstado);
     // Block reverting from Adjudicada without permission
-    if(c.estado==="Adjudicada"&&["Borrador","Enviada"].includes(nuevoEstado)){
+    if(c.estado==="Adjudicada"&&["Borrador","Enviada","Rechazada"].includes(nuevoEstado)){
       const puedeRevertir=perfil?.permisos?.includes("puede_revertir")||isAdmin;
       if(!puedeRevertir){toast("Solo usuarios con permiso especial pueden revertir una cotización adjudicada","danger",4000);return;}
       if(!window.confirm("⚠ Esto liberará la reserva de stock. ¿Revertir a \""+nuevoEstado+"\"?")) return;
@@ -2751,7 +2771,7 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
         <div style={{width:220,background:"#f8fafc",borderRadius:8,padding:"10px 12px",fontSize:12}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><span style={{color:"#64748b"}}>Base</span><span>{fmt(subtotalNeto)}</span></div>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#64748b"}}>IVA 19%</span><span>{fmt(iva)}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:"#1d4ed8",borderTop:"1px solid #e2e8f0",paddingTop:4}}><span>Total</span><span>{fmt(c.total||total)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:"#1d4ed8",borderTop:"1px solid #e2e8f0",paddingTop:4}}><span>Total</span><span>{fmt(totalFinal)}</span></div>
           <div style={{fontSize:11,marginTop:3,display:"flex",justifyContent:"space-between"}}><span style={{color:"#64748b"}}>Utilidad: {fmt(util)}</span><span style={{color:mg>=25?"#15803d":"#b91c1c",fontWeight:600}}>{fmtPct(mg)}</span></div>
         </div>
       </div>
@@ -2784,9 +2804,11 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onSave,onClos
   const [factUrl,setFactUrl]=useState(c.facturaUrl||"");
   const [facturando,setFacturando]=useState(false);
 
-  const {subtotalNeto,iva,total}=calcTotalesCot(c.items||[]);
-  const util=(c.total||total)-(c.costoTotal||0);
-  const mg=c.margenProm||0;
+  const {subtotalNeto,iva,total,costoTotal:costoCalc,margenProm:mgCalc}=calcTotalesCot(c.items||[]);
+  const totalFinal=c.total||total;
+  const costoFinal=c.costoTotal||costoCalc||0;
+  const util=totalFinal-costoFinal;
+  const mg=c.margenProm??mgCalc??0;
 
   // Items sin precio (costo=0 Y precioVenta=0)
   const itemsSinPrecio=(c.items||[]).filter(i=>(!i.costo||i.costo===0)&&(!i.precioVenta||i.precioVenta===0));

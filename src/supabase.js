@@ -8,7 +8,13 @@ if(!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 export const supabase = SUPABASE_URL && SUPABASE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,        // guarda sesión en localStorage
+        autoRefreshToken: true,      // renueva el token automáticamente
+        detectSessionInUrl: true,    // detecta el magic link en la URL
+      }
+    })
   : null;
 
 const ok = () => !!supabase;

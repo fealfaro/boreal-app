@@ -104,8 +104,18 @@ Presupuesto estimado: ${ficha.presupuesto || ficha.monto || ficha.montoEstimado 
 Fecha cierre: ${ficha.fechaCierre || ficha.fechaTermino || ficha.fechaCierreOferta || ''}
 Estado: ${ficha.estado || ficha.estadoActual || ''}
 Cotizaciones recibidas hasta ahora: ${cotizacionesRecibidas} (${tieneOfertas ? 'HAY COMPETENCIA' : 'sin competencia aún'})
-Items/Productos solicitados (LISTA COMPLETA): ${JSON.stringify(ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [])}
-Condiciones especiales: ${ficha.condiciones || ficha.observaciones || ficha.descripcionAdj || ''}
+Items/Productos solicitados (LISTA COMPLETA — usa el campo descripcion/glosa de cada item, no solo el nombre genérico):
+${(() => {
+  const rawItems = ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [];
+  if (!rawItems.length) return 'No especificado en la API';
+  return rawItems.map((item, i) => {
+    const nombreGenerico = item.nombre || item.nombreProducto || item.category || '';
+    const descripcion = item.descripcion || item.glosa || item.descripcionProducto || item.especificacion || item.detalle || '';
+    const cantidad = item.cantidad || item.cantidadEstimada || item.qty || '';
+    const unidad = item.unidad || item.unidadMedida || item.um || '';
+    return `${i+1}. Categoría: "${nombreGenerico}" | Descripción específica: "${descripcion || nombreGenerico}" | Cantidad: ${cantidad} ${unidad}`;
+  }).join('\n');
+})()}
 Datos completos ficha: ${JSON.stringify(ficha).slice(0, 3000)}
 Historial completo: ${JSON.stringify(hist).slice(0, 1000)}
         `.trim();
@@ -120,11 +130,11 @@ CATÁLOGO DISPONIBLE (busca coincidencias por nombre, sinónimos y categoría):
 ${catalogo.slice(0, 5000)}
 
 INSTRUCCIONES CRÍTICAS:
-1. ITEMS SEPARADOS: Lista CADA ítem por separado en productosDetectados aunque tengan el mismo nombre genérico (ej: "Papel higiénico 24 unidades" y "Papel higiénico industrial rollo" son 2 entradas distintas). Usa el campo descripcionOriginal con el texto exacto de la licitación.
-2. CATÁLOGO: Busca coincidencias en el catálogo por nombre, sinónimos y categoría. Sé generoso — si la licitación pide "papel higiénico" y el catálogo tiene "Papel Higiénico Doble Hoja", es una coincidencia. No dejes productosEnCatalogo vacío si hay productos similares.
-3. ATRACTIVO: Calcula un score del 1 al 10 basado en: presupuesto disponible (mayor = más puntos), cantidad de cotizaciones recibidas (más competencia = menos puntos), relevancia del catálogo (más productos = más puntos), plazo de entrega (más tiempo = más puntos).
-4. COMPETENCIA: Si hay cotizaciones recibidas, indícalo claramente en el resumen.
-5. DOCUMENTOS: Detecta si exige ficha técnica, certificados, formularios o muestras (ignora fotos).
+1. ITEMS SEPARADOS: La API de MP separa nombre genérico (categoría) de descripción específica. USA SIEMPRE la descripción específica de cada ítem, no el nombre genérico. Cada ítem con distinta descripción = entrada separada en productosDetectados. "Cable rojo 2.5mm" y "Cable blanco 2.5mm" son 2 productos distintos aunque compartan el mismo nombre genérico.
+2. CATÁLOGO: Busca coincidencias por nombre, sinónimos y categoría. Sé generoso — si piden "jabón líquido" y tienes "Jabón Líquido Antibacterial", es coincidencia. No dejes productosEnCatalogo vacío si hay productos similares o equivalentes.
+3. ATRACTIVO (1-10): presupuesto alto=+3pts, sin cotizaciones recibidas=+3pts, productos en catálogo=+2pts, plazo largo=+2pts.
+4. COMPETENCIA: Si hay cotizaciones recibidas, destácalo en el resumen con exclamación.
+5. DOCUMENTOS: Detecta ficha técnica, certificados, formularios o muestras requeridos (ignora fotos).
 
 Responde ÚNICAMENTE con JSON válido sin markdown:
 {"titulo":"...","institucion":"...","descripcion":"qué piden en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico","cantidad":10,"unidad":"unidades/cajas/etc","descripcionOriginal":"texto exacto de la licitación"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO","nombre":"nombre en catálogo","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"por qué coincide"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":["ficha técnica requerida"],"cotizacionesRecibidas":${cotizacionesRecibidas},"scoreAtractivo":7,"justificacionScore":"presupuesto alto, sin competencia, productos en catálogo"}`;

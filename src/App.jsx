@@ -757,8 +757,8 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{if(estado==="_desarchivar"){archivarCot(id,false);return;}cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{if(sinCostoIds?.length)setProdsPendientes(sinCostoIds);setVolverACot(modalCot?.id);setModalCot(null);setTab("productos");}}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{if(sinCostoIds?.length)setProdsPendientes(sinCostoIds);setVolverACot(detalleCot?.id);setDetalleCot(null);setTab("productos");}}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{if(estado==="_desarchivar"){archivarCot(id,false);return;}cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{setProdsPendientes(sinCostoIds||[]);setVolverACot(modalCot?.id);setModalCot(null);setTab("productos");}}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{setProdsPendientes(sinCostoIds||[]);setVolverACot(detalleCot?.id);setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
 }
@@ -872,8 +872,8 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
   const [sort,setSort]=useState("nombre_asc");
   const [filtroFoto,setFiltroFoto]=useState("todos");
   // Auto-activate sin costo filter when coming from cotizacion
-  const [filtroCosto,setFiltroCosto]=useState(prodsPendientes.length>0?"sin_costo":"todos");
-  useEffect(()=>{if(prodsPendientes.length>0)setFiltroCosto("sin_costo");},[prodsPendientes.length]);
+  const [filtroCosto,setFiltroCosto]=useState(()=>prodsPendientes.length>0?"sin_costo":"todos");
+  useEffect(()=>{if(prodsPendientes.length>0){setFiltroCosto("sin_costo");}},[JSON.stringify(prodsPendientes)]);
   const fileRef=useRef();
 
   const handleImport=e=>{
@@ -917,12 +917,18 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
         return <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
           <span style={{flex:1,fontSize:13,color:"#1d4ed8"}}>← Cotización <strong>{cot.numero}</strong> — completa el costo y vuelve</span>
           <button onClick={()=>{
-            // Reload cot with updated productos data
-            const cotActualizada=cot?{...cot,items:(cot.items||[]).map(item=>{
-              const prod=productos.find(p=>p.id===item.productoId);
-              return prod?{...item,costo:prod.costo,precioVenta:item.precioVenta||Math.round(prod.costo*(1+prod.margen/100)*1.19)}:item;
-            })}:cot;
-            setModalCot&&setModalCot(cotActualizada);
+            // Find fresh cot from cots array with updated data
+            const freshCot=cots.find(cc=>cc.id===volverACot);
+            if(freshCot){
+              // Update items with latest product costs
+              const cotActualizada={...freshCot,items:(freshCot.items||[]).map(item=>{
+                const prod=productos.find(p=>p.id===item.productoId);
+                if(!prod||item.costo>0) return item;
+                const pv=Math.round(prod.costo*(1+(prod.margen||30)/100)*1.19);
+                return {...item,costo:prod.costo,precioVenta:item.precioVenta||pv};
+              })};
+              setModalCot&&setModalCot(cotActualizada);
+            }
             setVolverACot&&setVolverACot(null);
             setProdsPendientes&&setProdsPendientes([]);
             setFiltroCosto("todos");
@@ -2745,7 +2751,10 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
       {tienePreciosPendientes&&(
         <div style={{background:"#fef9c3",border:"1px solid #fde68a",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
           <div style={{fontSize:12,fontWeight:700,color:"#92400e",marginBottom:2}}>{itemsSinPrecio.length} producto(s) sin precio</div>
-          <button onClick={()=>{setVolverACot&&setVolverACot(c.id);onGoProductos&&onGoProductos();}}
+          <button onClick={()=>{
+            const ids=(c.items||[]).filter(i=>!i.costo||i.costo===0).map(i=>i.productoId).filter(Boolean);
+            onGoProductos&&onGoProductos(ids);
+          }}
             style={{fontSize:11,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>
             Ir a Productos para completar costos →
           </button>

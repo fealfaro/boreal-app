@@ -2008,9 +2008,12 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
 
   // ── Sync form when cotizacion prop changes (after save/estado change) ──
   useEffect(()=>{
-    setForm(prev=>({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])],
-      // preserve local edits if still in edit mode
-    }));
+    setForm({...cotizacion,ejecutivo:cotizacion.ejecutivo||perfil?.nombre||"",items:[...(cotizacion.items||[])]});
+    // Block editing Adjudicada without permission
+    if(cotizacion.estado==="Adjudicada"){
+      const puedeEditar=perfil?.permisos?.includes("puede_revertir")||isAdmin;
+      if(!puedeEditar) setVistaTab("detalle");
+    }
   },[cotizacion.id, cotizacion.estado, cotizacion.updatedAt]);
 
   const {subtotalNeto,iva,total,costoTotal,margenProm,tieneSinCosto}=calcTotalesCot(form.items);
@@ -2553,25 +2556,11 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             </div>
           </div>
 
-          {/* ── Totales + Notas ──────────────────────────── */}
-          <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"1fr auto",gap:window.innerWidth<768?12:20,alignItems:"start"}}>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
-              <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={3}
-                style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:14,resize:"vertical",boxSizing:"border-box",minHeight:80}}/>
-            </div>
-            {total>0&&(
-              <div style={{width:240,background:"#f8fafc",borderRadius:10,padding:"14px 16px",flexShrink:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:13}}><span style={{color:"#64748b"}}>Importe base</span><span style={{fontWeight:500}}>{fmt(subtotalNeto)}</span></div>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,fontSize:13}}><span style={{color:"#64748b"}}>IVA 19%</span><span style={{fontWeight:500}}>{fmt(iva)}</span></div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:16,fontWeight:800,color:"#1d4ed8",borderTop:"2px solid #e2e8f0",paddingTop:8}}>
-                  <span>Total</span><span>{fmt(total)}</span>
-                </div>
-                <div style={{marginTop:6,textAlign:"right"}}>
-                  <MargenBadge pct={margenProm??null} monto={calcUtilidad(total,costoTotal)} sinCosto={tieneSinCosto}/>
-                </div>
-              </div>
-            )}
+          {/* ── Notas ────────────────────────────────────── */}
+          <div>
+            <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
+            <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={2}
+              style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:14,resize:"vertical",boxSizing:"border-box"}}/>
           </div>
         </div>}
         </div>{/* /scrollable */}

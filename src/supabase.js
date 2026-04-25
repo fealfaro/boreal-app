@@ -236,3 +236,20 @@ export const fromDbOp = (o) => ({
   cotizacionId:         o.cotizacion_id,
   importadaEn:          o.importada_en,
 });
+
+// ── AUTH ──────────────────────────────────────────────────────
+export const auth = {
+  signInWithOtp: (email) => supabase?.auth.signInWithOtp({
+    email, options: { emailRedirectTo: window.location.origin }
+  }),
+  signOut: () => supabase?.auth.signOut(),
+  getSession: () => supabase?.auth.getSession(),
+  onAuthStateChange: (cb) => supabase?.auth.onAuthStateChange(cb),
+};
+
+export const dbPerfiles = {
+  getAll: () => ok() ? supabase.from('perfiles').select('*') : noDb(),
+  getByEmail: (email) => ok() ? supabase.from('perfiles').select('*').eq('email',email).single() : noDb(),
+  upsert: (p) => ok() ? supabase.from('perfiles').upsert(p,{onConflict:'email'}) : noDb(),
+  updateAuthId: (email, authId) => ok() ? supabase.from('perfiles').update({auth_id:authId}).eq('email',email) : noDb(),
+};

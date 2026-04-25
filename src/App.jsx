@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import LoginScreen from "./LoginScreen.jsx";
 import Combobox from "./Combobox.jsx";
 import ProductoSearch from "./ProductoSearch.jsx";
 import MilesInput from "./MilesInput.jsx";
@@ -6,10 +7,10 @@ import { ToastContainer, toast } from "./Toast.jsx";
 import { generarPDFCotizacion } from "./pdfCotizacion.js";
 import { ESTADOS_COT, ESTADOS_OP, ESTADO_COLORS, MESES_FULL, MESES, EMPRESA_INFO, CATEGORIAS_GASTO } from "./constants.js";
 import {
-  supabase,
+  supabase, auth, dbPerfiles,
   dbProductos, dbCotizaciones, dbMovimientos, dbGastos,
   dbOrganismos, dbProveedores, dbBodegas, dbOportunidades,
-  dbSolicitudes, dbConfig, dbPerfiles,
+  dbSolicitudes, dbConfig,
   fromDbProducto, fromDbCot, fromDbMov, fromDbOp,
   toDbProducto, toDbCot, toDbMov, toDbOp,
 } from "./supabase.js";
@@ -172,6 +173,16 @@ function MargenBadge({pct,monto,umbrales={},size="sm",sinCosto=false}) {
 }
 
 function PeriodoChips({periodo,setPeriodo}) {
+  // Loading auth state
+  if(session===undefined) return (
+    <div style={{minHeight:"100vh",background:"#0f1117",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:32,height:32,border:"3px solid rgba(255,255,255,.1)",borderTop:"3px solid #3b82f6",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+    </div>
+  );
+
+  // Not logged in
+  if(!session) return <LoginScreen/>;
+
   return (
     <div style={{display:"flex",gap:6,flexWrap:"nowrap",alignItems:"center",overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
       {PERIODOS.map(p=>(
@@ -205,6 +216,7 @@ function buildNotifs(cots, prods, stockMin=5) {
 
 // ── APP ───────────────────────────────────────────────────────
 export default function App() {
+  const [session,setSession]      = useState(undefined); // undefined=loading, null=no auth, obj=authed
   const [tab,setTab]             = useState("dashboard");
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
@@ -656,8 +668,23 @@ export default function App() {
             );
           })}
         </nav>
-        <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,255,255,.08)"}}>
-          <div style={{textAlign:"center",marginTop:8,fontSize:9,color:"rgba(255,255,255,.2)"}}>{BUILD_VERSION}</div>
+        <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,255,255,.08)",display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#fff",flexShrink:0}}>
+              {(perfil?.nombre||"?").charAt(0).toUpperCase()}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{perfil?.nombre||session?.user?.email}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{perfil?.cargo||perfil?.rol||"Usuario"}</div>
+            </div>
+            <button onClick={()=>auth.signOut()} title="Cerrar sesión"
+              style={{background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,.3)",padding:4,display:"flex",alignItems:"center",borderRadius:6,transition:"all .12s",flexShrink:0}}
+              onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,.7)"}
+              onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,.3)"}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+          </div>
+          <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,.2)"}}>{BUILD_VERSION}</div>
         </div>
       </div>
 
@@ -4124,12 +4151,26 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
             </div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
               <Btn onClick={()=>setModalUser(null)} variant="ghost" size="sm">Cancelar</Btn>
-              <Btn onClick={()=>{
+              <Btn onClick={async()=>{
                 if(!modalUser.data.nombre?.trim()){toast("El nombre es obligatorio","warning");return;}
-                if(modalUser.idx===null) setUsuarios(prev=>[...prev,{id:uid(),...modalUser.data}]);
-                else setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
+                if(modalUser.idx===null){
+                  // New user — save to perfiles and send magic link invite
+                  const newUser={id:uid(),...modalUser.data};
+                  setUsuarios(prev=>[...prev,newUser]);
+                  // Save to DB perfiles
+                  if(supabase&&modalUser.data.email){
+                    await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:true,permisos:modalUser.data.permisos||[]});
+                    // Send magic link invite
+                    const {error}=await auth.signInWithOtp(modalUser.data.email);
+                    if(!error) toast(`Invitación enviada a ${modalUser.data.email}`,"success",4000);
+                    else toast("Usuario guardado pero no se pudo enviar el email","warning");
+                  }
+                } else {
+                  setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
+                  if(supabase&&modalUser.data.email) await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:modalUser.data.activo!==false,permisos:modalUser.data.permisos||[]});
+                }
                 setModalUser(null);
-                              }} size="sm">Guardar</Btn>
+              }} size="sm">Guardar</Btn>
             </div>
           </div>
         </Modal>

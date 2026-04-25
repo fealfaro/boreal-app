@@ -4165,6 +4165,48 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
               <strong>Admin:</strong> puede editar cotizaciones adjudicadas/facturadas, eliminar gastos, gestionar usuarios y aprobar solicitudes.<br/>
               <strong>Ejecutivo:</strong> acceso estándar, puede solicitar modificaciones que requieren aprobación.
             </div>
+
+            {/* Permisos adicionales — solo para ejecutivos */}
+            {(modalUser.data.rol||"ejecutivo")==="ejecutivo"&&(
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:8,letterSpacing:".06em"}}>PERMISOS ADICIONALES</label>
+                <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
+                  {[
+                    {id:"puede_revertir",    label:"Revertir cotizaciones adjudicadas",  desc:"Puede cambiar estado desde Adjudicada hacia atrás"},
+                    {id:"puede_archivar",    label:"Archivar cotizaciones",              desc:"Puede archivar y desarchivar cotizaciones"},
+                    {id:"puede_ver_margen",  label:"Ver márgenes y costos",              desc:"Puede ver los costos y márgenes en cotizaciones"},
+                    {id:"puede_editar_precio",label:"Editar precios de venta",           desc:"Puede modificar precios en cotizaciones"},
+                    {id:"puede_gastos",      label:"Gestionar gastos",                   desc:"Puede crear y editar gastos"},
+                    {id:"puede_compras",     label:"Gestionar compras e inventario",     desc:"Puede operar el módulo de compras e inventario"},
+                  ].map((p,i,arr)=>{
+                    const activo=(modalUser.data.permisos||[]).includes(p.id);
+                    return (
+                      <div key={p.id} onClick={()=>{
+                        const perms=modalUser.data.permisos||[];
+                        const nuevos=activo?perms.filter(x=>x!==p.id):[...perms,p.id];
+                        setModalUser(m=>({...m,data:{...m.data,permisos:nuevos}}));
+                      }} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 13px",
+                        borderBottom:i<arr.length-1?"1px solid #f8fafc":"none",
+                        cursor:"pointer",transition:"background .1s",
+                        background:activo?"#eff6ff":"#fff"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=activo?"#dbeafe":"#f8fafc"}
+                        onMouseLeave={e=>e.currentTarget.style.background=activo?"#eff6ff":"#fff"}>
+                        <div style={{width:18,height:18,borderRadius:5,flexShrink:0,marginTop:1,
+                          border:`2px solid ${activo?"#1d4ed8":"#cbd5e1"}`,
+                          background:activo?"#1d4ed8":"#fff",
+                          display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
+                          {activo&&<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:500,color:"#0f172a"}}>{p.label}</div>
+                          <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{p.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
               <Btn onClick={()=>setModalUser(null)} variant="ghost" size="sm">Cancelar</Btn>
               <Btn onClick={async()=>{

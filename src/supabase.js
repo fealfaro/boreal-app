@@ -102,6 +102,7 @@ export const toDbProducto = (p) => ({
   stock_por_bodega: p.stockPorBodega||[],
   historial_costos: p.historialCostos||[],
   activo:           p.activo===false?false:true,
+  archivada:        p.archivada||false,
   updated_at:       new Date().toISOString(),
 });
 
@@ -140,6 +141,7 @@ export const toDbCot = (c) => ({
   margen_prom:      c.margenProm,
   origen_mp:        c.origenMP||false,
   log:              c.log||[],
+  archivada:        p.archivada||false,
   updated_at:       new Date().toISOString(),
 });
 

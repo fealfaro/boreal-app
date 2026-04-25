@@ -1,4 +1,4 @@
-export const ESTADOS_COT = ["Borrador","Enviada","Adjudicada","Rechazada","Archivada"];
+export const ESTADOS_COT = ["Borrador","Enviada","Adjudicada","Rechazada"];
 export const ESTADOS_OP  = ["En compra","En despacho","Entregado"];
 export const ESTADO_COLORS = {
   Borrador:      {bg:"#f1f5f9",text:"#475569"},

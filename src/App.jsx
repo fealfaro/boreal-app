@@ -738,7 +738,7 @@ export default function App() {
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
         {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(new Set(notifList.map(n=>n.id)))}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
-        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
+        {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} alertaStock={config.alertaStockActivada!==false} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>archivarCot(id,true))} />}
         {tab==="revision"     && <ModuloRevision cots={cots} cambiarEstado={cambiarEstado} onDetalle={setModalCot}/>}
         {tab==="operacional"  && <ModuloOperacional cots={cots} productos={productos} onCambiarEstado={cambiarEstado} onDetalle={setModalCot} setMovimientos={setMovimientos} setProductos={setProductos} perfil={perfil}/>}
@@ -867,7 +867,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 }
 
 // ── PRODUCTOS ─────────────────────────────────────────────────
-function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,prodsPendientes=[],setProdsPendientes,volverACot,setVolverACot,cots=[],setDetalleCot,setTab}) {
+function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,alertaStock=true,prodsPendientes=[],setProdsPendientes,volverACot,setVolverACot,cots=[],setDetalleCot,setTab}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
   const [filtroFoto,setFiltroFoto]=useState("todos"); // todos | sin_foto | con_foto
@@ -968,7 +968,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
               <div onClick={()=>onEdit(p)} style={{width:"100%",paddingTop:"75%",position:"relative",background:"#f8fafc",overflow:"hidden"}}>
                 {p.foto_url?<img src={p.foto_url} alt={p.nombre} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"contain",padding:"6px",boxSizing:"border-box",background:"#f8fafc"}}/>
                   :<div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38,color:"#cbd5e1"}}></div>}
-                {getStockTotal(p)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
+                {alertaStock&&getStockTotal(p)<stockMinimo&&<div style={{position:"absolute",top:7,right:7,background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"2px 7px"}}>Stock bajo</div>}
               </div>
               <div style={{padding:"10px 12px"}}>
                 <div style={{fontFamily:"'Geist Mono',monospace",fontSize:9,color:"#94a3b8",marginBottom:2}}>{p.sku}</div>
@@ -2619,6 +2619,7 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
 // ── INLINE PRODUCT SEARCH (para tabla Odoo) ───────────────────
 function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFocus,placeholder}) {
   const [q,setQ]=useState(initialValue);
+  const [dropdownPos,setDropdownPos]=useState({top:0,left:0,width:300});
   const inputRef=useRef();
   const containerRef=useRef();
 
@@ -2643,8 +2644,13 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
         ref={inputRef}
         value={q}
         onChange={e=>setQ(e.target.value)}
+        onFocus={()=>{
+          if(inputRef.current){
+            const r=inputRef.current.getBoundingClientRect();
+            setDropdownPos({top:r.bottom+4,left:r.left,width:Math.max(r.width,320)});
+          }
+        }}
         onBlur={e=>{
-          // Don't close if clicking inside the dropdown
           setTimeout(()=>{
             if(containerRef.current&&!containerRef.current.contains(document.activeElement)) onClose?.();
           },150);
@@ -2654,7 +2660,7 @@ function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFoc
       />
       {/* Dropdown — aparece debajo del input, con z-index alto */}
       {filtered.length>0&&(
-        <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.16)",zIndex:9999,maxHeight:300,overflowY:"auto"}}>
+        <div style={{position:"fixed",top:dropdownPos.top,left:dropdownPos.left,width:dropdownPos.width,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 12px 32px rgba(0,0,0,.16)",zIndex:99999,maxHeight:300,overflowY:"auto"}}>
           {filtered.map(p=>{
             const pv=calcPrecioVenta(p.costo,p.margen);
             return (

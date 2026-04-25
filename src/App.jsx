@@ -285,7 +285,7 @@ export default function App() {
   const setConfigKey=(k,v)=>{
     setConfig(p=>({...p,[k]:v}));
     // Map camelCase keys to snake_case for DB
-    const keyMap={stockMinimo:"stock_minimo",umbralVerde:"umbral_verde",umbralAmarillo:"umbral_amarillo",diasAlertaVenc:"dias_alerta_vencimiento",alertaVariacionCompra:"alerta_variacion_compra",palabrasClave:"palabras_clave"};
+    const keyMap={stockMinimo:"stock_minimo",umbralVerde:"umbral_verde",umbralAmarillo:"umbral_amarillo",diasAlertaVenc:"dias_alerta_vencimiento",alertaVariacionCompra:"alerta_variacion_compra",palabrasClave:"palabras_clave",alertaStockActivada:"alerta_stock_activada"};
     if(keyMap[k]) guardarConfigDB({[keyMap[k]]:v});
   };
 
@@ -539,6 +539,7 @@ export default function App() {
         if(cfgDb) setConfig(prev=>({
           ...prev,
           stockMinimo:        cfgDb.stock_minimo||5,
+          alertaStockActivada: cfgDb.alerta_stock_activada!==false,
           umbralVerde:        cfgDb.umbral_verde||30,
           umbralAmarillo:     cfgDb.umbral_amarillo||15,
           diasAlertaVenc:     cfgDb.dias_alerta_vencimiento||3,
@@ -1755,15 +1756,18 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
             <div style={{fontSize:13,fontWeight:500}}>Alertas de stock bajo</div>
             <div style={{fontSize:11,color:"#64748b"}}>Notifica cuando el stock cae bajo el mínimo</div>
           </div>
-          <button onClick={()=>setConfigKey("alertaStockActivada",!(config.alertaStockActivada!==false))}
+          <button onClick={()=>{
+              const nuevo=!(config.alertaStockActivada!==false);
+              setConfigKey("alertaStockActivada",nuevo);
+              toast(nuevo?"Alertas de stock activadas":"Alertas de stock desactivadas","success",2500);
+            }}
             style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",transition:"background .2s",padding:2,
               background:config.alertaStockActivada!==false?"#1d4ed8":"#e2e8f0",display:"flex",alignItems:"center",
               justifyContent:config.alertaStockActivada!==false?"flex-end":"flex-start"}}>
             <span style={{width:20,height:20,borderRadius:"50%",background:"#fff",display:"block",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
           </button>
         </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0"}}
-          style={{opacity:config.alertaStockActivada!==false?1:.4,pointerEvents:config.alertaStockActivada!==false?"auto":"none"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",opacity:config.alertaStockActivada!==false?1:.4,pointerEvents:config.alertaStockActivada!==false?"auto":"none"}}>
           <div>
             <div style={{fontSize:13,fontWeight:500}}>Stock mínimo para alerta</div>
             <div style={{fontSize:11,color:"#64748b"}}>Bajo este número el producto aparece como "Stock bajo"</div>

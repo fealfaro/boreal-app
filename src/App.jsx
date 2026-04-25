@@ -56,7 +56,7 @@ const NAV = [
   {id:"dashboard",   label:"Dashboard",    icon:Ic.grid},
   {id:"productos",   label:"Productos",    icon:Ic.box},
   {id:"cotizaciones",label:"Cotizaciones", icon:Ic.file},
-  {id:"revision",    label:"Revisión",     icon:Ic.check},
+  {id:"revision",    label:"Revisión",     icon:Ic.check, hidden:true}, // futuro: activar por rol desde Config
   {id:"operacional", label:"Operacional",  icon:Ic.clock},
   {id:"compras",     label:"Compras",      icon:Ic.cart},
   {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
@@ -75,6 +75,18 @@ const getStockTotal = (p) => {
   if(p.stockPorBodega&&p.stockPorBodega.length>0)
     return p.stockPorBodega.reduce((a,b)=>a+(b.cantidad||0),0);
   return p.stock||0;
+};
+
+// Helper: stock reservado por cotizaciones adjudicadas/preparando
+const getStockReservado = (productoId, cots) => {
+  return cots
+    .filter(c=>["Adjudicada"].includes(c.estado)&&c.estadoOp!=="despachada")
+    .flatMap(c=>c.items||[])
+    .filter(i=>i.productoId===productoId)
+    .reduce((a,i)=>a+(i.cantidad||0),0);
+};
+const getStockDisponible = (p, cots) => {
+  return Math.max(0, getStockTotal(p) - getStockReservado(p.id, cots));
 };
 
 // Helper: migrate legacy stock/ubicacion to stockPorBodega
@@ -185,7 +197,7 @@ function buildNotifs(cots, prods, stockMin=5) {
       if(d<0) n.push({id:c.id+"_ve",tipo:"danger",msg:`${c.numero} venció hace ${Math.abs(d)}d`,tab:"cotizaciones"});
     }
   });
-  const comp=cots.filter(c=>c.estadoOp==="En compra");
+  const comp=cots.filter(c=>c.estadoOp==="preparando");
   if(comp.length) n.push({id:"comp",tipo:"info",msg:`${comp.length} cot. en proceso de compra`,tab:"compras"});
   prods.forEach(p=>{if(getStockTotal(p)<stockMin) n.push({id:"s"+p.id,tipo:"warning",msg:`Stock bajo: ${p.nombre} (${fmtN(getStockTotal(p))} uds)`,tab:"inventario"});});
   return n;
@@ -364,7 +376,44 @@ export default function App() {
     setActivityLog(prev=>[{id:uid(),ts:nowISO(),usuario:perfil.nombre,accion:`Cambió estado cotización a "${estado}"`,ref:id},...prev].slice(0,200));
     setCots(prev=>prev.map(c=>{
       if(c.id!==id) return c;
+      const estadoAnterior=c.estado;
       const updated={...c,estado,...extra,log:[...(c.log||[]),logEntry],updatedAt:nowISO()};
+
+      // ── Reservar stock al adjudicar ───────────────────────
+      if(estado==="Adjudicada"&&estadoAnterior!=="Adjudicada"){
+        // Stock reservation is implicit — tracked via getStockReservado()
+        // No physical stock change needed
+        toast(`Stock reservado para ${c.numero}`,"info",2000);
+      }
+
+      // ── Liberar reserva si se revierte desde Adjudicada ──
+      if(estadoAnterior==="Adjudicada"&&["Borrador","Enviada","Archivada","Rechazada"].includes(estado)){
+        toast(`Reserva liberada para ${c.numero}`,"info",2000);
+      }
+
+      // ── Rebajar stock real al despachar ──────────────────
+      if(extra.estadoOp==="despachada"&&c.estadoOp!=="despachada"){
+        setProductos(prevP=>prevP.map(p=>{
+          const item=(c.items||[]).find(i=>i.productoId===p.id);
+          if(!item) return p;
+          const nuevaSpb=(p.stockPorBodega||[]).map((b,i)=>{
+            if(i===0) return {...b,cantidad:Math.max(0,(b.cantidad||0)-item.cantidad)};
+            return b;
+          });
+          const nuevoStock=nuevaSpb.reduce((a,b)=>a+(b.cantidad||0),0);
+          const mov={id:uid(),tipo:"salida",signo:"-",productoId:p.id,nombreProducto:p.nombre,
+            cantidad:item.cantidad,stockAntes:getStockTotal(p),stockDespues:nuevoStock,
+            referencia:c.numero,motivo:"Despacho cotización adjudicada",
+            bodegaOrigen:"",bodegaDestino:"",usuario:perfil?.nombre||"",fecha:today(),ts:nowISO()};
+          setMovimientos(prevM=>[mov,...prevM]);
+          guardarMovDB(mov);
+          const pActualizado={...p,stockPorBodega:nuevaSpb,stock:nuevoStock,updatedAt:nowISO()};
+          guardarProductoDB(pActualizado);
+          return pActualizado;
+        }));
+        toast(`Stock rebajado al despachar ${c.numero}`,"success",2500);
+      }
+
       guardarCotDB(updated);
       setDetalleCot(prev2=>prev2?.id===id?updated:prev2);
       setModalCot(prev2=>prev2?.id===id?updated:prev2);
@@ -580,11 +629,11 @@ export default function App() {
         )}
 
         <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:1,overflowY:"auto"}}>
-          {NAV.filter(item=>!item.adminOnly||isAdmin).map(item=>{
+          {NAV.filter(item=>(!item.adminOnly||isAdmin)&&!item.hidden).filter(item=>!item.hidden).map(item=>{
             const isAct=tab===item.id;
             const badge = (() => {
-              if(item.id==="revision")    return cots.filter(c=>c.estado==="Borrador").length;
-              if(item.id==="operacional") return cots.filter(c=>c.estadoOp==="En despacho").length;
+              if(item.id==="revision")    return 0; // hidden
+              if(item.id==="operacional") return cots.filter(c=>c.estadoOp==="despachada").length;
               return 0;
             })();
             return (
@@ -664,7 +713,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
   const mgNeto=mgBruto-dashGastos;
   const enCurso=cots.filter(c=>["Enviada","Adjudicada"].includes(c.estado)).length;
   const paraRev=cots.filter(c=>c.estado==="Borrador").length;
-  const pendComp=cots.filter(c=>c.estadoOp==="En compra").length;
+  const pendComp=cots.filter(c=>c.estadoOp==="preparando").length;
   const porVencer=cots.filter(c=>c.fechaVencimiento&&["Borrador","Enviada"].includes(c.estado)&&diffDays(c.fechaVencimiento)<=3&&diffDays(c.fechaVencimiento)>=0).length;
 
   const KPI=({label,value,sub,color,tab})=>{
@@ -724,7 +773,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
           {[
             {label:"En curso",     val:enCurso,   color:"#1d4ed8",tab:"cotizaciones"},
             {label:"Borrador", val:paraRev,   color:"#64748b",tab:"cotizaciones"},
-            {label:"En compra",    val:pendComp,  color:"#92400e",tab:"compras"},
+            {label:"preparando",    val:pendComp,  color:"#92400e",tab:"compras"},
             {label:"Vencen pronto",val:porVencer, color:"#b91c1c",tab:"cotizaciones"},
           ].map((r,i)=>{
             const [h,setH]=useState(false);
@@ -1123,11 +1172,11 @@ function ModuloRevision({cots,cambiarEstado,onDetalle}) {
 function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimientos,setProductos,perfil}) {
   const [periodo,setPeriodo]=useState("todo");
   const adj=cots.filter(c=>c.estado==="Adjudicada");
-  const allOp=cots.filter(c=>c.estadoOp&&["En compra","En despacho","Entregado"].includes(c.estadoOp));
+  const allOp=cots.filter(c=>c.estadoOp&&["preparando","despachada","despachada"].includes(c.estadoOp));
   const filtrados=filtrarPorPeriodo(allOp,periodo);
 
   const cambiarOp=(c,estadoOp,extra={})=>{
-    if(estadoOp==="En despacho"){
+    if(estadoOp==="despachada"){
       const itemsSinCompra=(c.items||[]).filter(item=>{
         const p=productos.find(x=>x.id===item.productoId||x.nombre===item.nombre);
         return !p||getStockTotal(p)<1;
@@ -1137,11 +1186,11 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
         return;
       }
     }
-    if(estadoOp==="Entregado"){
+    if(estadoOp==="despachada"){
       const receptor=prompt("¿Quién recibió el pedido? (obligatorio)");
       if(!receptor?.trim()){toast("Debes ingresar el nombre de quien recibió","warning");return;}
       const fechaEnt=prompt("Fecha de entrega (YYYY-MM-DD):",today());
-      onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor:receptor.trim(),fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor.trim()}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"Entregado",nota:`Entregado a ${receptor.trim()}`,usuario:"Felipe Alfaro"}]});
+      onCambiarEstado(c.id,"Adjudicada",{estadoOp,receptor:receptor.trim(),fechaEntrega:fechaEnt||today(),nota:`Entregado a ${receptor.trim()}`,log:[...(c.log||[]),{ts:nowISO(),fecha:today(),estado:"despachada",nota:`Entregado a ${receptor.trim()}`,usuario:"Felipe Alfaro"}]});
       // Deduct stock for each item and register movement
       if(setProductos && setMovimientos) {
         (c.items||[]).forEach(item=>{
@@ -1175,7 +1224,7 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
   };
 
   const deshacerOp=c=>{
-    const estados=["En compra","En despacho","Entregado"];
+    const estados=["preparando","despachada","despachada"];
     const idx=estados.indexOf(c.estadoOp);
     if(idx>0) cambiarOp(c,estados[idx-1]);
     else onCambiarEstado(c.id,"Adjudicada",{estadoOp:"",nota:"Operación revertida"});
@@ -1198,7 +1247,7 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
                 <span style={{fontSize:13,fontWeight:600,marginLeft:8}}>{c.organismo}</span>
                 <div style={{fontSize:11,color:"#64748b"}}>{fmt(c.total||0)}</div>
               </div>
-              <Btn onClick={()=>cambiarOp(c,"En compra",{fechaCompra:today()})} variant="yellow" size="sm">→ Iniciar compra</Btn>
+              <Btn onClick={()=>cambiarOp(c,"preparando",{fechaCompra:today()})} variant="yellow" size="sm">→ Iniciar compra</Btn>
             </div>
           ))}
         </div>
@@ -1224,14 +1273,14 @@ function ModuloOperacional({cots,productos,onCambiarEstado,onDetalle,setMovimien
                   {c.receptor&&<div style={{fontSize:9,color:"#065f46",marginBottom:4}}>Recibió: {c.receptor}</div>}
                   <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}>
                     <button onClick={()=>deshacerOp(c)} style={{background:"#f1f5f9",border:"none",borderRadius:5,padding:"3px 7px",cursor:"pointer",fontSize:10,color:"#64748b",display:"flex",alignItems:"center",gap:2,transition:"all .12s"}}>{Ic.undo} Deshacer</button>
-                    {estado==="En compra"&&(
+                    {estado==="preparando"&&(
                       <button onClick={()=>{
                         const fd=prompt("Fecha de despacho (YYYY-MM-DD):",addDays(today(),1));
-                        if(fd) cambiarOp(c,"En despacho",{fechaDespacho:fd});
+                        if(fd) cambiarOp(c,"despachada",{fechaDespacho:fd});
                       }} style={{background:"#e0e7ff",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#3730a3",fontWeight:500,transition:"all .12s"}}>→ Despacho</button>
                     )}
-                    {estado==="En despacho"&&(
-                      <button onClick={()=>cambiarOp(c,"Entregado")} style={{background:"#d1fae5",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#065f46",fontWeight:500,transition:"all .12s"}}>✓ Entregado</button>
+                    {estado==="despachada"&&(
+                      <button onClick={()=>cambiarOp(c,"despachada")} style={{background:"#d1fae5",border:"none",borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10,color:"#065f46",fontWeight:500,transition:"all .12s"}}>✓ Entregado</button>
                     )}
                   </div>
                 </div>
@@ -1254,7 +1303,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
   const [bodegasCompra,setBodegasCompra]=useState({});
   const [verHistorial,setVerHistorial]=useState(false);
 
-  const pendientes=cots.filter(c=>c.estadoOp==="En compra");
+  const pendientes=cots.filter(c=>c.estadoOp==="preparando");
   const allItems=pendientes.flatMap(c=>(c.items||[]).map(i=>({...i,cotNum:c.numero,cotOrg:c.organismo})));
   const agrupado=allItems.reduce((acc,item)=>{
     const k=item.productoId||item.nombre;
@@ -1359,7 +1408,7 @@ function ModuloCompras({cots,productos,setProductos,perfil,config,setMovimientos
         </div>
       ):(
         !lista.length?(
-          <div style={{background:"#fff",borderRadius:12,padding:36,textAlign:"center",color:"#94a3b8",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>Sin cotizaciones en "En compra"</div>
+          <div style={{background:"#fff",borderRadius:12,padding:36,textAlign:"center",color:"#94a3b8",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>Sin cotizaciones en "preparando"</div>
         ):(
           <div className="print-table" style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
             <div style={{overflowX:"auto"}}>
@@ -2623,7 +2672,12 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
     const retro=esRetroceso(c.estado,nuevoEstado);
     if(!retro&&tienePreciosPendientes){toast("Sin precio en "+itemsSinPrecio.map(i=>i.nombre).join(", "),"warning",5000);return;}
     const critico=ESTADOS_CRITICOS.includes(nuevoEstado);
-    if((critico||retro)&&!window.confirm("¿"+(retro?"Retroceder":"Cambiar")+" a \""+nuevoEstado+"\"?")) return;
+    // Block reverting from Adjudicada without permission
+    if(c.estado==="Adjudicada"&&["Borrador","Enviada"].includes(nuevoEstado)){
+      const puedeRevertir=perfil?.permisos?.includes("puede_revertir")||isAdmin;
+      if(!puedeRevertir){toast("Solo usuarios con permiso especial pueden revertir una cotización adjudicada","danger",4000);return;}
+      if(!window.confirm("⚠ Esto liberará la reserva de stock. ¿Revertir a \""+nuevoEstado+"\"?")) return;
+    } else if((critico||retro)&&!window.confirm("¿"+(retro?"Retroceder":"Cambiar")+" a \""+nuevoEstado+"\"?")) return;
     if(nuevoEstado==="Adjudicada"){
       const sinStock=(c.items||[]).filter(item=>{const p=productos.find(x=>x.id===item.productoId);return !p||getStockTotal(p)<item.cantidad;});
       if(sinStock.length>0){if(!window.confirm("⚠ Stock insuficiente para "+sinStock.map(i=>i.nombre).join(", ")+". ¿Adjudicar igual?"))return;}
@@ -2757,7 +2811,7 @@ function DetalleCotizacion({cotizacion:c,productos,onCambiarEstado,onSave,onClos
       if(sinStock.length>0){
         const ok=window.confirm("⚠ Stock insuficiente:\n"+sinStock.map(i=>i.nombre).join(", ")+"\n\n¿Adjudicar e iniciar compra?");
         if(!ok) return;
-        onCambiarEstado(c.id,"Adjudicada",{estadoOp:"En compra",fechaCompra:today(),nota:"Adjudicada — compra iniciada"});
+        onCambiarEstado(c.id,"Adjudicada",{estadoOp:"preparando",fechaCompra:today(),nota:"Adjudicada — compra iniciada"});
         return;
       }
     }

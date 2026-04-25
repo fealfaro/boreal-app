@@ -1988,7 +1988,11 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
     const realItems=form.items.filter(i=>i.nombre);
     if(!form.organismo?.trim()){toast("El organismo es obligatorio","warning");return;}
     onSave({...form,items:realItems,total,costoTotal,margenProm});
-    setVistaTab("detalle");
+    if(window.innerWidth<768){
+      onClose(); // mobile: close after save
+    } else {
+      setVistaTab("detalle"); // desktop: switch to detail tab
+    }
   };
 
   const inp={width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid #e2e8f0",fontSize:15,boxSizing:"border-box",outline:"none",background:"#fff",fontFamily:"'Geist',system-ui,sans-serif"};
@@ -2014,9 +2018,6 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
             <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{form.organismo||"Sin organismo"}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {wizStep===3&&(
-              <Btn onClick={handleSave} size="sm">Guardar</Btn>
-            )}
             <button onClick={()=>{if(form.items.length>0||form.organismo){if(window.confirm("¿Cerrar sin guardar?"))onClose();}else onClose();}}
               style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",fontSize:18}}>
               ×
@@ -2026,22 +2027,34 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
 
         {/* ── Step indicator ── */}
         <div style={{background:"#fff",borderBottom:"1px solid #f1f5f9",padding:"12px 16px",display:"flex",gap:0,flexShrink:0}}>
-          {STEPS.map((s,i)=>(
+          {STEPS.map((s,i)=>{
+            const canGo=s.n!==wizStep;
+            const goToStep=()=>{
+              if(s.n===wizStep) return;
+              if(s.n>wizStep){
+                // Validate before advancing
+                if(wizStep===1&&!form.organismo?.trim()){toast("Elige el organismo comprador","warning");return;}
+                if(wizStep===2&&form.items.filter(i=>i.nombre).length===0){toast("Agrega al menos un producto","warning");return;}
+              }
+              setWizStep(s.n);
+            };
+            return (
             <div key={s.n} style={{flex:1,display:"flex",alignItems:"center"}}>
-              <div onClick={()=>s.n<wizStep&&setWizStep(s.n)}
-                style={{display:"flex",alignItems:"center",gap:6,cursor:s.n<wizStep?"pointer":"default"}}>
+              <div onClick={goToStep}
+                style={{display:"flex",alignItems:"center",gap:6,cursor:canGo?"pointer":"default",userSelect:"none"}}>
                 <div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,
                   background:wizStep===s.n?"#1d4ed8":wizStep>s.n?"#dcfce7":"#f1f5f9",
                   color:wizStep===s.n?"#fff":wizStep>s.n?"#15803d":"#94a3b8",
                   border:wizStep===s.n?"2px solid #1d4ed8":wizStep>s.n?"2px solid #15803d":"2px solid #e2e8f0",
-                  transition:"all .2s"}}>
+                  transition:"all .2s",boxShadow:canGo?"0 0 0 3px rgba(59,130,246,.08)":"none"}}>
                   {wizStep>s.n?"✓":s.n}
                 </div>
                 <span style={{fontSize:12,fontWeight:wizStep===s.n?600:400,color:wizStep===s.n?"#1d4ed8":wizStep>s.n?"#15803d":"#94a3b8"}}>{s.label}</span>
               </div>
               {i<STEPS.length-1&&<div style={{flex:1,height:2,background:wizStep>s.n?"#bbf7d0":"#e2e8f0",margin:"0 8px",borderRadius:2}}/>}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── Step content ── */}

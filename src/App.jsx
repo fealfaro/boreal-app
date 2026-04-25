@@ -214,9 +214,9 @@ export default function App() {
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
   const [dismissedNotifs,setDismissedNotifs] = useState(()=>{
-    try{const s=JSON.parse(localStorage.getItem("boreal_dismissed_notifs")||"[]");return new Set(s);}catch{return new Set();}
+    try{const s=JSON.parse(localStorage.getItem("boreal_dismissed_notifs")||"[]");return new Set(Array.isArray(s)?s:[]);}catch{return new Set();}
   });
-  // Persist dismissed notifs to localStorage
+  // Persist dismissed notifs to localStorage on every change
   useEffect(()=>{
     try{localStorage.setItem("boreal_dismissed_notifs",JSON.stringify([...dismissedNotifs]));}catch{}
   },[dismissedNotifs]);
@@ -743,7 +743,7 @@ export default function App() {
 
       {/* MAIN */}
       <div style={{marginLeft:isMob?0:220,padding:isMob?"14px 14px":"24px 24px",minHeight:isMob?"calc(100vh - 56px)":"100vh"}}>
-        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);return s;})} onClearAll={()=>setDismissedNotifs(prev=>{const s=new Set([...prev,...notifList.map(n=>n.id)]);return s;})}/>}
+        {tab==="notificaciones"&& <ModuloNotificaciones notifList={notifList} goTab={goTab} cots={cots} config={config} onSeen={()=>setSeenNotifs(true)} dismissed={dismissedNotifs} onDismiss={(id)=>setDismissedNotifs(prev=>{const s=new Set(prev);s.add(id);try{localStorage.setItem("boreal_dismissed_notifs",JSON.stringify([...s]));}catch{}return s;})} onClearAll={()=>{const ids=notifList.map(n=>n.id);setDismissedNotifs(prev=>{const s=new Set([...prev,...ids]);try{localStorage.setItem("boreal_dismissed_notifs",JSON.stringify([...s]));}catch{}return s;})}}/>}
         {tab==="dashboard"    && <Dashboard cots={cots} adjFact={adjFact} totalV={totalV} mgBruto={mgBruto} mgPct={mgPct} tasa={tasa} vMes={vMes} maxV={maxV} periDash={periDash} setPeriDash={setPeriDash} gastos={gastos} dashGastos={dashGastos} goTab={goTab} isMob={isMob}/>}
         {tab==="productos"    && <ModuloProductos productos={productos} setProductos={setProductos} onEdit={setModalProd} prodsPendientes={prodsPendientes} setProdsPendientes={setProdsPendientes} onNew={()=>setModalProd({sku:"",nombre:"",proveedor:"",costo:0,margen:30,foto_url:"",stockPorBodega:[{bodega:bodegas[0]||"",cantidad:0}],historialCostos:[]})} onClonar={clonarProd} bodegas={bodegas} perfil={perfil} stockMinimo={config.stockMinimo||5} alertaStock={config.alertaStockActivada!==false} volverACot={volverACot} setVolverACot={setVolverACot} cots={cots} setDetalleCot={setDetalleCot} setTab={setTab}/>}
         {tab==="cotizaciones" && <ModuloCotizaciones cots={cots} total={cots.length} busqueda={busqueda} setBusqueda={setBusqueda} filtroEst={filtroEst} setFiltroEst={setFiltroEst} sortCot={sortCot} setSortCot={setSortCot} onNew={nuevaCot} onDetalle={setModalCot} onEditar={setModalCot} umbrales={{verde:config.umbralVerde,amarillo:config.umbralAmarillo}} periodo={periodo} setPeriodo={setPeriodo} onArchivar={(ids)=>ids.forEach(id=>archivarCot(id,true))} />}
@@ -1828,19 +1828,6 @@ function ModuloConfig({proveedores,setProv,empresas,setEmpresas,bodegas,setBodeg
             <span style={{fontSize:12,color:"#64748b"}}>{config.umbralAmarillo||15}%</span>
           </div>
         </div>
-      </div>
-
-      {/* Gestión de usuarios — redirige a Administración */}
-      <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"14px 16px",marginBottom:13,display:"flex",alignItems:"center",gap:12}}>
-        <span style={{fontSize:24}}>👥</span>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:600,fontSize:13,color:"#1d4ed8"}}>Gestión de usuarios y permisos</div>
-          <div style={{fontSize:12,color:"#64748b",marginTop:1}}>Administra usuarios, roles y permisos por función desde el módulo de Administración</div>
-        </div>
-        <button onClick={()=>document.dispatchEvent(new CustomEvent("boreal-goto",{detail:"admin"}))}
-          style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",whiteSpace:"nowrap"}}>
-          Ir a Administración →
-        </button>
       </div>
 
 

@@ -443,7 +443,7 @@ export default function App() {
     facturaNum:"",facturaUrl:"",estadoOp:"",log:[]
   });
 
-  const goTab=t=>{setTab(t);setSideOpen(false);};
+  const goTab=t=>{setTab(t);setSideOpen(false);window.location.hash=t;};
   const [winW,setWinW]=useState(window.innerWidth);
 
   // ── Auth session ──────────────────────────────────────────────
@@ -4141,7 +4141,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
 
       {/* Modal usuario */}
       {modalUser&&(
-        <Modal onClose={()=>setModalUser(null)} maxWidth={460}>
+        <Modal onClose={()=>setModalUser(null)} maxWidth={540}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
             <h2 style={{fontSize:16,fontWeight:700,margin:0}}>{modalUser.idx===null?"Nuevo usuario":"Editar usuario"}</h2>
             <CloseBtn onClose={()=>setModalUser(null)}/>
@@ -5103,72 +5103,63 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 
 
 // ── MÓDULO NOTIFICACIONES ─────────────────────────────────────
-function ModuloNotificaciones({notifList,goTab,cots,config,onSeen,dismissed=new Set(),onDismiss,onClearAll}) {
+function ModuloNotificaciones({notifList,goTab,onSeen,dismissed=new Set(),onDismiss,onClearAll}) {
   useEffect(()=>{if(onSeen)onSeen();},[]);
-
   const visible=notifList.filter(n=>!dismissed.has(n.id));
-
-  const TIPO_CONFIG={
-    warning: {bg:"#fef9c3",border:"#fde68a",dot:"#d97706",icon:"⚠️"},
-    danger:  {bg:"#fee2e2",border:"#fecaca",dot:"#ef4444",icon:"🔴"},
-    info:    {bg:"#eff6ff",border:"#bfdbfe",dot:"#3b82f6",icon:"ℹ️"},
-    success: {bg:"#f0fdf4",border:"#bbf7d0",dot:"#16a34a",icon:"✅"},
+  const cfg={
+    warning:{dot:"#f59e0b",label:"Advertencia"},
+    danger: {dot:"#ef4444",label:"Urgente"},
+    info:   {dot:"#3b82f6",label:"Info"},
+    success:{dot:"#22c55e",label:"OK"},
   };
-
   return (
-    <div style={{maxWidth:640,margin:"0 auto"}}>
-      {/* Header */}
+    <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div>
           <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Notificaciones</h1>
-          <p style={{fontSize:12,color:"#94a3b8",margin:"3px 0 0"}}>
-            {visible.length===0?"Todo al día":""+visible.length+" pendiente"+(visible.length!==1?"s":"")}
-          </p>
+          <p style={{fontSize:12,color:"#94a3b8",margin:"4px 0 0"}}>{visible.length===0?"Sin pendientes":visible.length+" pendiente"+(visible.length!==1?"s":"")}</p>
         </div>
-        {visible.length>0&&(
-          <button onClick={onClearAll}
-            style={{fontSize:12,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>
-            Marcar todo como visto
-          </button>
-        )}
+        {visible.length>0&&<button onClick={onClearAll}
+          style={{fontSize:12,color:"#64748b",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",cursor:"pointer"}}>
+          Marcar todo como leído
+        </button>}
       </div>
 
-      {/* Empty state */}
-      {visible.length===0&&(
-        <div style={{background:"#fff",borderRadius:16,border:"1px solid #f1f5f9",padding:"48px 24px",textAlign:"center"}}>
-          <div style={{fontSize:36,marginBottom:12}}>✅</div>
-          <div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginBottom:6}}>Todo al día</div>
+      {visible.length===0?(
+        <div style={{background:"#fff",borderRadius:14,border:"1px solid #f1f5f9",padding:"56px 24px",textAlign:"center"}}>
+          <div style={{width:56,height:56,background:"#f0fdf4",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:24}}>✓</div>
+          <div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginBottom:4}}>Todo al día</div>
           <div style={{fontSize:13,color:"#94a3b8"}}>No hay notificaciones pendientes</div>
         </div>
-      )}
-
-      {/* Notifications list */}
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {visible.map(n=>{
-          const tc=TIPO_CONFIG[n.tipo]||TIPO_CONFIG.info;
-          return (
-            <div key={n.id}
-              style={{background:"#fff",borderRadius:12,border:`1px solid #f1f5f9`,
-                borderLeft:`4px solid ${tc.dot}`,padding:"14px 16px",
-                display:"flex",alignItems:"flex-start",gap:12,
-                cursor:n.tab?"pointer":"default",transition:"background .1s"}}
-              onClick={()=>n.tab&&goTab(n.tab)}
-              onMouseEnter={e=>n.tab&&(e.currentTarget.style.background="#f8fafc")}
-              onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:tc.dot,flexShrink:0,marginTop:5}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:500,color:"#0f172a",lineHeight:1.4}}>{n.msg}</div>
-                {n.tab&&<div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>
-                  Ver en {n.tab.charAt(0).toUpperCase()+n.tab.slice(1)} →
-                </div>}
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {visible.map(n=>{
+            const c=cfg[n.tipo]||cfg.info;
+            return (
+              <div key={n.id} onClick={()=>n.tab&&goTab(n.tab)}
+                style={{background:"#fff",borderRadius:12,border:"1px solid #f1f5f9",
+                  borderLeft:"3px solid "+c.dot,
+                  padding:"14px 16px 14px 18px",display:"flex",alignItems:"center",gap:12,
+                  cursor:n.tab?"pointer":"default",transition:"background .1s"}}
+                onMouseEnter={e=>n.tab&&(e.currentTarget.style.background="#f8fafc")}
+                onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:500,color:"#0f172a"}}>{n.msg}</div>
+                  {n.tab&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>
+                    Ir a {n.tab.charAt(0).toUpperCase()+n.tab.slice(1)} →
+                  </div>}
+                </div>
+                <button onClick={e=>{e.stopPropagation();onDismiss(n.id);}}
+                  style={{color:"#cbd5e1",background:"none",border:"none",cursor:"pointer",
+                    fontSize:20,lineHeight:1,padding:"0 2px",flexShrink:0,transition:"color .1s"}}
+                  onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
+                  onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
               </div>
-              <button onClick={e=>{e.stopPropagation();onDismiss(n.id);}}
-                style={{background:"none",border:"none",cursor:"pointer",color:"#cbd5e1",fontSize:18,lineHeight:1,padding:"0 2px",flexShrink:0}}
-                title="Descartar">×</button>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

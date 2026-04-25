@@ -208,7 +208,8 @@ function buildNotifs(cots, prods, stockMin=5) {
 // ── APP ───────────────────────────────────────────────────────
 export default function App() {
   const [session,setSession]      = useState(undefined); // undefined=loading, null=no auth, obj=authed
-  const [tab,setTab]             = useState("dashboard");
+  const getInitialTab = () => { const h=window.location.hash.replace("#",""); return h&&NAV.find(n=>n.id===h)?h:"dashboard"; };
+  const [tab,setTab]             = useState(getInitialTab);
   const [sideOpen,setSideOpen]   = useState(false);
   const [dbReady,setDbReady]     = useState(false);
   const [seenNotifs,setSeenNotifs] = useState(false);
@@ -4029,7 +4030,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <span style={{fontSize:13,color:"#64748b"}}>{usuarios.length} usuarios registrados</span>
-            <Btn onClick={()=>setModalUser({idx:null,data:{...EMPTY_USER}})} size="sm">+ Nuevo usuario</Btn>
+            <Btn onClick={()=>setModalUser({idx:null,data:{...EMPTY_USER,permisos:[]}})} size="sm">+ Nuevo usuario</Btn>
           </div>
           <div style={{background:"#fff",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
             <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
@@ -4066,7 +4067,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                     </td>
                     <td style={{padding:"10px 13px"}}>
                       <div style={{display:"flex",gap:5}}>
-                        <button onClick={()=>setModalUser({idx:i,data:{...u}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar</button>
+                        <button onClick={()=>setModalUser({idx:i,data:{...u,permisos:u.permisos||[]}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar</button>
                         {u.nombre!==perfil?.nombre&&(
                           <button onClick={()=>setConfirmDelUser({idx:i,nombre:u.nombre})} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#b91c1c",fontWeight:500}}>Eliminar</button>
                         )}
@@ -5105,95 +5106,73 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 function ModuloNotificaciones({notifList,goTab,cots,config,onSeen,dismissed=new Set(),onDismiss,onClearAll}) {
   useEffect(()=>{if(onSeen)onSeen();},[]);
 
-  const now=new Date();
-  const fmtRelative=ts=>{
-    if(!ts) return "";
-    const d=Math.floor((now-new Date(ts))/60000);
-    if(d<1) return "ahora";
-    if(d<60) return `${d}m`;
-    if(d<1440) return `${Math.floor(d/60)}h`;
-    return `${Math.floor(d/1440)}d`;
+  const visible=notifList.filter(n=>!dismissed.has(n.id));
+
+  const TIPO_CONFIG={
+    warning: {bg:"#fef9c3",border:"#fde68a",dot:"#d97706",icon:"⚠️"},
+    danger:  {bg:"#fee2e2",border:"#fecaca",dot:"#ef4444",icon:"🔴"},
+    info:    {bg:"#eff6ff",border:"#bfdbfe",dot:"#3b82f6",icon:"ℹ️"},
+    success: {bg:"#f0fdf4",border:"#bbf7d0",dot:"#16a34a",icon:"✅"},
   };
 
-  // Build enriched notif list with timestamps from cot data
-  const enriched=notifList.map(n=>{
-    const cot=cots.find(c=>n.id.includes(c.id));
-    return {...n, ts:cot?.updatedAt||cot?.creadaEn||null};
-  });
-
-  const visible=enriched.filter(n=>!dismissed.has(n.id));
-
-  const GRUPOS=[
-    {id:"urgente",label:"Urgente",color:"#b91c1c",
-      items:visible.filter(n=>n.tipo==="danger")},
-    {id:"atencion",label:"Atención",color:"#854d0e",
-      items:visible.filter(n=>n.tipo==="warning")},
-    {id:"info",label:"Información",color:"#1d4ed8",
-      items:visible.filter(n=>n.tipo==="info")},
-  ].filter(g=>g.items.length>0);
-
   return (
-    <div>
+    <div style={{maxWidth:640,margin:"0 auto"}}>
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div>
-          <h1 style={{fontSize:22,fontWeight:700,marginBottom:2}}>Notificaciones</h1>
-          <p style={{color:"#64748b",fontSize:13,margin:0}}>
-            {visible.length===0?"Todo al día":""+visible.length+" alerta"+(visible.length>1?"s":"")}
+          <h1 style={{fontSize:22,fontWeight:700,margin:0}}>Notificaciones</h1>
+          <p style={{fontSize:12,color:"#94a3b8",margin:"3px 0 0"}}>
+            {visible.length===0?"Todo al día":""+visible.length+" pendiente"+(visible.length!==1?"s":"")}
           </p>
         </div>
         {visible.length>0&&(
           <button onClick={onClearAll}
-            style={{fontSize:12,color:"#94a3b8",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 12px",cursor:"pointer"}}>
-            Limpiar todo
+            style={{fontSize:12,color:"#64748b",background:"none",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 12px",cursor:"pointer"}}>
+            Marcar todo como visto
           </button>
         )}
       </div>
 
       {/* Empty state */}
       {visible.length===0&&(
-        <div style={{background:"#fff",borderRadius:16,padding:"48px 24px",textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-          <div style={{width:52,height:52,background:"#dcfce7",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",color:"#15803d"}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <h3 style={{fontSize:15,fontWeight:700,marginBottom:4,color:"#15803d"}}>Todo al día</h3>
-          <p style={{color:"#64748b",fontSize:12}}>Sin alertas pendientes</p>
+        <div style={{background:"#fff",borderRadius:16,border:"1px solid #f1f5f9",padding:"48px 24px",textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:12}}>✅</div>
+          <div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginBottom:6}}>Todo al día</div>
+          <div style={{fontSize:13,color:"#94a3b8"}}>No hay notificaciones pendientes</div>
         </div>
       )}
 
-      {/* Grupos */}
-      {GRUPOS.map(g=>(
-        <div key={g.id} style={{marginBottom:16}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:".08em",marginBottom:6}}>
-            {g.label.toUpperCase()} · {g.items.length}
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {g.items.map(item=>(
-              <div key={item.id} style={{background:"#fff",borderRadius:10,border:"1px solid #f1f5f9",borderLeft:"3px solid "+g.color,display:"flex",alignItems:"center",gap:0,overflow:"hidden"}}>
-                {/* Click area */}
-                <div onClick={()=>goTab(item.tab)}
-                  style={{flex:1,padding:"12px 14px",cursor:"pointer",minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-                    <span style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{item.msg}</span>
-                    {item.ts&&<span style={{fontSize:10,color:"#cbd5e1",flexShrink:0}}>{fmtRelative(item.ts)}</span>}
-                  </div>
-                  {item.sub&&<div style={{fontSize:11,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.sub}</div>}
-                </div>
-                {/* Dismiss button */}
-                <button onClick={()=>onDismiss&&onDismiss(item.id)}
-                  style={{padding:"0 12px",height:"100%",background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:16,alignSelf:"stretch",display:"flex",alignItems:"center"}}
-                  onMouseEnter={e=>e.currentTarget.style.color="#94a3b8"}
-                  onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>
-                  ×
-                </button>
+      {/* Notifications list */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {visible.map(n=>{
+          const tc=TIPO_CONFIG[n.tipo]||TIPO_CONFIG.info;
+          return (
+            <div key={n.id}
+              style={{background:"#fff",borderRadius:12,border:`1px solid #f1f5f9`,
+                borderLeft:`4px solid ${tc.dot}`,padding:"14px 16px",
+                display:"flex",alignItems:"flex-start",gap:12,
+                cursor:n.tab?"pointer":"default",transition:"background .1s"}}
+              onClick={()=>n.tab&&goTab(n.tab)}
+              onMouseEnter={e=>n.tab&&(e.currentTarget.style.background="#f8fafc")}
+              onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:tc.dot,flexShrink:0,marginTop:5}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:500,color:"#0f172a",lineHeight:1.4}}>{n.msg}</div>
+                {n.tab&&<div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>
+                  Ver en {n.tab.charAt(0).toUpperCase()+n.tab.slice(1)} →
+                </div>}
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+              <button onClick={e=>{e.stopPropagation();onDismiss(n.id);}}
+                style={{background:"none",border:"none",cursor:"pointer",color:"#cbd5e1",fontSize:18,lineHeight:1,padding:"0 2px",flexShrink:0}}
+                title="Descartar">×</button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
 
 // ── MÓDULO FACTURACIÓN ────────────────────────────────────────
 function ModuloFacturacion({cots, perfil}) {

@@ -632,6 +632,9 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                         <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr",padding:"8px 12px",borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",alignItems:"center",gap:8,background:crearNuevo?"#fffbeb":"#fff"}}>
                           <div style={{minWidth:0}}>
                             <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{det.nombre}</div>
+                            {det.descripcionOriginal&&det.descripcionOriginal!==det.nombre&&(
+                              <div style={{fontSize:10,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={det.descripcionOriginal}>{det.descripcionOriginal}</div>
+                            )}
                             {crearNuevo&&<div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>}
                           </div>
                           <div style={{fontSize:12,fontWeight:500,textAlign:"center"}}>{cant} {unidad}</div>

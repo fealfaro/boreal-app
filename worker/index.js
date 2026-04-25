@@ -1,10 +1,16 @@
 /**
- * Boreal API Proxy — Cloudflare Worker
+ * Boreal API Proxy — Cloudflare Worker v1.21.1
  * 
  * Rutas:
- *   POST /anthropic  → proxy a api.anthropic.com (usa ANTHROPIC_API_KEY del secret)
- *   GET  /mp?id=XXX  → fetch Mercado Público + análisis IA
+ *   POST /anthropic  → proxy a api.anthropic.com
+ *   GET  /mp?id=XXX  → fetch Mercado Público + análisis híbrido
  *   OPTIONS *        → CORS preflight
+ *
+ * Arquitectura:
+ *   - Items: extraídos de productos_solicitados en código (gratis, exacto)
+ *   - Matching catálogo: algoritmo TF-IDF en código (gratis, determinístico)
+ *   - Score atractivo: calculado en código (gratis)
+ *   - IA (Haiku): solo resumen, recomendación y docs requeridos (~600 tokens)
  */
 
 const CORS = {
@@ -13,203 +19,206 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// ── Matching en código ─────────────────────────────────────────────────────
+
+const STOPWORDS = new Set([
+  'de','del','la','el','los','las','un','una','en','con','por','para','que',
+  'se','su','sus','al','y','o','a','x','no','sin','color','rollo','bolsa',
+  'caja','pack','paquete','litro','litros','ml','kg','gr','cc','metros',
+  'metro','unidades','unidad','ea','und','pza','pieza','set','tipo','marca',
+]);
+
+function normalizar(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !STOPWORDS.has(w));
+}
+
+function scoreMatch(tokensA, tokensB) {
+  if (!tokensA.length || !tokensB.length) return 0;
+  const setB = new Set(tokensB);
+  let hits = 0;
+  for (const t of tokensA) {
+    if (setB.has(t)) hits += 1;
+    else if ([...setB].some(b => b.includes(t) || t.includes(b))) hits += 0.4;
+  }
+  const union = new Set([...tokensA, ...tokensB]).size;
+  return hits / union;
+}
+
+function matchCatalogo(items, catalogoJSON) {
+  let catalogo = [];
+  try { catalogo = JSON.parse(catalogoJSON); } catch { return { enCatalogo: [], nuevos: [] }; }
+  if (!catalogo.length) return { enCatalogo: [], nuevos: items.map(i => ({ nombre: i.nombre, descripcion: i.descripcionOriginal, cantidadEstimada: i.cantidad, unidad: i.unidad })) };
+
+  const enCatalogo = [];
+  const nuevos = [];
+
+  for (const item of items) {
+    const tokensItem = normalizar(item.nombre + ' ' + item.descripcionOriginal + ' ' + item.nombreGenerico);
+
+    let mejorScore = 0;
+    let mejorProd = null;
+
+    for (const prod of catalogo) {
+      const tokensProd = normalizar(prod.nombre + ' ' + (prod.sku || '') + ' ' + (prod.categoria || ''));
+      const s = scoreMatch(tokensItem, tokensProd);
+      if (s > mejorScore) { mejorScore = s; mejorProd = prod; }
+    }
+
+    if (mejorProd && mejorScore >= 0.10) {
+      const confianza = mejorScore >= 0.25 ? 'alta' : mejorScore >= 0.15 ? 'media' : 'baja';
+      enCatalogo.push({
+        sku:             mejorProd.sku || mejorProd.id,
+        productoId:      mejorProd.id,
+        nombre:          mejorProd.nombre,
+        foto_url:        mejorProd.foto_url || null,
+        costo:           mejorProd.costo || 0,
+        margen:          mejorProd.margen || 30,
+        cantidadEstimada: item.cantidad,
+        confianza,
+        score:           Math.round(mejorScore * 100),
+        itemOrigen:      item.nombre,
+        nota:            `Match ${Math.round(mejorScore*100)}% con "${item.nombre}"`,
+      });
+    } else {
+      nuevos.push({
+        nombre:          item.nombre,
+        descripcion:     item.descripcionOriginal || item.nombre,
+        cantidadEstimada: item.cantidad,
+        unidad:          item.unidad,
+      });
+    }
+  }
+
+  return { enCatalogo, nuevos };
+}
+
+function calcScore(presupuesto, cotizaciones, enCatalogo, plazo) {
+  let s = 5;
+  if (presupuesto >= 5000000)      s += 3;
+  else if (presupuesto >= 1000000) s += 2;
+  else if (presupuesto >= 300000)  s += 1;
+  if (cotizaciones === 0)     s += 2;
+  else if (cotizaciones <= 2) s += 1;
+  else                        s -= 1;
+  const altasMatch = enCatalogo.filter(p => p.confianza === 'alta').length;
+  if (altasMatch >= 3) s += 1;
+  if (plazo >= 5)      s += 1;
+  return Math.max(1, Math.min(10, s));
+}
+
+// ── Worker ─────────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env) {
-    // ── CORS preflight ──────────────────────────────────────
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
-    }
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url = new URL(request.url);
 
-    // ── POST /anthropic — proxy a Claude API ────────────────
+    // ── POST /anthropic ───────────────────────────────────────
     if (request.method === 'POST' && url.pathname === '/anthropic') {
       try {
         const body = await request.json();
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-          },
+          headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify(body),
         });
-        const data = await resp.json();
-        return new Response(JSON.stringify(data), {
-          status: resp.status,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
+        return new Response(JSON.stringify(await resp.json()), { status: resp.status, headers: { ...CORS, 'Content-Type': 'application/json' } });
       } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), {
-          status: 500,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
       }
     }
 
-    // ── GET /mp?id=XXX — scrape Mercado Público + análisis ──
+    // ── GET /mp ───────────────────────────────────────────────
     if (request.method === 'GET' && url.pathname === '/mp') {
       const id = url.searchParams.get('id');
-      const catalogo = url.searchParams.get('catalogo') || '';
-
-      if (!id) {
-        return new Response(JSON.stringify({ error: 'ID requerido' }), {
-          status: 400,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
-      }
+      const catalogoJSON = url.searchParams.get('catalogo') || '[]';
+      if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
       try {
-        // 1. Llamar a la API interna del buscador de Compra Ágil
-        const MP_API = 'https://api.buscador.mercadopublico.cl/compra-agil';
-        // MP_API_KEY se configura como secret en Cloudflare Workers
-        // Si no está configurado, usa el valor por defecto conocido
         const MP_KEY = env.MP_API_KEY || 'e93089e4-437c-4723-b343-4fa20045e3bc';
+        const BASE   = 'https://api.buscador.mercadopublico.cl/compra-agil';
 
-        const [fichaResp, historialResp] = await Promise.all([
-          fetch(`${MP_API}?action=ficha&code=${id}`, {
-            headers: { 'x-api-key': MP_KEY, 'Content-Type': 'application/json' },
-          }),
-          fetch(`${MP_API}?action=historial&code=${id}`, {
-            headers: { 'x-api-key': MP_KEY, 'Content-Type': 'application/json' },
-          }),
+        const [fichaResp, histResp] = await Promise.all([
+          fetch(`${BASE}?action=ficha&code=${id}`,     { headers: { 'x-api-key': MP_KEY } }),
+          fetch(`${BASE}?action=historial&code=${id}`, { headers: { 'x-api-key': MP_KEY } }),
         ]);
 
-        const fichaData  = fichaResp.ok  ? await fichaResp.json()  : {};
-        const historial  = historialResp.ok ? await historialResp.json() : {};
+        const ficha = ((fichaResp.ok ? await fichaResp.json() : {})?.payload || {});
+        const hist  = ((histResp.ok  ? await histResp.json()  : {})?.payload || {});
 
-        // Log para debug
-        const mpDebug = {
-          fichaStatus: fichaResp.status,
-          historialStatus: historialResp.status,
-          fichaKeys: Object.keys(fichaData?.data || fichaData || {}),
-        };
+        // Items directamente del campo correcto de la API
+        const rawItems = ficha.productos_solicitados || ficha.items || ficha.productos || [];
+        const itemsExtraidos = rawItems.map((item, i) => ({
+          idx:               i + 1,
+          nombre:            item.descripcion || item.nombre || '',
+          nombreGenerico:    item.nombre || '',
+          descripcionOriginal: item.descripcion || '',
+          cantidad:          Number(item.cantidad) || 1,
+          unidad:            item.unidad_medida || item.unidad || 'unidades',
+        }));
 
-        // 2. Extraer items directamente del API response (no confiar en IA para esto)
-        const ficha = fichaData?.payload || fichaData?.data || fichaData || {};
-        const hist  = historial?.payload  || historial?.data  || historial  || {};
+        const cotizacionesRecibidas = Number(hist?.cantidadOfertas || hist?.cantidad_ofertas || hist?.ofertas?.length || 0);
+        const presupuesto  = Number(ficha.presupuesto_estimado || 0);
+        const plazoEntrega = Number(ficha.plazo_entrega || 0);
 
-        const cotizacionesRecibidas = hist?.cantidadOfertas || hist?.ofertas?.length || hist?.numeroOfertas || 0;
-        const tieneOfertas = cotizacionesRecibidas > 0;
+        // Matching en código — exacto y gratuito
+        const { enCatalogo, nuevos } = matchCatalogo(itemsExtraidos, catalogoJSON);
+        const scoreAtractivo = calcScore(presupuesto, cotizacionesRecibidas, enCatalogo, plazoEntrega);
 
-        // Extraer TODOS los items con sus descripciones específicas
-        // Campo real de la API: productos_solicitados[].descripcion
-        const rawItems = ficha.productos_solicitados || ficha.items || ficha.productos || ficha.lineas || ficha.itemsLicitacion || [];
-        const itemsExtraidos = rawItems.map((item, i) => {
-          const nombreGenerico = item.nombre || '';
-          const descripcion = item.descripcion || item.glosa || '';
-          const cantidad = item.cantidad || 1;
-          const unidad = item.unidad_medida || item.unidad || item.unidadMedida || 'unidades';
-          return {
-            nombre: descripcion || nombreGenerico,  // descripcion específica primero
-            nombreGenerico,
-            descripcionOriginal: descripcion,
-            cantidad: Number(cantidad) || 1,
-            unidad,
-            idx: i + 1,
-          };
-        });
-
-        const textoItems = itemsExtraidos.length > 0
-          ? itemsExtraidos.map(it => `${it.idx}. "${it.nombre}" — ${it.cantidad} ${it.unidad}`).join('\n')
-          : 'No especificado en la API';
-
-        const textoLicitacion = `
-ID: ${id}
+        // IA solo para: resumen + recomendación + docs (~600 tokens)
+        const promptIA = `Licitación Mercado Público Chile.
 Nombre: ${ficha.nombre || ''}
-Institución: ${ficha.nombreOrganismo || ficha.institucion || ficha.organismo || ''}
-Descripción general: ${ficha.descripcion || ''}
-Presupuesto estimado: ${ficha.presupuesto_estimado || ficha.presupuesto || ficha.monto || 'No especificado'} ${ficha.moneda || 'CLP'}
-Fecha cierre: ${ficha.fecha_cierre || ficha.fechaCierre || ''}
-Plazo entrega: ${ficha.plazo_entrega || ''} días
-Cotizaciones recibidas: ${cotizacionesRecibidas}
-PRODUCTOS SOLICITADOS (${itemsExtraidos.length} items — YA EXTRAÍDOS, NO MODIFICAR ESTA LISTA):
-${textoItems}
-        `.trim();
+Institución: ${ficha.nombreOrganismo || ficha.organismo || ''}
+Presupuesto: $${presupuesto.toLocaleString('es-CL')} CLP | Plazo: ${plazoEntrega}d | Cotizaciones recibidas: ${cotizacionesRecibidas}
+Descripción: ${(ficha.descripcion || '').slice(0, 400)}
+Items (${itemsExtraidos.length}): ${itemsExtraidos.slice(0,10).map(i=>`${i.nombre} x${i.cantidad}`).join(', ')}
+Coincidencias catálogo: ${enCatalogo.length}/${itemsExtraidos.length}
 
-        // 3. Analizar con Claude
-        const prompt = `Eres asistente de ventas de empresa chilena de suministros de limpieza y aseo.
-
-LICITACIÓN:
-${textoLicitacion}
-
-CATÁLOGO DISPONIBLE (nombre y SKU):
-${catalogo.slice(0, 5000)}
-
-TAREA: Los productos solicitados YA están extraídos arriba (no los modifiques ni agrupes). Tu trabajo es:
-1. Para cada producto de la lista, busca si existe algo similar en el catálogo (por nombre, sinónimo o categoría). Sé generoso.
-2. Calcula score de atractivo 1-10: presupuesto alto=+3, sin cotizaciones=+3, productos en catálogo=+2, plazo largo=+2.
-3. Detecta documentos requeridos (ficha técnica, certificados, formularios — ignora fotos).
-4. Escribe un resumen breve.
-
-Responde ÚNICAMENTE con JSON válido sin markdown:
-{"titulo":"...","institucion":"...","descripcion":"...","productosEnCatalogo":[{"sku":"SKU-EXACTO","nombre":"nombre en catálogo","cantidadEstimada":2,"confianza":"alta/media/baja","nota":"por qué coincide con qué item"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":1}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":[],"cotizacionesRecibidas":${cotizacionesRecibidas},"scoreAtractivo":7,"justificacionScore":"..."}`;
-
+Responde SOLO JSON sin markdown (sin explicaciones fuera del JSON):
+{"titulo":"...","institucion":"...","descripcion":"qué piden en 1 oración","relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"análisis breve para el equipo de ventas","requerimientosEspeciales":[],"justificacionScore":"${scoreAtractivo}/10 porque..."}`;
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 2000,
-            messages: [{ role: 'user', content: prompt }],
-          }),
+          headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 600, messages: [{ role: 'user', content: promptIA }] }),
         });
 
-        const claudeData = await claudeResp.json();
-        const txt = claudeData.content?.[0]?.text || '';
-        
-        // Debug info included in response
-        const debugInfo = {
-          claudeStatus: claudeResp.status,
-          hasContent: !!claudeData.content,
-          contentLength: txt.length,
-          txtPreview: txt.slice(0, 200),
-          claudeError: claudeData.error || null,
-        };
-        
-        let analisis = {};
+        let iaExtra = {};
         try {
-          const jsonMatch = txt.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            analisis = JSON.parse(jsonMatch[0]);
-          }
-        } catch(parseErr) {
-          analisis = {
-            resumen: txt.slice(0, 300) || 'Error al parsear respuesta',
-            relevante: true,
-            recomendacion: 'revisar',
-            productosEnCatalogo: [],
-            productosNuevos: [],
-            _parseError: parseErr.message,
-          };
-        }
-
-        // ALWAYS inject items from API directly — never trust IA to list them
-        analisis.productosDetectados = itemsExtraidos;
-        analisis.cotizacionesRecibidas = analisis.cotizacionesRecibidas ?? cotizacionesRecibidas;
+          const txt = (await claudeResp.json()).content?.[0]?.text || '';
+          const m = txt.match(/\{[\s\S]*\}/);
+          if (m) iaExtra = JSON.parse(m[0]);
+        } catch {}
 
         return new Response(JSON.stringify({
           ok: true,
           url: `https://buscador.mercadopublico.cl/ficha?code=${id}`,
-          analisis,
-        }), {
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
+          analisis: {
+            titulo:                  iaExtra.titulo        || ficha.nombre || id,
+            institucion:             iaExtra.institucion   || ficha.nombreOrganismo || '',
+            descripcion:             iaExtra.descripcion   || (ficha.descripcion || '').slice(0, 150),
+            relevante:               iaExtra.relevante     ?? (enCatalogo.length > 0),
+            recomendacion:           iaExtra.recomendacion || (enCatalogo.length > 0 ? 'cotizar' : 'revisar'),
+            resumen:                 iaExtra.resumen       || '',
+            requerimientosEspeciales: iaExtra.requerimientosEspeciales || [],
+            justificacionScore:      iaExtra.justificacionScore || '',
+            productosDetectados:     itemsExtraidos,
+            productosEnCatalogo:     enCatalogo,
+            productosNuevos:         nuevos,
+            cotizacionesRecibidas,
+            scoreAtractivo,
+            presupuesto,
+            _source: 'web',
+          },
+        }), { headers: { ...CORS, 'Content-Type': 'application/json' } });
 
       } catch (e) {
-        return new Response(JSON.stringify({
-          error: e.message,
-          ok: false,
-        }), {
-          status: 500,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
+        return new Response(JSON.stringify({ error: e.message, ok: false }), { status: 500, headers: { ...CORS, 'Content-Type': 'application/json' } });
       }
     }
 

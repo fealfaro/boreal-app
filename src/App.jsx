@@ -2355,247 +2355,182 @@ function ModalCotizacion({cotizacion,productos,empresas,empresasData=[],config,o
   }
   // ── END MOBILE WIZARD ─────────────────────────────────────
 
-  // Full-screen overlay, not the small Modal wrapper
+  // ── DESKTOP: Detalle always shown when saved, form when new/editing ──
+  const canEdit = cotizacion.estado!=="Adjudicada" || perfil?.permisos?.includes("puede_revertir") || isAdmin;
+
   return (
-    <div style={{position:"fixed",inset:0,background:window.innerWidth<768?"#fff":"rgba(0,0,0,.5)",display:"flex",alignItems:"stretch",justifyContent:"center",zIndex:300,padding:window.innerWidth<768?0:"20px"}}
-      onClick={e=>{if(e.target===e.currentTarget){if(form.items.length>0||form.organismo){if(window.confirm("¿Cerrar sin guardar los cambios?"))onClose();}else onClose();}}}>
-      <div style={{background:"#fff",borderRadius:window.innerWidth<768?0:16,width:"100%",maxWidth:window.innerWidth<768?"100%":1100,display:"flex",flexDirection:"column",boxShadow:window.innerWidth<768?"none":"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:"20px"}}
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:860,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
         onClick={e=>e.stopPropagation()}>
 
-        {/* ── Header fijo ─────────────────────────────── */}
-        <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-            {isSaved&&<div style={{fontFamily:"'Geist Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700,flexShrink:0}}>{form.numero}</div>}
-            <EstadoBadge estado={form.estado||"Borrador"}/>
-            {isSaved&&(
-              <div style={{display:"flex",gap:1,background:"#f1f5f9",borderRadius:7,padding:2,marginLeft:4,flexShrink:0}}>
-                {[["editar","Editar"],["detalle","Detalle"]].map(([t,l])=>(
-                  <button key={t} onClick={()=>setVistaTab(t)}
-                    style={{padding:"3px 10px",borderRadius:5,border:"none",cursor:"pointer",fontSize:12,
-                      fontWeight:vistaTab===t?600:400,background:vistaTab===t?"#fff":"transparent",
-                      color:vistaTab===t?"#0f172a":"#64748b",
-                      boxShadow:vistaTab===t?"0 1px 2px rgba(0,0,0,.08)":"none"}}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* ── Header ───────────────────────────────────── */}
+        <div style={{padding:"12px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {isSaved&&<span style={{fontFamily:"'Geist Mono',monospace",fontSize:12,color:"#1d4ed8",fontWeight:700}}>{cotizacion.numero}</span>}
+            <EstadoBadge estado={(isSaved?cotizacion.estado:form.estado)||"Borrador"}/>
           </div>
           <CloseBtn onClose={onClose}/>
         </div>
 
         {/* ── Cuerpo scrolleable ───────────────────────── */}
-        <div style={{flex:1,overflowY:"auto",padding:window.innerWidth<768?"12px 14px":"20px 24px"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"20px 24px"}}>
+          {/* Si guardada → mostrar detalle siempre */}
+          {isSaved&&!vistaTab.startsWith("edit")&&(
+            <DetalleCotBody c={cotizacion} productos={productos} onCambiarEstado={onCambiarEstado}
+              onEditar={canEdit?()=>setVistaTab("editar"):null}
+              perfil={perfil} isAdmin={isAdmin||false}
+              solicitudes={solicitudes||[]} setSolicitudes={setSolicitudes||function(){}}
+              setVolverACot={setVolverACot||function(){}} onGoProductos={onGoProductos||function(){}}
+              logoB64={logoB64}/>
+          )}
 
-        {/* ── DETALLE TAB ─────────────────────────────── */}
-        {vistaTab==="detalle"&&(
-          <DetalleCotBody c={cotizacion} productos={productos} onCambiarEstado={onCambiarEstado} onEditar={()=>setVistaTab("editar")} perfil={perfil} isAdmin={isAdmin||false} solicitudes={solicitudes||[]} setSolicitudes={setSolicitudes||function(){}} setVolverACot={setVolverACot||function(){}} onGoProductos={onGoProductos||function(){}} logoB64={logoB64}/>
-        )}
-
-        {/* ── EDITAR TAB ──────────────────────────────── */}
-        {vistaTab==="editar"&&<div>
-
-          {/* Campos encabezado — 1 col mobile, 2 col desktop */}
-          <div style={{display:"grid",gridTemplateColumns:window.innerWidth<768?"1fr":"1fr 1fr",gap:"10px 16px",marginBottom:16}}>
-            <div style={{gridColumn:"1/-1"}}>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORGANISMO COMPRADOR *</label>
-              <div>
+          {/* Formulario edición — nueva o editando */}
+          {(!isSaved||vistaTab.startsWith("edit"))&&<div>
+            {/* Campos encabezado */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 16px",marginBottom:16}}>
+              <div style={{gridColumn:"1/-1"}}>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ORGANISMO COMPRADOR *</label>
                 <Combobox value={form.organismo||""} onChange={v=>{
                   set("organismo",v);
                   const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===v);
                   if(org?.rut) set("rut_cliente",org.rut);
                 }} options={empresas} placeholder="Buscar o crear organismo…"/>
-                {form.organismo&&(()=>{
-                  const org=empresasData.find(e=>(typeof e==="string"?e:e.nombre)===form.organismo);
-                  if(!org||typeof org==="string") return null;
-                  const hasData=org.rut||org.email||org.telefono;
-                  if(!hasData) return null;
-                  return (
-                    <div style={{marginTop:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                      {org.rut&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>RUT: <strong>{org.rut}</strong></span>}
-                      {org.email&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>{org.email}</span>}
-                      {org.telefono&&<span style={{fontSize:11,color:"#475569",background:"#f1f5f9",padding:"3px 8px",borderRadius:20}}>{org.telefono}</span>}
-                      <button type="button" onClick={()=>{onClose();setTimeout(()=>document.dispatchEvent(new CustomEvent("ir-maestros")),100);}}
-                        style={{fontSize:11,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline"}}>
-                        Editar organismo →
-                      </button>
-                    </div>
-                  );
-                })()}
               </div>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>EJECUTIVO</label>
-              <input value={form.ejecutivo||""} onChange={e=>set("ejecutivo",e.target.value)} style={inp}/>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ESTADO</label>
-              <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)} style={{...inp,background:"#fff",cursor:"pointer"}}>
-                {ESTADOS_COT.map(e=><option key={e}>{e}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>FECHA</label>
-              <input type="date" value={form.fecha||""} onChange={e=>set("fecha",e.target.value)} style={inp}/>
-            </div>
-            <div>
-              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>VENCIMIENTO</label>
-              <input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)} style={inp}/>
-            </div>
-            {window.innerWidth>=768&&(
               <div>
-                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ID OPORTUNIDAD</label>
-                <input value={form.oportunidad_id||""} onChange={e=>set("oportunidad_id",e.target.value)} style={inp}/>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>EJECUTIVO</label>
+                <input value={form.ejecutivo||""} onChange={e=>set("ejecutivo",e.target.value)}
+                  style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
               </div>
-            )}
-          </div>
-
-          {/* ── Tabla de productos estilo Odoo ──────────── */}
-          <div style={{marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <span style={{fontSize:12,fontWeight:700,color:"#0f172a",textTransform:"uppercase",letterSpacing:"0.5px"}}>Líneas de cotización</span>
-              <button onClick={()=>setShowMargen(v=>!v)} style={{fontSize:11,color:showMargen?"#1d4ed8":"#94a3b8",background:"none",border:"none",cursor:"pointer",fontWeight:500}}>
-                {showMargen?"▾ Ocultar margen":"▸ Mostrar margen"}
-              </button>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>ESTADO</label>
+                <select value={form.estado||"Borrador"} onChange={e=>set("estado",e.target.value)}
+                  style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none",background:"#fff"}}>
+                  {ESTADOS_COT.map(e=><option key={e}>{e}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>FECHA</label>
+                <input type="date" value={form.fecha||""} onChange={e=>set("fecha",e.target.value)}
+                  style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>VENCIMIENTO</label>
+                <input type="date" value={form.fechaVencimiento||""} onChange={e=>set("fechaVencimiento",e.target.value)}
+                  style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,boxSizing:"border-box",outline:"none"}}/>
+              </div>
             </div>
 
-            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:window.innerWidth<768?500:"100%"}}>
-                <thead>
-                  <tr style={{background:"#f8fafc"}}>
-                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700,width:36}}></th>
-                    <th style={{padding:"10px 12px",textAlign:"left",fontSize:11,color:"#64748b",fontWeight:700,minWidth:140}}>Producto</th>
-                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:70}}>Cant.</th>
-                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:110}}>Precio (IVA)</th>
-                    <th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:100}}>Subtotal</th>
-                    {showMargen&&<th style={{padding:"10px 12px",fontSize:11,color:"#64748b",fontWeight:700,width:80}}>Margen</th>}
-                    <th style={{width:36}}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.map((item,i)=>{
-                    const mgL=item.precioVenta>0&&item.costo>0?((item.precioVenta/1.19-item.costo)/item.costo*100):0;
-                    return (
-                      <tr key={i} style={{borderTop:"1px solid #f1f5f9",background:"#fff"}}>
-                        {/* Foto */}
-                        <td style={{padding:"8px 10px",width:44}}>
-                          {item.foto_url
-                            ?<img src={item.foto_url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,display:"block"}}/>
-                            :<div style={{width:30,height:30,background:"#f1f5f9",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#94a3b8"}}></div>
-                          }
-                        </td>
-                        {/* Nombre del producto — clic abre buscador para reemplazar */}
-                        <td style={{padding:"6px 10px",minWidth:200,position:"relative"}}>
-                          {searchIdx===i ? (
-                            <InlineProductSearch
-                              productos={productos}
-                              initialValue={item.nombre}
-                              onSelect={p=>selectProductInRow(i,p)}
-                              onClose={()=>setSearchIdx(null)}
-                              autoFocus
-                            />
-                          ) : (
-                            <div onClick={()=>setSearchIdx(i)} style={{cursor:"pointer",padding:"4px 6px",borderRadius:6,transition:"background .1s"}}
-                              onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                              <div style={{fontWeight:500,fontSize:13}}>{item.nombre}</div>
+            {/* Líneas */}
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <label style={{fontSize:11,color:"#64748b",fontWeight:600}}>LÍNEAS DE COTIZACIÓN</label>
+                <button onClick={()=>setShowMargen(v=>!v)} style={{fontSize:11,color:"#94a3b8",background:"none",border:"none",cursor:"pointer"}}>
+                  {showMargen?"▾ Ocultar margen":"▸ Mostrar margen"}
+                </button>
+              </div>
+              <div style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"1px solid #f1f5f9"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr style={{borderBottom:"1px solid #f1f5f9"}}>
+                    <th style={{padding:"8px 12px",textAlign:"left",fontSize:10,color:"#94a3b8",fontWeight:700}}>Producto</th>
+                    <th style={{padding:"8px 12px",textAlign:"center",fontSize:10,color:"#94a3b8",fontWeight:700,width:70}}>Cant.</th>
+                    <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#94a3b8",fontWeight:700,width:120}}>Precio (IVA)</th>
+                    <th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#94a3b8",fontWeight:700,width:100}}>Subtotal</th>
+                    {showMargen&&<th style={{padding:"8px 12px",textAlign:"right",fontSize:10,color:"#94a3b8",fontWeight:700,width:80}}>Margen</th>}
+                    <th style={{width:28}}></th>
+                  </tr></thead>
+                  <tbody>
+                    {form.items.map((item,i)=>(
+                      <tr key={i} style={{borderBottom:"1px solid #f8fafc"}}>
+                        <td style={{padding:"8px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            {item.foto_url&&<img src={item.foto_url} alt="" style={{width:28,height:28,borderRadius:5,objectFit:"cover",flexShrink:0}}/>}
+                            <div>
+                              <div style={{fontSize:13,fontWeight:500}}>{item.nombre}</div>
                               {item.sku&&<div style={{fontSize:10,color:"#94a3b8",fontFamily:"'Geist Mono',monospace"}}>{item.sku}</div>}
                             </div>
-                          )}
+                          </div>
                         </td>
-                        {/* Cantidad */}
-                        <td style={{padding:"6px 10px",width:80}}>
-                          <MilesInput value={item.cantidad} onChange={v=>updateItem(i,"cantidad",Number(v)||1)}
-                            style={{width:60,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center",outline:"none"}}/>
+                        <td style={{padding:"8px 12px"}}>
+                          <input type="number" min={1} value={item.cantidad}
+                            onChange={e=>updateItem(i,"cantidad",Number(e.target.value))}
+                            style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"center"}}/>
                         </td>
-                        {/* Precio */}
-                        <td style={{padding:"6px 10px",width:130}}>
-                          <MilesInput value={Math.round(item.precioVenta||0)} onChange={v=>updateItem(i,"precioVenta",Number(v)||0)}
-                            style={{width:110,padding:"6px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,outline:"none"}}/>
+                        <td style={{padding:"8px 12px"}}>
+                          <MilesInput value={item.precioVenta||0} onChange={v=>updateItem(i,"precioVenta",v)}
+                            style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:13,textAlign:"right"}}/>
                         </td>
-                        {/* Subtotal */}
-                        <td style={{padding:"6px 10px",fontWeight:600,color:"#0f172a",width:120}}>
-                          {item.precioVenta>0?fmt(Math.round(item.precioVenta/1.19)*item.cantidad):"—"}
+                        <td style={{padding:"8px 12px",textAlign:"right",fontWeight:600,fontSize:13}}>
+                          {fmt(Math.round((item.precioVenta||0)/1.19)*(item.cantidad||0))}
                         </td>
-                        {/* Margen */}
-                        {showMargen&&<td style={{padding:"6px 10px",width:80}}>
-                          <span style={{fontSize:11,fontWeight:600,color:mgL<0?"#b91c1c":mgL>=20?"#15803d":"#92400e"}}>{item.costo>0&&item.precioVenta>0?fmtPct(mgL):<span style={{color:"#d97706",fontWeight:600}}>sin costo</span>}</span>
+                        {showMargen&&<td style={{padding:"8px 12px",textAlign:"right"}}>
+                          <MargenBadge pct={item.costo>0?Math.round((((item.precioVenta||0)/1.19)-item.costo)/item.costo*100):null} sinCosto={!item.costo}/>
                         </td>}
-                        {/* Eliminar */}
-                        <td style={{padding:"6px 8px",textAlign:"center",width:36}}>
-                          <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:18,lineHeight:1,padding:2,borderRadius:4,transition:"color .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.color="#ef4444"}
-                            onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>×</button>
+                        <td style={{padding:"8px 4px",textAlign:"center"}}>
+                          <button onClick={()=>removeItem(i)} style={{color:"#cbd5e1",background:"none",border:"none",cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}}>×</button>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>{/* /overflowX */}
+                    ))}
+                    <tr>
+                      <td colSpan={showMargen?6:5} style={{padding:"8px 12px"}}>
+                        {searchIdx==="new"?(
+                          <InlineProductSearch productos={productos} initialValue="" onSelect={p=>selectProductInRow("new",p)}
+                            onClose={()=>setSearchIdx(null)} autoFocus placeholder="Buscar producto…"/>
+                        ):(
+                          <button onClick={()=>setSearchIdx("new")}
+                            style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:0}}>
+                            <span style={{fontSize:20,fontWeight:300}}>+</span> Agregar producto
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            {/* Botón agregar + buscador flotante — FUERA de la tabla */}
-            <div style={{marginTop:0,borderTop:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:"0 0 10px 10px",padding:"10px 12px",position:"relative"}}>
-              {searchIdx==="new" ? (
-                <InlineProductSearch
-                  productos={productos}
-                  initialValue=""
-                  onSelect={p=>selectProductInRow("new",p)}
-                  onClose={()=>setSearchIdx(null)}
-                  autoFocus
-                  placeholder="Buscar y seleccionar producto…"
-                />
-              ) : (
-                <button onClick={addEmptyRow}
-                  style={{background:"none",border:"none",color:"#1d4ed8",cursor:"pointer",fontSize:13,fontWeight:500,display:"flex",alignItems:"center",gap:6,padding:0}}>
-                  <span style={{fontSize:20,lineHeight:1,fontWeight:300}}>+</span> Agregar producto
-                </button>
-              )}
+            {/* Notas */}
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
+              <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={2}
+                style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
             </div>
-          </div>
+          </div>}
+        </div>
 
-          {/* ── Notas ────────────────────────────────────── */}
-          <div>
-            <label style={{fontSize:11,color:"#64748b",fontWeight:600,display:"block",marginBottom:4}}>NOTAS / CONDICIONES</label>
-            <textarea value={form.notas||""} onChange={e=>set("notas",e.target.value)} rows={2}
-              style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:14,resize:"vertical",boxSizing:"border-box"}}/>
-          </div>
-        </div>}
-        </div>{/* /scrollable */}
-
-        {/* ── Footer fijo ─────────────────────────── */}
-        <div style={{padding:"12px 16px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
+        {/* ── Footer fijo ───────────────────────────────── */}
+        <div style={{padding:"10px 20px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#fff"}}>
           {/* Izquierda */}
-          <div style={{display:"flex",gap:8}}>
-            {isSaved&&vistaTab==="detalle"&&["Enviada","Adjudicada"].includes(cotizacion.estado)&&(
-              <button onClick={()=>generarPDFCotizacion({...form,total,costoTotal,margenProm},logoB64)}
-                style={{display:"flex",alignItems:"center",gap:7,background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:500}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Descargar cotización
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {(!isSaved||vistaTab.startsWith("edit"))&&total>0&&(
+              <div style={{display:"flex",gap:10,fontSize:12,color:"#64748b"}}>
+                <span>Neto <strong style={{color:"#0f172a"}}>{fmt(subtotalNeto)}</strong></span>
+                <span>IVA <strong style={{color:"#0f172a"}}>{fmt(iva)}</strong></span>
+                <span>Total <strong style={{color:"#1d4ed8",fontSize:14}}>{fmt(total)}</strong></span>
+                {margenProm!=null&&costoTotal>0&&<MargenBadge pct={margenProm} monto={calcUtilidad(total,costoTotal)} sinCosto={tieneSinCosto}/>}
+              </div>
+            )}
+            {isSaved&&!vistaTab.startsWith("edit")&&["Enviada","Adjudicada"].includes(cotizacion.estado)&&(
+              <button onClick={()=>generarPDFCotizacion({...cotizacion},logoB64)}
+                style={{display:"flex",alignItems:"center",gap:6,background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:500,fontFamily:"inherit"}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Descargar PDF
               </button>
             )}
           </div>
           {/* Derecha */}
           <div style={{display:"flex",gap:8}}>
-            {isSaved&&vistaTab==="detalle"&&(
-              <Btn onClick={()=>setVistaTab("editar")} variant="ghost">Editar</Btn>
-            )}
-            {isSaved&&vistaTab==="editar"&&(
-              <Btn onClick={()=>setVistaTab("detalle")} variant="ghost">Cancelar</Btn>
-            )}
-            {vistaTab==="editar"&&(
-              <Btn onClick={handleSave} style={{minWidth:120}}>
-                {isSaved?"Guardar cambios":"Guardar cotización"}
-              </Btn>
-            )}
+            {isSaved&&vistaTab.startsWith("edit")&&<Btn onClick={()=>setVistaTab("detalle")} variant="ghost">Cancelar</Btn>}
+            {isSaved&&!vistaTab.startsWith("edit")&&canEdit&&<Btn onClick={()=>setVistaTab("editar")} variant="ghost">Editar</Btn>}
+            {(!isSaved||vistaTab.startsWith("edit"))&&<Btn onClick={handleSave}>{isSaved?"Guardar cambios":"Guardar cotización"}</Btn>}
           </div>
         </div>
+
       </div>
     </div>
   );
 }
+
 
 // ── INLINE PRODUCT SEARCH (para tabla Odoo) ───────────────────
 function InlineProductSearch({productos,initialValue="",onSelect,onClose,autoFocus,placeholder}) {

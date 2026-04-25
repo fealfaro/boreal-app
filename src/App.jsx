@@ -746,7 +746,7 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
           {ESTADOS_COT.map(e=>{
             const cnt=cots.filter(c=>c.estado===e).length;
             if(!cnt) return null;
-            const col=ESTADO_COLORS[e]; const pct=cots.length>0?(cnt/cots.length*100):0;
+            const col=ESTADO_COLORS[e]||{bg:"#f1f5f9",text:"#64748b"}; const pct=cots.length>0?(cnt/cots.length*100):0;
             return (<div key={e} style={{padding:"8px 10px",background:"#f8fafc",borderRadius:8}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                 <EstadoBadge estado={e}/><span style={{fontSize:12,color:"#64748b",fontWeight:600}}>{cnt}</span>

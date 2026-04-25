@@ -222,7 +222,7 @@ export default function App() {
   const [detalleCot,setDetalleCot]= useState(null);
   const [showNotifs,setShowNotifs]= useState(false);
   const [busqueda,setBusqueda]   = useState("");
-  const [filtroEst,setFiltroEst] = useState("accion");
+  const [filtroEst,setFiltroEst] = useState("Borrador");
   const [periodo,setPeriodo]     = useState("30d");
   const [sortCot,setSortCot]     = useState("fecha_desc");
   const [periDash,setPeriDash]   = useState("mes");
@@ -888,7 +888,6 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
 
   // Tabs por estado real
   const TABS=[
-    {id:"accion",   label:"Activas",     fn:c=>["Borrador","Enviada"].includes(c.estado)&&c.estado!=="Archivada"},
     {id:"Borrador",   label:"Borrador",    fn:c=>c.estado==="Borrador"},
     {id:"Enviada",    label:"Enviada",     fn:c=>c.estado==="Enviada"},
     {id:"Adjudicada", label:"Adjudicada",  fn:c=>c.estado==="Adjudicada"},
@@ -900,7 +899,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
   const activeTab=TABS.find(t=>t.id===filtroEst)||TABS[0];
 
   const enPeriodo=(fecha)=>{
-    if(filtroEst==="accion") return true;
+    if(filtroEst==="Borrador"||filtroEst==="Enviada") return true; // always show active
     if(!periodo||periodo==="todo") return true;
     if(!fecha) return false;
     const d=new Date(fecha); const now=new Date();
@@ -988,7 +987,7 @@ function ModuloCotizaciones({cots,total,busqueda,setBusqueda,filtroEst,setFiltro
             style={{flex:1,border:"none",outline:"none",fontSize:13,padding:"7px 0",background:"transparent"}}/>
           {busqueda&&<button onClick={()=>setBusqueda("")} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1}}>×</button>}
         </div>
-        {filtroEst!=="accion"&&(
+        {!["Borrador","Enviada"].includes(filtroEst)&&(
           <select value={periodo} onChange={e=>setPeriodo(e.target.value)}
             style={{padding:"7px 10px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:12,background:"#fff",cursor:"pointer",color:"#475569"}}>
             <option value="7d">Últimos 7 días</option>
@@ -2663,8 +2662,8 @@ function DetalleCotBody({c,productos,onCambiarEstado,onEditar,logoB64,perfil,isA
                 <tr key={i} style={{borderBottom:"1px solid #f8fafc"}}>
                   <td style={{padding:"8px 8px 8px 12px"}}>
                     {foto
-                      ? <img src={foto} alt="" style={{width:32,height:32,borderRadius:6,objectFit:"cover",display:"block"}}/>
-                      : <div style={{width:32,height:32,borderRadius:6,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📦</div>
+                      ? <img src={foto} alt="" style={{width:42,height:42,borderRadius:7,objectFit:"cover",display:"block"}}/>
+                      : <div style={{width:42,height:42,borderRadius:7,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📦</div>
                     }
                   </td>
                   <td style={{padding:"8px 12px"}}>

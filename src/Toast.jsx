@@ -20,8 +20,9 @@ export function ToastContainer() {
   const colors = {
     success: { bg: "#15803d", icon: "✓" },
     error:   { bg: "#b91c1c", icon: "✕" },
+    danger:  { bg: "#b91c1c", icon: "✕" },
     info:    { bg: "#1d4ed8", icon: "ℹ" },
-    warning: { bg: "#92400e", icon: "⚠" },
+    warning: { bg: "#d97706", icon: "⚠" },
   };
 
   if (toasts.length === 0) return null;

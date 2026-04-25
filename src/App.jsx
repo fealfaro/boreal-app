@@ -64,7 +64,7 @@ const NAV = [
   {id:"inventario",  label:"Inventario",   icon:Ic.warehouse},
   {id:"gastos",      label:"Gastos",       icon:Ic.wallet},
   {id:"rentabilidad",label:"Rentabilidad", icon:Ic.chart},
-  {id:"admin",       label:"Administración",icon:Ic.settings, adminOnly:true},
+  {id:"admin",       label:"Usuarios",      icon:Ic.users,    adminOnly:true},
   {id:"maestros",    label:"Maestros",      icon:Ic.box},
   {id:"oportunidades",label:"Oportunidades", icon:Ic.file},
   {id:"facturacion", label:"Facturación",  icon:Ic.file},
@@ -4089,7 +4089,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                     </td>
                     <td style={{padding:"10px 13px"}}>
                       <div style={{display:"flex",gap:5}}>
-                        <button onClick={()=>setModalUser({idx:i,data:{...u,permisos:Array.isArray(u.permisos)?u.permisos:[]}})} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar permisos</button>
+                        <button onClick={()=>{const realIdx=usuarios.findIndex(x=>x.id===u.id);setModalUser({idx:realIdx,data:{...u,permisos:Array.isArray(u.permisos)?u.permisos:[]}});}} style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#475569",fontWeight:500}}>Editar</button>
                         {u.nombre!==perfil?.nombre&&(
                           <button onClick={()=>setConfirmDelUser({idx:i,nombre:u.nombre})} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,color:"#b91c1c",fontWeight:500}}>Eliminar</button>
                         )}
@@ -4248,7 +4248,7 @@ function ModuloAdmin({usuarios,setUsuarios,solicitudes,setSolicitudes,activityLo
                     else toast("Usuario guardado pero no se pudo enviar el email","warning");
                   }
                 } else {
-                  setUsuarios(prev=>prev.map((x,i)=>i===modalUser.idx?{...x,...modalUser.data}:x));
+                  setUsuarios(prev=>prev.map(x=>x.id===modalUser.data.id?{...x,...modalUser.data}:x));
                   if(supabase&&modalUser.data.email){await dbPerfiles.upsert({nombre:modalUser.data.nombre,email:modalUser.data.email,rol:modalUser.data.rol||"ejecutivo",cargo:modalUser.data.cargo||"",activo:modalUser.data.activo!==false,permisos:Array.isArray(modalUser.data.permisos)?modalUser.data.permisos:[]});toast("Usuario actualizado","success",2000);}
                 }
                 setModalUser(null);

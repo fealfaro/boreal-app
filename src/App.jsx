@@ -4274,7 +4274,7 @@ function BtnCotizar({op, nuevos, overrides, onCrearYCotizar}) {
 
 function ModuloOportunidades({oportunidades,setOportunidades,productos,setProductos,
   empresas,setEmpresas,cots,setCots,config,perfil,nuevaCot,setModalCot,
-  guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab,setProdsPendientes,setModalCot}) {
+  guardarProductoDB,guardarCotDB,empresasNombres=[],setDetalleCot,setTab,setProdsPendientes}) {
 
   const [filtro,     setFiltro]     = useState("nuevas");
   const [sortBy,     setSortBy]     = useState("potencial");

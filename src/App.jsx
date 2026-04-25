@@ -173,16 +173,6 @@ function MargenBadge({pct,monto,umbrales={},size="sm",sinCosto=false}) {
 }
 
 function PeriodoChips({periodo,setPeriodo}) {
-  // Loading auth state
-  if(session===undefined) return (
-    <div style={{minHeight:"100vh",background:"#0f1117",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:32,height:32,border:"3px solid rgba(255,255,255,.1)",borderTop:"3px solid #3b82f6",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-    </div>
-  );
-
-  // Not logged in
-  if(!session) return <LoginScreen/>;
-
   return (
     <div style={{display:"flex",gap:6,flexWrap:"nowrap",alignItems:"center",overflowX:"auto",paddingBottom:2,WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
       {PERIODOS.map(p=>(
@@ -453,6 +443,23 @@ export default function App() {
 
   const goTab=t=>{setTab(t);setSideOpen(false);};
   const [winW,setWinW]=useState(window.innerWidth);
+
+  // ── Auth session ──────────────────────────────────────────────
+  useEffect(()=>{
+    if(!supabase){setSession(null);return;}
+    supabase.auth.getSession().then(({data})=>setSession(data?.session||null));
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+      setSession(session||null);
+      if(session?.user?.email){
+        dbPerfiles.getByEmail(session.user.email).then(({data})=>{
+          if(data) setPerfil(p=>({...p,...data,permisos:data.permisos||[]}));
+          if(data&&!data.auth_id) dbPerfiles.updateAuthId(session.user.email,session.user.id);
+        });
+      }
+    });
+    return()=>subscription?.unsubscribe?.();
+  },[]);
+
   useEffect(()=>{const h=()=>setWinW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
   useEffect(()=>{const h=()=>setTab("maestros");document.addEventListener("ir-maestros",h);return()=>document.removeEventListener("ir-maestros",h);},[]);
   useEffect(()=>{setSeenNotifs(false);},[notifList.length]);
@@ -611,6 +618,15 @@ export default function App() {
       <style>{`@keyframes pulse{0%,100%{transform:scale(.8);opacity:.4}50%{transform:scale(1);opacity:1}}`}</style>
     </div>
   );
+
+  // ── Auth guards ─────────────────────────────────────────────
+  if(session===undefined) return (
+    <div style={{minHeight:"100vh",background:"#0f1117",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:32,height:32,border:"3px solid rgba(255,255,255,.1)",borderTop:"3px solid #3b82f6",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+  if(!session) return <LoginScreen/>;
 
   return (
     <div style={{fontFamily:"'Geist',system-ui,sans-serif",background:"#f4f5f7",minHeight:"100vh",color:"#0f172a"}}>

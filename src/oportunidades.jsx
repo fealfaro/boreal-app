@@ -103,7 +103,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           unidadCompra: r["Unidad de compra"]||"",
           fechaPublicacion: r["Fecha de publicación"]||"",
           fechaCierre,
-          presupuesto: parseFloat(String(r["Presupuesto estimado"]||"0").replace(/[^0-9.]/g,""))||0,
+          presupuesto: parseFloat(String(r["Presupuesto estimado"]||r["Monto estimado"]||r["Presupuesto"]||r["Monto"]||r["monto"]||r["presupuesto"]||"0").replace(/[^0-9.,]/g,"").replace(",","."))||0,
           estadoConvocatoria: r["Estado de Convocatoria"]||"",
           cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
           estado, matches, analisisIA:null, cotizacionId:null,
@@ -260,13 +260,14 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     const notasInternas="Compra Ágil MP — ID: "+op.id+"\nPresupuesto: "+fmt(op.presupuesto)+(productosCreados.length>0?"\nProductos pendientes de precio: "+productosCreados.map(p=>p.nombre).join(", "):"");
     const tots=calcTotalesCot(items);
     const cot={id:uid(),numero:numCot,organismo:instNorm,rut_cliente:"",oportunidad_id:op.id,
-      ejecutivo:perfil?.nombre||"",estado:"Para revisar",fecha:today(),fechaVencimiento:fechaVenc,
+      ejecutivo:perfil?.nombre||"",estado:"Borrador",fecha:today(),fechaVencimiento:fechaVenc,
       items:items.map(({_pendiente,...r})=>r),notas:"",notasInternas,creadaEn:nowISO(),origenMP:true,
       total:tots.total,costoTotal:tots.costoTotal,margenProm:tots.margenProm};
     setCots(prev=>[cot,...prev]);
     guardarCotDB(cot);
     setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"cotizada",cotizacionId:cot.id}:o));
-    if(setDetalleCot) setDetalleCot(cot);
+    if(setModalCot) setModalCot(cot);
+    else if(setDetalleCot) setDetalleCot(cot);
     if(setTab) setTab("cotizaciones");
     toast("Cotización "+numCot+" creada"+(productosCreados.length>0?" — "+productosCreados.length+" productos pendientes de precio":""),"success",4000);
   };
@@ -555,7 +556,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
               · {esCerrada?"Cerrada":"Cierra"} {cierre.label}{cierre.hora?" "+cierre.hora:""}{diasCierre!==null&&!esCerrada?` (${diasCierre===0?"hoy":diasCierre===1?"mañana":diasCierre+"d"})`:esCerrada?" (vencida)":""}
             </span>}
             <a href={mpUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-              style={{fontSize:10,color:"#1d4ed8",textDecoration:"none",flexShrink:0}}>Ver en MP →</a>
+              style={{fontSize:10,color:"#1d4ed8",textDecoration:"none",flexShrink:0}}>Ver en Mercado Público →</a>
           </div>
         </div>
 
@@ -600,6 +601,26 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                   </span>
                 )}
               </div>
+
+              {/* ⚠ Alerta requerimientos especiales */}
+              {ia.requerimientosEspeciales?.length>0&&(
+                <div style={{background:"#fef2f2",border:"2px solid #ef4444",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                    <span style={{fontSize:18}}>⚠️</span>
+                    <span style={{fontSize:13,fontWeight:800,color:"#b91c1c",letterSpacing:"-.01em"}}>REQUIERE DOCUMENTOS ADICIONALES</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {ia.requerimientosEspeciales.map((r,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"flex-start",gap:6,fontSize:12,color:"#7f1d1d",fontWeight:600}}>
+                        <span style={{flexShrink:0}}>→</span><span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:8,fontSize:11,color:"#b91c1c",fontStyle:"italic"}}>
+                    Recuerda adjuntar estos documentos antes de cotizar
+                  </div>
+                </div>
+              )}
 
               {/* Tabla productos */}
               {(()=>{
@@ -699,7 +720,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
           {/* Acciones */}
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
             {ia&&op.estado!=="cotizada"&&op.estado!=="archivada"&&op.estado!=="perdida"&&puedeGenerar&&(
-              <BtnCotizar op={op} nuevos={nuevos} overrides={overrides} onCrearYCotizar={onCrearYCotizar}/>
+              <BtnCotizar op={op} nuevos={nuevos} overrides={overrides} enCatalogo={enCatalogo} onCrearYCotizar={onCrearYCotizar}/>
             )}
             {ia&&<Btn onClick={()=>onAnalizar(op)} variant="ghost" size="sm" disabled={analizando===op.id}
               style={{opacity:analizando===op.id?.6:1}}>{analizando===op.id?"Analizando…":"Re-analizar"}</Btn>}
@@ -710,7 +731,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
               <Btn onClick={onRestaurar} variant="ghost" size="sm">Restaurar</Btn>
             )}
             <a href={mpUrl} target="_blank" rel="noreferrer"
-              style={{fontSize:12,color:"#1d4ed8",textDecoration:"none",marginLeft:"auto"}}>Ver en MP →</a>
+              style={{fontSize:12,color:"#1d4ed8",textDecoration:"none",marginLeft:"auto"}}>Ver en Mercado Público →</a>
           </div>
         </div>
       )}

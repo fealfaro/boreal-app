@@ -116,9 +116,11 @@ ${catalogo.slice(0, 4000)}
 
 Analiza si esta licitación es relevante para el catálogo. 
 IMPORTANTE: Lista CADA ítem de la licitación por separado en productosDetectados, aunque sean del mismo tipo (ej: 2 tipos de papel higiénico = 2 entradas distintas).
+Detecta en requerimientosEspeciales si la licitación exige adjuntar documentos como ficha técnica, certificados, formularios especiales, muestras u otros requisitos (ignora fotos de productos, esas siempre se suben). Solo incluye si está explícitamente mencionado.
 Usa los SKU exactos del catálogo cuando haya coincidencia.
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{"titulo":"...","institucion":"...","descripcion":"qué piden exactamente en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico del item","cantidad":10,"unidad":"cajas/unidades/etc","descripcionOriginal":"texto exacto del item en la licitacion"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO-DEL-CATALOGO","nombre":"...","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"..."}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"..."}`;
+{"titulo":"...","institucion":"...","descripcion":"qué piden exactamente en 1-2 oraciones","productosDetectados":[{"nombre":"nombre específico del item","cantidad":10,"unidad":"cajas/unidades/etc","descripcionOriginal":"texto exacto del item en la licitacion"}],"productosEnCatalogo":[{"sku":"SKU-EXACTO-DEL-CATALOGO","nombre":"...","cantidadEstimada":10,"confianza":"alta/media/baja","nota":"..."}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":5}],"relevante":true,"recomendacion":"cotizar/revisar/descartar","resumen":"...","requerimientosEspeciales":["ficha técnica del producto","formulario de oferta firmado"]}`;
+
 
         const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',

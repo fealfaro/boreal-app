@@ -49,8 +49,7 @@ export default function LoginScreen() {
                     placeholder="tu@empresa.cl"
                     style={{width:"100%",padding:"10px 14px",borderRadius:9,border:"1px solid rgba(255,255,255,.15)",
                       background:"rgba(255,255,255,.07)",color:"#fff",fontSize:14,outline:"none",
-                      boxSizing:"border-box",fontFamily:"inherit",
-                      "::placeholder":{color:"rgba(255,255,255,.3)"}}}
+                      boxSizing:"border-box",fontFamily:"inherit"}}
                   />
                 </div>
                 {error&&<div style={{fontSize:12,color:"#f87171",marginBottom:12,padding:"8px 12px",background:"rgba(239,68,68,.1)",borderRadius:7}}>{error}</div>}

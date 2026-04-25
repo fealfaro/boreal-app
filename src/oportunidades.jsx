@@ -95,7 +95,8 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         const cerrada=d&&m&&y&&new Date(y,m-1,d)<hoy;
         const matches=matchKW(r["Nombre"]||"");
         // Sin coincidencias o cerrada → archivada/perdida directamente
-        const estado=cerrada?"perdida":matches.length===0?"archivada":"nueva";
+        const estado=cerrada?"perdida":"nueva";
+          const archivada=!cerrada&&matches.length===0;
         return {
           id: r["ID"]||uid(),
           nombre: r["Nombre"]||"",
@@ -106,7 +107,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           presupuesto: parseFloat(String(r["Presupuesto estimado"]||r["Monto estimado"]||r["Presupuesto"]||r["Monto"]||r["monto"]||r["presupuesto"]||"0").replace(/[^0-9.,]/g,"").replace(",","."))||0,
           estadoConvocatoria: r["Estado de Convocatoria"]||"",
           cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
-          estado, matches, analisisIA:null, cotizacionId:null,
+          estado, archivada:archivada||false, matches, analisisIA:null, cotizacionId:null,
           importadaEn:nowISO(),
         };
       }).filter(o=>o.nombre);
@@ -314,7 +315,6 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
     nueva:    {bg:"#eff6ff",text:"#1d4ed8",label:"Nueva"},
     analizada:{bg:"#fef9c3",text:"#854d0e",label:"Analizada"},
     cotizada: {bg:"#dcfce7",text:"#15803d",label:"Cotizada"},
-    archivada:{bg:"#f1f5f9",text:"#94a3b8",label:"Archivada"},
     perdida:  {bg:"#fee2e2",text:"#b91c1c",label:"Perdida"},
   };
 
@@ -342,10 +342,19 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           )}
           {modoSel&&(
             <>
+              <button onClick={()=>seleccion.size===opsFiltradas.length?setSeleccion(new Set()):setSeleccion(new Set(opsFiltradas.map(o=>o.id)))}
+                style={{fontSize:12,color:"#1d4ed8",background:"none",border:"1px solid #bfdbfe",borderRadius:6,padding:"4px 10px",cursor:"pointer"}}>
+                {seleccion.size===opsFiltradas.length?"Deseleccionar todo":"Seleccionar todo"}
+              </button>
               <span style={{fontSize:12,color:"#64748b"}}>{seleccion.size} sel.</span>
               <Btn onClick={()=>{setModoSel(false);setSeleccion(new Set());}} variant="ghost" size="sm">Cancelar</Btn>
-              {seleccion.size>0&&<Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size}</Btn>}
-              {seleccion.size>0&&<Btn onClick={()=>{setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,estado:"archivada"}:o));setSeleccion(new Set());setModoSel(false);toast("Archivadas");}} variant="ghost" size="sm">Archivar sel.</Btn>}
+              {seleccion.size>0&&filtro!=="archivadas"&&<Btn onClick={()=>encolarAnalisis([...seleccion])} size="sm">Analizar {seleccion.size}</Btn>}
+              {seleccion.size>0&&<Btn onClick={()=>{
+                const esArchivar=filtro!=="archivadas";
+                setOportunidades(prev=>prev.map(o=>seleccion.has(o.id)?{...o,archivada:esArchivar}:o));
+                setSeleccion(new Set());setModoSel(false);
+                toast(esArchivar?"Archivadas":"Desarchivadas","success");
+              }} variant="ghost" size="sm">{filtro==="archivadas"?"Desarchivar sel.":"Archivar sel."}</Btn>}
             </>
           )}
           {/* Analizar todas con coincidencias */}
@@ -364,7 +373,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           {/* Reprocesar archivadas */}
           {filtro==="archivadas"&&counts.archivadas>0&&(
             <Btn onClick={()=>{
-              setOportunidades(prev=>prev.map(o=>o.estado==="archivada"?{...o,matches:matchKW(o.nombre),estado:matchKW(o.nombre).length>0?"nueva":"archivada"}:o));
+              setOportunidades(prev=>prev.map(o=>o.archivada?{...o,matches:matchKW(o.nombre),archivada:matchKW(o.nombre).length===0,estado:matchKW(o.nombre).length>0?"nueva":o.estado}:o));
               toast("Reprocesando con filtros actualizados");
             }} variant="ghost" size="sm">Reprocesar con filtros actuales</Btn>
           )}
@@ -453,7 +462,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         <OpCard key={op.id} op={op} expandida={expandida} setExpandida={setExpandida}
           analizando={analizando} enCola={cola.includes(op.id)}
           onAnalizar={analizarConIA} onCrearYCotizar={crearYCotizar}
-          onArchivar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"archivada"}:o))}
+          onArchivar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,archivada:!o.archivada}:o))}
           onRestaurar={()=>setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:o.matches?.length?"nueva":"archivada"}:o))}
           ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}
           modoSel={modoSel} seleccionada={seleccion.has(op.id)}
@@ -516,7 +525,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
     <div style={{background:"#fff",borderRadius:12,marginBottom:8,
       boxShadow:potencial?.nivel==="alto"?"0 0 0 1.5px #86efac,0 1px 3px rgba(0,0,0,.06)":"0 1px 3px rgba(0,0,0,.06)",
       border:potencial?.nivel==="alto"?"1px solid #86efac":op.matches?.length?"1px solid #bfdbfe":"1px solid #f1f5f9",
-      opacity:["archivada","perdida"].includes(op.estado)?.6:1,overflow:"hidden"}}>
+      opacity:(op.archivada||op.estado==="perdida")?.6:1,overflow:"hidden"}}>
 
       {/* ── HEADER ──────────────────────────────────────────── */}
       <div style={{padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:10}}

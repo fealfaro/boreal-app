@@ -757,8 +757,8 @@ export default function App() {
 
 
       {modalProd   && <ModalProducto producto={modalProd} proveedores={proveedores} bodegas={bodegas} onSave={guardarProd} onDelete={elimProd} onClose={()=>setModalProd(null)} perfil={perfil}/>}
-      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{if(estado==="_desarchivar"){archivarCot(id,false);return;}cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setModalCot(null);setTab("productos");}}/>}
-      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={()=>{setDetalleCot(null);setTab("productos");}}/>}
+      {modalCot    && <ModalCotizacion cotizacion={modalCot} productos={productos} empresas={empresasNombres} empresasData={empresas} config={config} onSave={guardarCot} onCambiarEstado={(id,estado,extra)=>{if(estado==="_desarchivar"){archivarCot(id,false);return;}cambiarEstado(id,estado,extra);setModalCot(prev=>prev?.id===id?{...prev,estado,...extra}:prev);}} onClose={()=>setModalCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isSaved={!!cots.find(c=>c.id===modalCot.id)} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{if(sinCostoIds?.length)setProdsPendientes(sinCostoIds);setVolverACot(modalCot?.id);setModalCot(null);setTab("productos");}}/>}
+      {detalleCot  && <DetalleCotizacion cotizacion={detalleCot} productos={productos} onCambiarEstado={cambiarEstado} onSave={c=>{setDetalleCot(null);setModalCot(c);}} onClose={()=>setDetalleCot(null)} logoB64={LOGO_B64_COLOR} perfil={perfil} isAdmin={isAdmin} solicitudes={solicitudes} setSolicitudes={setSolicitudes} setVolverACot={setVolverACot} onGoProductos={(sinCostoIds)=>{if(sinCostoIds?.length)setProdsPendientes(sinCostoIds);setVolverACot(detalleCot?.id);setDetalleCot(null);setTab("productos");}}/>}
     </div>
   );
 }
@@ -870,7 +870,10 @@ function Dashboard({cots,adjFact,totalV,mgBruto,mgPct,tasa,vMes,maxV,periDash,se
 function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,perfil,stockMinimo=5,alertaStock=true,prodsPendientes=[],setProdsPendientes,volverACot,setVolverACot,cots=[],setDetalleCot,setTab}) {
   const [busq,setBusq]=useState("");
   const [sort,setSort]=useState("nombre_asc");
-  const [filtroFoto,setFiltroFoto]=useState("todos"); // todos | sin_foto | con_foto
+  const [filtroFoto,setFiltroFoto]=useState("todos");
+  // Auto-activate sin costo filter when coming from cotizacion
+  const [filtroCosto,setFiltroCosto]=useState(prodsPendientes.length>0?"sin_costo":"todos");
+  useEffect(()=>{if(prodsPendientes.length>0)setFiltroCosto("sin_costo");},[prodsPendientes.length]);
   const fileRef=useRef();
 
   const handleImport=e=>{
@@ -892,6 +895,7 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
       if(busq&&!p.nombre.toLowerCase().includes(busq.toLowerCase())&&!(p.sku||"").toLowerCase().includes(busq.toLowerCase())) return false;
       if(filtroFoto==="sin_foto"&&p.foto_url) return false;
       if(filtroFoto==="con_foto"&&!p.foto_url) return false;
+      if(filtroCosto==="sin_costo"&&(p.costo||0)>0) return false;
       return true;
     });
     const [k,d]=sort.split("_");const mul=d==="asc"?1:-1;
@@ -912,9 +916,20 @@ function ModuloProductos({productos,setProductos,onEdit,onNew,onClonar,bodegas,p
         if(!cot) return null;
         return <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
           <span style={{flex:1,fontSize:13,color:"#1d4ed8"}}>← Cotización <strong>{cot.numero}</strong> — completa el costo y vuelve</span>
-          <button onClick={()=>{setDetalleCot&&setDetalleCot(cot);setVolverACot&&setVolverACot(null);setTab&&setTab("cotizaciones");}}
+          <button onClick={()=>{
+            // Reload cot with updated productos data
+            const cotActualizada=cot?{...cot,items:(cot.items||[]).map(item=>{
+              const prod=productos.find(p=>p.id===item.productoId);
+              return prod?{...item,costo:prod.costo,precioVenta:item.precioVenta||Math.round(prod.costo*(1+prod.margen/100)*1.19)}:item;
+            })}:cot;
+            setModalCot&&setModalCot(cotActualizada);
+            setVolverACot&&setVolverACot(null);
+            setProdsPendientes&&setProdsPendientes([]);
+            setFiltroCosto("todos");
+            setTab&&setTab("cotizaciones");
+          }}
             style={{fontSize:12,fontWeight:600,color:"#fff",background:"#1d4ed8",border:"none",borderRadius:7,padding:"5px 14px",cursor:"pointer"}}>
-            Volver
+            Volver a cotización
           </button>
           <button onClick={()=>setVolverACot&&setVolverACot(null)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16}}>×</button>
         </div>;

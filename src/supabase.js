@@ -83,8 +83,10 @@ export const dbConfig = {
 // ── PERFILES ──────────────────────────────────────────────────
 export const dbPerfiles = {
   getAll: () => ok() ? supabase.from('perfiles').select('*').order('nombre') : noDb(),
-  upsert: (p) => ok() ? supabase.from('perfiles').upsert(p).select().single() : noDb(),
+  getByEmail: (email) => ok() ? supabase.from('perfiles').select('*').eq('email',email).single() : noDb(),
+  upsert: (p) => ok() ? supabase.from('perfiles').upsert(p,{onConflict:'email'}).select().single() : noDb(),
   update: (id,data) => ok() ? supabase.from('perfiles').update(data).eq('id',id) : noDb(),
+  updateAuthId: (email, authId) => ok() ? supabase.from('perfiles').update({auth_id:authId}).eq('email',email) : noDb(),
 };
 
 // ── CONVERSORES camelCase ↔ snake_case ─────────────────────────
@@ -247,9 +249,4 @@ export const auth = {
   onAuthStateChange: (cb) => supabase?.auth.onAuthStateChange(cb),
 };
 
-export const dbPerfiles = {
-  getAll: () => ok() ? supabase.from('perfiles').select('*') : noDb(),
-  getByEmail: (email) => ok() ? supabase.from('perfiles').select('*').eq('email',email).single() : noDb(),
-  upsert: (p) => ok() ? supabase.from('perfiles').upsert(p,{onConflict:'email'}) : noDb(),
-  updateAuthId: (email, authId) => ok() ? supabase.from('perfiles').update({auth_id:authId}).eq('email',email) : noDb(),
-};
+

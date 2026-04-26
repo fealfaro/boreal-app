@@ -701,23 +701,34 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
 
               {/* Tabla productos */}
               {(()=>{
-                const todosItems=detectados.length>0?detectados.map(det=>{
-                  const m=enCatalogo.find(p=>det.nombre.toLowerCase().includes((p.nombre||"").toLowerCase().split(" ")[0])||(p.nombre||"").toLowerCase().includes(det.nombre.toLowerCase().split(" ")[0]));
-                  const prod=m?productos.find(pr=>pr.sku===m.sku||(pr.nombre||"").toLowerCase()===(m.nombre||"").toLowerCase()):null;
-                  return {det,prod,esNuevo:!prod};
-                }):[...enCatalogo.map(p=>{
-                  const prod=productos.find(pr=>pr.sku===p.sku||(pr.nombre||"").toLowerCase()===(p.nombre||"").toLowerCase());
-                  return {det:{nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"},prod,esNuevo:!prod};
-                }),...nuevos.map(p=>({det:{nombre:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"},prod:null,esNuevo:true}))];
-                if(!todosItems.length) return null;
+                // Usar siempre productosDetectados si existen — sin agrupar
+                const todosItems = detectados.length > 0
+                  ? detectados.map(det => {
+                      // Buscar match en catálogo por productoId (del nuevo worker) o por nombre
+                      const m = enCatalogo.find(p =>
+                        (p.productoId && det.productoId && p.productoId===det.productoId) ||
+                        (p.itemOrigen && p.itemOrigen===det.nombre) ||
+                        (p.nombre||"").toLowerCase().includes((det.nombre||"").toLowerCase().split(" ")[0])
+                      );
+                      const prod = m ? productos.find(pr => pr.id===m.productoId||pr.sku===m.sku) : null;
+                      return { det, prod, matchCatalogo: m, esNuevo: !m };
+                    })
+                  : [...enCatalogo.map(p => {
+                      const prod = productos.find(pr => pr.id===p.productoId||pr.sku===p.sku);
+                      return { det:{nombre:p.nombre,nombreGenerico:p.itemOrigen||p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"}, prod, matchCatalogo:p, esNuevo:false };
+                    }), ...nuevos.map(p => ({
+                      det:{nombre:p.nombre,nombreGenerico:p.nombre,cantidad:p.cantidadEstimada||1,unidad:"un"}, prod:null, matchCatalogo:null, esNuevo:true
+                    }))];
+
+                if (!todosItems.length) return null;
                 return (
                   <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:12,overflow:"hidden"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>SOLICITAN</span>
+                    <div style={{display:"grid",gridTemplateColumns:"1.2fr 1.8fr 80px",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:8}}>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>CATEGORÍA</span>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>DESCRIPCIÓN ESPECÍFICA</span>
                       <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"center"}}>CANT.</span>
-                      <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"right"}}>EN TU CATÁLOGO</span>
                     </div>
-                    {todosItems.map(({det,prod:prodIA,esNuevo},i)=>{
+                    {todosItems.map(({det,prod:prodIA,matchCatalogo:mc,esNuevo},i)=>{
                       const ovId=overrides[i];
                       const prod=ovId==="nuevo"?null:ovId?productos.find(p=>p.id===ovId):prodIA;
                       const crearNuevo=ovId==="nuevo"||(esNuevo&&ovId===undefined);
@@ -725,66 +736,25 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                       const unidad=UNITS[det.unidad?.toUpperCase()]||det.unidad||"un";
                       const stock=prod?getStockTotal(prod):0;
                       const stockOk=prod&&stock>=cant;
-                      const prodsFiltrados=productos.filter(p=>p.activo!==false&&(!busqFila||p.nombre.toLowerCase().includes(busqFila.toLowerCase())||(p.sku||"").toLowerCase().includes(busqFila.toLowerCase()))).slice(0,8);
                       return (
-                        <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 80px 1fr",padding:"8px 12px",borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",alignItems:"center",gap:8,background:crearNuevo?"#fffbeb":"#fff"}}>
-                          <div style={{minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{det.nombre}</div>
-                            {det.descripcionOriginal&&det.descripcionOriginal!==det.nombre&&(
-                              <div style={{fontSize:10,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={det.descripcionOriginal}>{det.descripcionOriginal}</div>
-                            )}
-                            {crearNuevo&&<div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>}
+                        <div key={i} style={{display:"grid",gridTemplateColumns:"1.2fr 1.8fr 80px",padding:"8px 12px",
+                          borderBottom:i<todosItems.length-1?"1px solid #f8fafc":"none",
+                          alignItems:"center",gap:8,
+                          background:crearNuevo?"#fffbeb":mc?"#f0fdf4":"#fff"}}>
+                          {/* Col 1: Categoría genérica */}
+                          <div style={{fontSize:11,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={det.nombreGenerico||det.nombre}>
+                            {det.nombreGenerico||det.nombre}
                           </div>
-                          <div style={{fontSize:12,fontWeight:500,textAlign:"center"}}>{cant} {unidad}</div>
+                          {/* Col 2: Descripción específica + estado catálogo */}
                           <div style={{minWidth:0}}>
-                            {buscandoFila===i?(
-                              <div style={{position:"relative"}}>
-                                <input autoFocus value={busqFila} onChange={e=>setBusqFila(e.target.value)}
-                                  placeholder="Buscar…" onBlur={()=>setTimeout(()=>{setBuscandoFila(null);setBusqFila("");},250)}
-                                  style={{width:"100%",fontSize:12,padding:"4px 8px",borderRadius:6,border:"1px solid #1d4ed8",outline:"none",boxSizing:"border-box"}}/>
-                                <div style={{position:"fixed",top:dropPos.top,left:dropPos.left,width:Math.max(dropPos.width,300),background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.15)",zIndex:9999,maxHeight:260,overflowY:"auto"}}>
-                                  <div onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(p=>({...p,[i]:"nuevo"}));setBuscandoFila(null);setBusqFila("");}}
-                                    style={{padding:"8px 12px",fontSize:12,color:"#d97706",fontWeight:600,cursor:"pointer",borderBottom:"1px solid #f1f5f9",background:"#fffbeb"}}
-                                    onMouseEnter={e=>e.currentTarget.style.background="#fef3c7"}
-                                    onMouseLeave={e=>e.currentTarget.style.background="#fffbeb"}>
-                                    + Crear como producto nuevo
-                                  </div>
-                                  {prodsFiltrados.map(p=>(
-                                    <div key={p.id} onMouseDown={e=>e.preventDefault()} onClick={()=>{setOverrides(prev=>({...prev,[i]:p.id}));setBuscandoFila(null);setBusqFila("");}}
-                                      style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f8fafc"}}
-                                      onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                                      onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                      {p.foto_url?<img src={p.foto_url} alt="" style={{width:32,height:32,objectFit:"contain",borderRadius:5,background:"#f8fafc",flexShrink:0}}/>
-                                        :<div style={{width:32,height:32,background:"#f1f5f9",borderRadius:5,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>{Ic.box}</div>}
-                                      <div style={{flex:1,minWidth:0}}>
-                                        <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nombre}</div>
-                                        <div style={{fontSize:11,color:"#94a3b8"}}>{p.sku} · {getStockTotal(p)} uds · {fmt(calcPrecioVenta(p.costo,p.margen))}</div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ):(
-                              <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setDropPos({top:r.bottom+4,left:r.left,width:Math.max(r.width,300)});setBuscandoFila(i);setBusqFila("");}}
-                                style={{width:"100%",textAlign:"left",background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                                {prod?(
-                                  <>
-                                    {prod.foto_url?<img src={prod.foto_url} alt="" style={{width:24,height:24,objectFit:"contain",borderRadius:4,background:"#f8fafc",flexShrink:0}}/>
-                                      :<div style={{width:24,height:24,background:"#f1f5f9",borderRadius:4,flexShrink:0}}/>}
-                                    <div style={{flex:1,minWidth:0}}>
-                                      <div style={{fontSize:11,fontWeight:600,color:stockOk?"#15803d":"#b91c1c",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stockOk?"✓":"⚠"} {prod.nombre}</div>
-                                      <div style={{fontSize:10,color:"#94a3b8"}}>{stock} disp.</div>
-                                    </div>
-                                  </>
-                                ):crearNuevo?(
-                                  <span style={{fontSize:11,color:"#d97706",fontWeight:500}}>Crear nuevo</span>
-                                ):(
-                                  <span style={{fontSize:11,color:"#94a3b8"}}>Sin match — elegir</span>
-                                )}
-                                <span style={{color:"#94a3b8",fontSize:10,flexShrink:0,marginLeft:"auto"}}>✎</span>
-                              </button>
-                            )}
+                            <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={det.nombre}>
+                              {det.nombre}
+                            </div>
+                            {mc&&<div style={{fontSize:10,color:"#15803d",marginTop:1}}>✓ En catálogo: {mc.nombre}</div>}
+                            {crearNuevo&&!mc&&<div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>}
                           </div>
+                          {/* Col 3: Cantidad */}
+                          <div style={{fontSize:12,fontWeight:600,textAlign:"center"}}>{cant} <span style={{fontWeight:400,color:"#94a3b8"}}>{unidad}</span></div>
                         </div>
                       );
                     })}

@@ -104,7 +104,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           unidadCompra: r["Unidad de compra"]||"",
           fechaPublicacion: r["Fecha de publicación"]||"",
           fechaCierre,
-          presupuesto: parseFloat(String(r["Presupuesto estimado"]||r["Monto estimado"]||r["Presupuesto"]||r["Monto"]||r["monto"]||r["presupuesto"]||"0").replace(/[^0-9.,]/g,"").replace(",","."))||0,
+          presupuesto: parseFloat(String(r["Presupuesto estimado"]||r["Monto estimado"]||r["Presupuesto"]||r["Monto"]||r["monto"]||r["presupuesto"]||r["Precio estimado"]||r["Valor estimado"]||r["Valor"]||"0").replace(/[^0-9.,]/g,"").replace(",","."))||0,
           estadoConvocatoria: r["Estado de Convocatoria"]||"",
           cotizacionesEnviadas: Number(r["Cotizaciones enviadas"]||0),
           estado, archivada:archivada||false, matches, analisisIA:null, cotizacionId:null,
@@ -163,7 +163,13 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
             messages:[{role:"user",content:`Eres asistente de ventas de limpieza en Chile. LICITACIÓN: ID:${op.id} Nombre:"${op.nombre}" Institución:${op.institucion} Presupuesto:${fmt(op.presupuesto)} Cierre:${op.fechaCierre}\nCATÁLOGO:\n${catalogoResumen}\nResponde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sku":"...","nombre":"...","cantidadEstimada":1,"confianza":"alta/media/baja"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":1}],"resumen":"...","recomendacion":"cotizar/descartar/revisar"}`}]})});
         const fd=await fb.json();
         const txt=fd.content?.[0]?.text||"{}";
-        try{analisis=JSON.parse(txt.replace(/```json|```/g,"").trim());analisis._source="nombre";}catch{analisis={resumen:txt.slice(0,200),_source:"nombre"};}
+        try{
+          let clean=txt.replace(/```json|```/g,"").trim();
+          const m=clean.match(/\{[\s\S]*\}/);
+          if(m) clean=m[0];
+          analisis=JSON.parse(clean);
+          analisis._source="nombre";
+        }catch{analisis={resumen:txt.replace(/```json|```/g,"").replace(/\{[\s\S]*/g,"").trim().slice(0,200)||"Sin análisis",_source:"nombre"};}
       }
       const ts=nowISO();
       setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis,analisisTs:ts}:o));
@@ -493,6 +499,14 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
   const [busqFila,setBusqFila]=useState("");
   const [dropPos,setDropPos]=useState({top:0,left:0,width:320});
   const potencial=ia?calcPotencial(ia,productos):null;
+  // Use scoreAtractivo from new worker if available
+  const scoreIA=ia?.scoreAtractivo||0;
+  const potencialFinal=scoreIA>0?{
+    nivel:scoreIA>=7?"alto":scoreIA>=4?"medio":"bajo",
+    color:scoreIA>=7?"#15803d":scoreIA>=4?"#854d0e":"#b91c1c",
+    bg:scoreIA>=7?"#dcfce7":scoreIA>=4?"#fef9c3":"#fee2e2",
+    score:scoreIA/10,
+  }:potencial;
 
   const parseCierre=str=>{
     if(!str) return null;
@@ -618,7 +632,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
               <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
                 <div style={{flex:1}}>
                   {ia._source&&<span style={{fontSize:10,background:ia._source==="web"?"#dcfce7":"#fef9c3",color:ia._source==="web"?"#15803d":"#854d0e",padding:"1px 7px",borderRadius:20,marginRight:6}}>{ia._source==="web"?"con detalle MP":"solo nombre"}</span>}
-                  <p style={{fontSize:13,color:"#475569",lineHeight:1.5,margin:"6px 0 0"}}>{ia.resumen}</p>
+                  <p style={{fontSize:13,color:"#475569",lineHeight:1.5,margin:"6px 0 0"}}>{(ia.resumen||"").startsWith("{")?"(Re-analizar para ver el resumen)":ia.resumen}</p>
                 </div>
                 {ia.recomendacion&&(
                   <span style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:20,

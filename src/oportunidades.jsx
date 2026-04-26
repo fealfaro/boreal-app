@@ -143,25 +143,21 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const analizarConIA = async(op) => {
     setAnalizando(op.id);
     try {
-      // Enviar catálogo como POST JSON — GET se trunca con 507 productos
+      // Enviar catálogo como POST JSON — sin foto_url (base64 muy pesado)
       const catalogoData = productos.map(p=>({
         id: p.id, sku: p.sku||"", nombre: p.nombre||"",
-        categoria: p.categoria||"", costo: p.costo||0,
-        margen: p.margen||30, foto_url: p.foto_url||null,
+        categoria: p.categoria||"", costo: p.costo||0, margen: p.margen||30,
       }));
-      console.log(`[Boreal] Analizando ${op.id} — catálogo: ${catalogoData.length} productos`);
+      const bodyStr = JSON.stringify({id: op.id, catalogo: catalogoData});
+      console.log(`[Boreal] Analizando ${op.id} — catálogo: ${catalogoData.length} prods, body: ${(bodyStr.length/1024).toFixed(1)}KB`);
       const resp = await fetch(`${WORKER_URL}/mp`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({id: op.id, catalogo: catalogoData}),
+        body: bodyStr,
       });
       const data = await resp.json();
-      console.log(`[Boreal] Status: ${resp.status}`);
-      console.log(`[Boreal] ok: ${data.ok}`);
-      console.log(`[Boreal] productosDetectados: ${data.analisis?.productosDetectados?.length}`);
-      console.log(`[Boreal] productosEnCatalogo: ${data.analisis?.productosEnCatalogo?.length}`);
-      console.log(`[Boreal] productosNuevos: ${data.analisis?.productosNuevos?.length}`);
-      console.log(`[Boreal] Full analisis keys:`, Object.keys(data.analisis||{}));
+      console.log(`[Boreal] Status: ${resp.status}, ok: ${data.ok}`);
+      console.log(`[Boreal] detectados: ${data.analisis?.productosDetectados?.length}, enCatalogo: ${data.analisis?.productosEnCatalogo?.length}, nuevos: ${data.analisis?.productosNuevos?.length}`);
       console.log(`[Boreal] First 3 detectados:`, JSON.stringify(data.analisis?.productosDetectados?.slice(0,3)));
       const getAnalisis=(d)=>{
         if(!d.ok) return null;

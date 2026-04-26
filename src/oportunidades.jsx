@@ -143,12 +143,20 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const analizarConIA = async(op) => {
     setAnalizando(op.id);
     try {
-      const catalogoResumen=productos.map(p=>
-        `- ${p.nombre} (SKU:${p.sku}, precio:${fmt(calcPrecioVenta(p.costo,p.margen))}, stock:${getStockTotal(p)} uds)`
-      ).join("\n");
-      const params=new URLSearchParams({id:op.id,catalogo:catalogoResumen});
-      const resp=await fetch(`${WORKER_URL}/mp?${params}`);
-      const data=await resp.json();
+      // Enviar catálogo como JSON array para el matching en código
+      const catalogoData = productos.map(p=>({
+        id: p.id, sku: p.sku||"", nombre: p.nombre||"",
+        categoria: p.categoria||"", costo: p.costo||0,
+        margen: p.margen||30, foto_url: p.foto_url||null,
+      }));
+      const params = new URLSearchParams({
+        id: op.id,
+        catalogo: JSON.stringify(catalogoData),
+      });
+      console.log(`[Boreal] Analizando ${op.id} — catálogo: ${catalogoData.length} productos`);
+      const resp = await fetch(`${WORKER_URL}/mp?${params}`);
+      const data = await resp.json();
+      console.log(`[Boreal] Worker response:`, data);
       const getAnalisis=(d)=>{
         if(!d.ok) return null;
         const a=d.analisis;
@@ -157,7 +165,11 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
       };
       let analisis=getAnalisis(data);
       if(!analisis){
+        console.warn(`[Boreal] Worker falló, usando fallback. Error:`, data);
         // fallback
+        const catalogoResumen=productos.map(p=>
+          `- ${p.nombre} (SKU:${p.sku}, precio:${fmt(calcPrecioVenta(p.costo,p.margen))}, stock:${getStockTotal(p)} uds)`
+        ).join("\n");
         const fb=await fetch(`${WORKER_URL}/anthropic`,{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,
             messages:[{role:"user",content:`Eres asistente de ventas de limpieza en Chile. LICITACIÓN: ID:${op.id} Nombre:"${op.nombre}" Institución:${op.institucion} Presupuesto:${fmt(op.presupuesto)} Cierre:${op.fechaCierre}\nCATÁLOGO:\n${catalogoResumen}\nResponde SOLO JSON: {"relevante":true,"razon":"...","productosEncontrados":[{"sku":"...","nombre":"...","cantidadEstimada":1,"confianza":"alta/media/baja"}],"productosNuevos":[{"nombre":"...","descripcion":"...","cantidadEstimada":1}],"resumen":"...","recomendacion":"cotizar/descartar/revisar"}`}]})});
@@ -169,7 +181,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           if(m) clean=m[0];
           analisis=JSON.parse(clean);
           analisis._source="nombre";
-        }catch{analisis={resumen:txt.replace(/```json|```/g,"").replace(/\{[\s\S]*/g,"").trim().slice(0,200)||"Sin análisis",_source:"nombre"};}
+        }catch{analisis={resumen:"Sin análisis disponible",_source:"nombre"};}
       }
       const ts=nowISO();
       setOportunidades(prev=>prev.map(o=>o.id===op.id?{...o,estado:"analizada",analisisIA:analisis,analisisTs:ts}:o));

@@ -786,7 +786,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                 return (
                   <div style={{background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:12,overflow:"hidden"}}>
                     <div style={{display:"grid",gridTemplateColumns:"1.2fr 1.8fr 80px",padding:"6px 12px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:8}}>
-                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>CATEGORÍA</span>
+                      <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>CATEGORÍA ✓</span>
                       <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>DESCRIPCIÓN ESPECÍFICA</span>
                       <span style={{fontSize:10,fontWeight:700,color:"#64748b",textAlign:"center"}}>CANT.</span>
                     </div>

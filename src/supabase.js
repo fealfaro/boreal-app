@@ -239,7 +239,7 @@ export const fromDbOp = (o) => ({
   cotizacionesEnviadas: o.cotizaciones_enviadas,
   estado:               o.estado,
   matches:              o.matches||[],
-  analisisIA:           o.analisis_ia,
+  analisisIA:           typeof o.analisis_ia === 'string' ? (() => { try { return JSON.parse(o.analisis_ia); } catch { return null; } })() : o.analisis_ia,
   analisisTs:           o.analisis_ts,
   cotizacionId:         o.cotizacion_id,
   importadaEn:          o.importada_en,

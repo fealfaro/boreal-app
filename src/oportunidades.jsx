@@ -650,7 +650,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
               <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:12}}>
                 <div style={{flex:1}}>
                   {ia._source&&<span style={{fontSize:10,background:ia._source==="web"?"#dcfce7":"#fef9c3",color:ia._source==="web"?"#15803d":"#854d0e",padding:"1px 7px",borderRadius:20,marginRight:6}}>{ia._source==="web"?"con detalle MP":"solo nombre"}</span>}
-                  <p style={{fontSize:13,color:"#475569",lineHeight:1.5,margin:"6px 0 0"}}>{(ia.resumen||"").startsWith("{")?"(Re-analizar para ver el resumen)":ia.resumen}</p>
+                  <p style={{fontSize:13,color:"#475569",lineHeight:1.5,margin:"6px 0 0"}}>{(ia.resumen||"").match(/^[`{]/)?"(Re-analizar para actualizar)":ia.resumen}</p>
                 </div>
                 {ia.recomendacion&&(
                   <span style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"4px 12px",borderRadius:20,

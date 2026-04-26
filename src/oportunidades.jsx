@@ -142,6 +142,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 
   const analizarConIA = async(op) => {
     setAnalizando(op.id);
+    console.log(`[Boreal] analizarConIA — productos disponibles: ${productos?.length}`);
     try {
       // Enviar catálogo como POST JSON — sin foto_url (base64 muy pesado)
       const catalogoData = productos.map(p=>({

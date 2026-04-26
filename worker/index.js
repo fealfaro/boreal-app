@@ -28,13 +28,28 @@ const STOPWORDS = new Set([
   'metro','unidades','unidad','ea','und','pza','pieza','set','tipo','marca',
 ]);
 
+// Stemming básico para español
+function stem(w) {
+  return w
+    .replace(/iones$/, 'ion')
+    .replace(/ados$|idos$/, '')
+    .replace(/ando$|iendo$/, '')
+    .replace(/mente$/, '')
+    .replace(/istas?$/, 'ist')
+    .replace(/adores?$/, 'ador')
+    .replace(/es$/, '')    // plurales: bolsas→bolsa, guantes→guante
+    .replace(/s$/, '')     // bolsa→bols (opcional)
+    || w;
+}
+
 function normalizar(str) {
   return (str || '')
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 1 && !STOPWORDS.has(w));
+    .filter(w => w.length > 1 && !STOPWORDS.has(w))
+    .map(stem);
 }
 
 function scoreMatch(tokensA, tokensB) {
@@ -43,10 +58,14 @@ function scoreMatch(tokensA, tokensB) {
   let hits = 0;
   for (const t of tokensA) {
     if (setB.has(t)) hits += 1;
-    else if ([...setB].some(b => b.includes(t) || t.includes(b))) hits += 0.4;
+    // partial match con stem
+    else if ([...setB].some(b => b.includes(t) || t.includes(b))) hits += 0.5;
   }
-  const union = new Set([...tokensA, ...tokensB]).size;
-  return hits / union;
+  // Usar precision (hits/tokensA) en vez de Jaccard — favorece matches parciales
+  const precision = hits / tokensA.length;
+  const recall    = hits / tokensB.length;
+  if (precision + recall === 0) return 0;
+  return 2 * precision * recall / (precision + recall); // F1 score
 }
 
 function matchCatalogo(items, catalogoJSON) {
@@ -69,13 +88,13 @@ function matchCatalogo(items, catalogoJSON) {
       if (s > mejorScore) { mejorScore = s; mejorProd = prod; }
     }
 
-    if (mejorProd && mejorScore >= 0.10) {
-      const confianza = mejorScore >= 0.25 ? 'alta' : mejorScore >= 0.15 ? 'media' : 'baja';
+    if (mejorProd && mejorScore >= 0.08) {
+      const confianza = mejorScore >= 0.30 ? 'alta' : mejorScore >= 0.15 ? 'media' : 'baja';
       enCatalogo.push({
         sku:             mejorProd.sku || mejorProd.id,
         productoId:      mejorProd.id,
         nombre:          mejorProd.nombre,
-        foto_url:        mejorProd.foto_url || null,
+        foto_url:        null,
         costo:           mejorProd.costo || 0,
         margen:          mejorProd.margen || 30,
         cantidadEstimada: item.cantidad,

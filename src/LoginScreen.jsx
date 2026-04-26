@@ -12,11 +12,11 @@ export default function LoginScreen() {
     if(!email.trim()) return;
     setLoading(true); setError("");
     try {
-      const { error: err } = await auth.signInWithOtp(email.trim().toLowerCase());
-      if(err) throw err;
+      const result = await auth.signInWithOtp(email.trim().toLowerCase());
+      if(result?.error) throw result.error;
       setSent(true);
     } catch(err) {
-      setError(err.message||"Error al enviar el link");
+      setError(err?.message||"Error al enviar el link");
     } finally {
       setLoading(false);
     }

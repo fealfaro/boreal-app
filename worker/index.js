@@ -159,9 +159,13 @@ export default {
         if (request.method === 'POST') {
           const body = await request.json();
           id = body.id;
-          catalogoJSON = JSON.stringify(body.catalogo || []);
           const cat = body.catalogo || [];
-          console.log(`[Worker] POST /mp id=${id} catalogo=${cat.length} productos bodySize=${JSON.stringify(body).length}`);
+          catalogoJSON = JSON.stringify(cat);
+          console.log(`[Worker] POST id=${id} catalogo=${cat.length} items`);
+          // Si llega vacío, devolver error descriptivo
+          if (cat.length === 0) {
+            console.log('[Worker] ADVERTENCIA: catálogo vacío recibido');
+          }
         } else {
           id = url.searchParams.get('id');
           catalogoJSON = url.searchParams.get('catalogo') || '[]';

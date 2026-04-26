@@ -499,6 +499,52 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           <Btn onClick={()=>setPagina(p=>Math.min(totalPags,p+1))} disabled={pagina===totalPags} variant="ghost" size="sm">Siguiente →</Btn>
         </div>
       )}
+
+      {/* Modal detalle producto catálogo */}
+      {modalProd&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}
+          onClick={()=>setModalProd(null)}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>Producto en catálogo</span>
+              <button onClick={()=>setModalProd(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#94a3b8",lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:"18px 20px"}}>
+              <div style={{display:"flex",gap:14,marginBottom:16,alignItems:"center"}}>
+                {modalProd.foto_url
+                  ?<img src={modalProd.foto_url} alt="" style={{width:72,height:72,borderRadius:10,objectFit:"cover",flexShrink:0,border:"1px solid #f1f5f9"}}/>
+                  :<div style={{width:72,height:72,borderRadius:10,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>📦</div>
+                }
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#0f172a",marginBottom:3}}>{modalProd.nombre}</div>
+                  {modalProd.sku&&<div style={{fontSize:11,color:"#94a3b8",fontFamily:"'Geist Mono',monospace"}}>{modalProd.sku}</div>}
+                  {modalProd.categoria&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>{modalProd.categoria}</div>}
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  {label:"Costo neto",   value:fmt(modalProd.costo||0)},
+                  {label:"Precio venta", value:fmt(calcPrecioVenta(modalProd.costo,modalProd.margen))},
+                  {label:"Margen",       value:`${modalProd.margen||0}%`},
+                  {label:"Stock",        value:`${getStockTotal(modalProd)} uds`},
+                ].map(({label,value})=>(
+                  <div key={label} style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+                    <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:3,letterSpacing:".06em"}}>{label.toUpperCase()}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              {modalProd.proveedor&&(
+                <div style={{marginTop:8,background:"#f8fafc",borderRadius:8,padding:"8px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:2,letterSpacing:".06em"}}>PROVEEDOR</div>
+                  <div style={{fontSize:13,color:"#0f172a"}}>{modalProd.proveedor}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -513,6 +559,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
   const [buscandoFila,setBuscandoFila]=useState(null);
   const [busqFila,setBusqFila]=useState("");
   const [dropPos,setDropPos]=useState({top:0,left:0,width:320});
+  const [modalProd,setModalProd]=useState(null);
   const potencial=ia?calcPotencial(ia,productos):null;
   // Use scoreAtractivo from new worker if available
   const scoreIA=ia?.scoreAtractivo||0;
@@ -765,7 +812,15 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                             <div style={{fontSize:12,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={det.nombre}>
                               {det.nombre}
                             </div>
-                            {mc&&<div style={{fontSize:10,color:"#15803d",marginTop:1}}>✓ En catálogo: {mc.nombre}</div>}
+                            {mc&&(
+                              <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+                                <span style={{fontSize:10,color:"#15803d"}}>✓ En catálogo: {mc.nombre}</span>
+                                <button onClick={e=>{e.stopPropagation();const p=productos.find(pr=>pr.id===mc.productoId||pr.sku===mc.sku);if(p)setModalProd(p);}}
+                                  style={{fontSize:10,color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",flexShrink:0}}>
+                                  ver →
+                                </button>
+                              </div>
+                            )}
                             {crearNuevo&&!mc&&<div style={{fontSize:10,color:"#d97706"}}>Nuevo — se creará inactivo</div>}
                           </div>
                           {/* Col 3: Cantidad */}

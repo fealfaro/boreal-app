@@ -70,7 +70,19 @@ function scoreMatch(tokensA, tokensB) {
 
 function matchCatalogo(items, catalogoJSON) {
   let catalogo = [];
-  try { catalogo = JSON.parse(catalogoJSON); } catch { return { enCatalogo: [], nuevos: [] }; }
+  try { 
+    catalogo = JSON.parse(catalogoJSON); 
+  } catch { 
+    // JSON truncado por límite de URL — reparar cortando en último objeto completo
+    try {
+      const lastValid = catalogoJSON.lastIndexOf('},{');
+      if (lastValid > 0) {
+        catalogo = JSON.parse(catalogoJSON.slice(0, lastValid) + '}]');
+      }
+    } catch {}
+    console.log(`[Worker] JSON reparado: ${catalogo.length} prods`);
+  }
+  console.log(`[Worker] matchCatalogo: ${items.length} items vs ${catalogo.length} prods en catálogo`);
   if (!catalogo.length) return { enCatalogo: [], nuevos: items.map(i => ({ nombre: i.nombre, descripcion: i.descripcionOriginal, cantidadEstimada: i.cantidad, unidad: i.unidad })) };
 
   const enCatalogo = [];
@@ -89,6 +101,7 @@ function matchCatalogo(items, catalogoJSON) {
     }
 
     if (mejorProd && mejorScore >= 0.08) {
+      console.log(`[Worker] MATCH: "${item.nombre.slice(0,30)}" → "${mejorProd.nombre.slice(0,30)}" score:${mejorScore.toFixed(2)}`);
       const confianza = mejorScore >= 0.30 ? 'alta' : mejorScore >= 0.15 ? 'media' : 'baja';
       enCatalogo.push({
         sku:             mejorProd.sku || mejorProd.id,
@@ -168,8 +181,9 @@ export default {
           }
         } else {
           id = url.searchParams.get('id');
-          catalogoJSON = url.searchParams.get('catalogo') || '[]';
-          console.log(`[Worker] GET /mp id=${id} catalogoLen=${catalogoJSON.length}`);
+          // GET no puede enviar catálogo completo (límite URL) — ignorar catálogo truncado
+          catalogoJSON = '[]';
+          console.log(`[Worker] GET /mp id=${id} — catálogo ignorado (usar POST)`);
         }
         if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
 

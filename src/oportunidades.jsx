@@ -150,7 +150,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         categoria: p.categoria||"", costo: p.costo||0, margen: p.margen||30,
       }));
       const bodyStr = JSON.stringify({id: op.id, catalogo: catalogoData});
-      console.log(`[Boreal] Analizando ${op.id} — catálogo: ${catalogoData.length} prods, body: ${(bodyStr.length/1024).toFixed(1)}KB`);
+      console.log(`[Boreal] body size: ${(bodyStr.length/1024).toFixed(1)}KB, catalogo: ${catalogoData.length} prods, primer prod: ${catalogoData[0]?.nombre}`);
       const resp = await fetch(`${WORKER_URL}/mp`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},

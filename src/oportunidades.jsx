@@ -54,6 +54,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const [modoSel,    setModoSel]    = useState(false);
   const [expandida,  setExpandida]  = useState(null);
   const [pagina,     setPagina]     = useState(1);
+  const [modalProd,  setModalProd]  = useState(null);
   const [showConfig, setShowConfig] = useState(false);
   const POR_PAGINA = 25;
   const fileRef = useRef();
@@ -488,7 +489,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
           ESTADOS_OP_COLORS={ESTADOS_OP_COLORS} productos={productos}
           modoSel={modoSel} seleccionada={seleccion.has(op.id)}
           onToggleSel={()=>setSeleccion(prev=>{const s=new Set(prev);s.has(op.id)?s.delete(op.id):s.add(op.id);return s;})}
-          mpUrl={MP_URL(op.id)}/>
+          mpUrl={MP_URL(op.id)} setModalProd={setModalProd}/>
       ))}
 
       {/* ── PAGINACIÓN ───────────────────────────────────────── */}
@@ -550,7 +551,7 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
 }
 
 function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearYCotizar,
-  onArchivar,onRestaurar,ESTADOS_OP_COLORS,productos,modoSel,seleccionada,onToggleSel,mpUrl}) {
+  onArchivar,onRestaurar,ESTADOS_OP_COLORS,productos,modoSel,seleccionada,onToggleSel,mpUrl,setModalProd}) {
   const isExp=expandida===op.id;
   const ec=ESTADOS_OP_COLORS[op.estado]||ESTADOS_OP_COLORS.nueva;
   const ia=op.analisisIA;
@@ -559,7 +560,6 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
   const [buscandoFila,setBuscandoFila]=useState(null);
   const [busqFila,setBusqFila]=useState("");
   const [dropPos,setDropPos]=useState({top:0,left:0,width:320});
-  const [modalProd,setModalProd]=useState(null);
   const potencial=ia?calcPotencial(ia,productos):null;
   // Use scoreAtractivo from new worker if available
   const scoreIA=ia?.scoreAtractivo||0;

@@ -156,7 +156,13 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
         body: JSON.stringify({id: op.id, catalogo: catalogoData}),
       });
       const data = await resp.json();
-      console.log(`[Boreal] Worker response:`, JSON.stringify(data).slice(0,500));
+      console.log(`[Boreal] Status: ${resp.status}`);
+      console.log(`[Boreal] ok: ${data.ok}`);
+      console.log(`[Boreal] productosDetectados: ${data.analisis?.productosDetectados?.length}`);
+      console.log(`[Boreal] productosEnCatalogo: ${data.analisis?.productosEnCatalogo?.length}`);
+      console.log(`[Boreal] productosNuevos: ${data.analisis?.productosNuevos?.length}`);
+      console.log(`[Boreal] Full analisis keys:`, Object.keys(data.analisis||{}));
+      console.log(`[Boreal] First 3 detectados:`, JSON.stringify(data.analisis?.productosDetectados?.slice(0,3)));
       const getAnalisis=(d)=>{
         if(!d.ok) return null;
         const a=d.analisis;

@@ -141,9 +141,12 @@ export default {
           const body = await request.json();
           id = body.id;
           catalogoJSON = JSON.stringify(body.catalogo || []);
+          const cat = body.catalogo || [];
+          console.log(`[Worker] POST /mp id=${id} catalogo=${cat.length} productos bodySize=${JSON.stringify(body).length}`);
         } else {
           id = url.searchParams.get('id');
           catalogoJSON = url.searchParams.get('catalogo') || '[]';
+          console.log(`[Worker] GET /mp id=${id} catalogoLen=${catalogoJSON.length}`);
         }
         if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
@@ -160,6 +163,7 @@ export default {
 
         // Items directamente del campo correcto de la API
         const rawItems = ficha.productos_solicitados || ficha.items || ficha.productos || [];
+        console.log(`[Worker] rawItems: ${rawItems.length} — field used: ${ficha.productos_solicitados?'productos_solicitados':ficha.items?'items':'productos'}`);
         const itemsExtraidos = rawItems.map((item, i) => ({
           idx:               i + 1,
           nombre:            item.descripcion || item.nombre || '',

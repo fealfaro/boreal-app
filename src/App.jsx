@@ -4837,6 +4837,7 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
   const ia=op.analisisIA;
   const [overrides,setOverrides]=useState({});
   const [buscandoFila,setBuscandoFila]=useState(null);
+  const [modalProdRef,setModalProdRef]=useState(null);
   const [busqFila,setBusqFila]=useState("");
   const [dropPos,setDropPos]=useState({top:0,left:0,width:320});
   const potencial=ia?calcPotencial(ia,productos):null;
@@ -5068,6 +5069,11 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
                                       </div>
                                       <div style={{fontSize:10,color:"#94a3b8"}}>{stock} disp.</div>
                                     </div>
+                                    <span onClick={e=>{e.stopPropagation();setModalProdRef(prod);}}
+                                      style={{fontSize:10,color:"#1d4ed8",fontWeight:600,padding:"2px 7px",borderRadius:5,background:"#eff6ff",cursor:"pointer",flexShrink:0,marginLeft:4}}
+                                      title="Ver detalle del producto">
+                                      ver
+                                    </span>
                                   </>
                                 ):crearNuevo?(
                                   <span style={{fontSize:11,color:"#d97706"}}>Crear nuevo</span>
@@ -5119,6 +5125,57 @@ function OpCard({op,expandida,setExpandida,analizando,enCola,onAnalizar,onCrearY
           </div>
         )}
       </div>
+
+      {/* Modal detalle producto del catálogo */}
+      {modalProdRef&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}
+          onClick={()=>setModalProdRef(null)}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 60px rgba(0,0,0,.3)",overflow:"hidden"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>Detalle producto catálogo</span>
+              <button onClick={()=>setModalProdRef(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#94a3b8",lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:"18px 20px"}}>
+              <div style={{display:"flex",gap:14,marginBottom:16,alignItems:"center"}}>
+                {modalProdRef.foto_url
+                  ?<img src={modalProdRef.foto_url} alt="" style={{width:72,height:72,borderRadius:10,objectFit:"cover",flexShrink:0,border:"1px solid #f1f5f9"}}/>
+                  :<div style={{width:72,height:72,borderRadius:10,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0}}>📦</div>
+                }
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:700,color:"#0f172a",marginBottom:3}}>{modalProdRef.nombre}</div>
+                  {modalProdRef.sku&&<div style={{fontSize:11,color:"#94a3b8",fontFamily:"'Geist Mono',monospace"}}>{modalProdRef.sku}</div>}
+                  {modalProdRef.categoria&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>{modalProdRef.categoria}</div>}
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:3,letterSpacing:".06em"}}>COSTO NETO</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(modalProdRef.costo||0)}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:3,letterSpacing:".06em"}}>PRECIO VENTA</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{fmt(calcPrecioVenta(modalProdRef.costo,modalProdRef.margen))}</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:3,letterSpacing:".06em"}}>MARGEN</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{modalProdRef.margen||0}%</div>
+                </div>
+                <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:3,letterSpacing:".06em"}}>STOCK</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#0f172a"}}>{getStockTotal(modalProdRef)} uds</div>
+                </div>
+              </div>
+              {modalProdRef.proveedor&&(
+                <div style={{marginTop:8,background:"#f8fafc",borderRadius:8,padding:"8px 12px"}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,marginBottom:2,letterSpacing:".06em"}}>PROVEEDOR</div>
+                  <div style={{fontSize:13,color:"#0f172a"}}>{modalProdRef.proveedor}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

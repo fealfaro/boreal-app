@@ -133,13 +133,20 @@ export default {
       }
     }
 
-    // ── GET /mp ───────────────────────────────────────────────
-    if (request.method === 'GET' && url.pathname === '/mp') {
-      const id = url.searchParams.get('id');
-      const catalogoJSON = url.searchParams.get('catalogo') || '[]';
-      if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
-
+    // ── POST /mp — catálogo grande como JSON body ─────────────
+    if (url.pathname === '/mp') {
       try {
+        let id, catalogoJSON;
+        if (request.method === 'POST') {
+          const body = await request.json();
+          id = body.id;
+          catalogoJSON = JSON.stringify(body.catalogo || []);
+        } else {
+          id = url.searchParams.get('id');
+          catalogoJSON = url.searchParams.get('catalogo') || '[]';
+        }
+        if (!id) return new Response(JSON.stringify({ error: 'ID requerido' }), { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } });
+
         const MP_KEY = env.MP_API_KEY || 'e93089e4-437c-4723-b343-4fa20045e3bc';
         const BASE   = 'https://api.buscador.mercadopublico.cl/compra-agil';
 

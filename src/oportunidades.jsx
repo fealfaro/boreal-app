@@ -143,20 +143,20 @@ function ModuloOportunidades({oportunidades,setOportunidades,productos,setProduc
   const analizarConIA = async(op) => {
     setAnalizando(op.id);
     try {
-      // Enviar catálogo como JSON array para el matching en código
+      // Enviar catálogo como POST JSON — GET se trunca con 507 productos
       const catalogoData = productos.map(p=>({
         id: p.id, sku: p.sku||"", nombre: p.nombre||"",
         categoria: p.categoria||"", costo: p.costo||0,
         margen: p.margen||30, foto_url: p.foto_url||null,
       }));
-      const params = new URLSearchParams({
-        id: op.id,
-        catalogo: JSON.stringify(catalogoData),
-      });
       console.log(`[Boreal] Analizando ${op.id} — catálogo: ${catalogoData.length} productos`);
-      const resp = await fetch(`${WORKER_URL}/mp?${params}`);
+      const resp = await fetch(`${WORKER_URL}/mp`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({id: op.id, catalogo: catalogoData}),
+      });
       const data = await resp.json();
-      console.log(`[Boreal] Worker response:`, data);
+      console.log(`[Boreal] Worker response:`, JSON.stringify(data).slice(0,500));
       const getAnalisis=(d)=>{
         if(!d.ok) return null;
         const a=d.analisis;
